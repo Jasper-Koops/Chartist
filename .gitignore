@@ -1,0 +1,8 @@
+.idea
+db.sqlite3
+Chartist/secrets/*
+__pycache__/
+*.pyc
+design.md
+.env
+.venv

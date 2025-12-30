@@ -63,10 +63,10 @@ class TestZaakDTO(TestCase):
         )
         self.assertEqual("2025-2026", zaak_dto.Vergaderjaar)
         self.assertEqual(
-            "2025-12-16T00:00:00+01:00", zaak_dto.GestartOp.isoformat()
+            "2024-12-16T00:00:00+01:00", zaak_dto.GestartOp.isoformat()
         )
         self.assertEqual(
-            "2025-12-17T13:18:36.050000+01:00", zaak_dto.GewijzigdOp.isoformat()
+            "2024-12-17T13:18:36.050000+01:00", zaak_dto.GewijzigdOp.isoformat()
         )
 
 

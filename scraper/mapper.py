@@ -25,7 +25,7 @@ def parliamentary_item_from_dto(
     return {
         "api_id": zaak_dto.Id,
         "title": zaak_dto.Onderwerp,
-        "date": zaak_dto.GewijzigdOp,
+        "date": dto.GewijzigdOp,
         "item_type": ParliamentaryItemType.MOTION,
         "status": dto.BesluitSoort,
     }

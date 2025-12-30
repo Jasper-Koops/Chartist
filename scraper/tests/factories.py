@@ -48,9 +48,9 @@ class AgendapuntZaakBesluitVolgordeDTOFactory(factory.Factory):
 
     Id = factory.Faker("uuid4")
     Agendapunt_Id = factory.Faker("uuid4")
-    BesluitSoort = factory.Faker("word")
-    BesluitTekst = factory.Faker(
-        "random_element", elements=["Aangenomen.", "Verworpen."]
+    BesluitSoort = factory.Faker(
+        "random_element",
+        elements=["stemming: aangenomen.", "stemming: verworpen."],
     )
     GewijzigdOp = factory.Faker(
         "date_time_this_decade", before_now=True, after_now=False, tzinfo=None

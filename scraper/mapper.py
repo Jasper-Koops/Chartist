@@ -27,7 +27,7 @@ def parliamentary_item_from_dto(
         "title": zaak_dto.Onderwerp,
         "date": zaak_dto.GewijzigdOp,
         "item_type": ParliamentaryItemType.MOTION,
-        "status": dto.BesluitTekst,
+        "status": dto.BesluitSoort,
     }
 
 

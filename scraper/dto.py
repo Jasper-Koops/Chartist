@@ -237,7 +237,6 @@ class AgendapuntZaakBesluitVolgordeDTO:
     Id: str
     Agendapunt_Id: str
     BesluitSoort: str
-    BesluitTekst: str
     GewijzigdOp: datetime
     Zaak: list[ZaakDTO]
     Stemming: list[StemmingDTO]
@@ -274,9 +273,8 @@ class AgendapuntZaakBesluitVolgordeDTO:
         return cls(
             Id=validated.Id,
             Agendapunt_Id=validated.Agendapunt_Id,
-            BesluitSoort=validated.BesluitSoort,
-            BesluitTekst=cls.get_parliamentary_item_status(
-                validated.BesluitTekst
+            BesluitSoort=cls.get_parliamentary_item_status(
+                validated.BesluitSoort
             ),
             GewijzigdOp=validated.GewijzigdOp,
             Zaak=[ZaakDTO.from_api(zaak) for zaak in validated.Zaak],
@@ -293,6 +291,11 @@ class AgendapuntZaakBesluitVolgordeDTO:
         Map a decision status string from the API to a
             ParliamentaryItemStatusTypes enum.
 
+        The values provided by the API may not standardized. The function will
+        clean and tokenize the values before comparing them. It will also
+        check for negations to handle the inevitable 'Niet aangenomen' bug
+        that I can see approaching from the horizon.
+
         Args:
             data (str): The decision status string from the API.
 
@@ -303,7 +306,19 @@ class AgendapuntZaakBesluitVolgordeDTO:
         Raises:
             ValueError: If the decision status is unknown.
         """
-        value = data.strip().lower().rstrip(".")
+        negations: set[str] = {"niet"}
+        value = data.strip().lower()
+
+        # Normalize common punctuation into spaces so tokenization works.
+        for ch in ".()[],:;-/":
+            value = value.replace(ch, " ")
+
+        tokens = value.split()
+
+        # Detect negations, because I do not trust this API to keep its values
+        # standardized.
+        if negations.intersection(tokens):
+            raise ValueError(f"Negation detected in: {data}")
 
         # Exact match dictionary for known values
         status_mapping = {
@@ -312,9 +327,9 @@ class AgendapuntZaakBesluitVolgordeDTO:
             "aangehouden": ParliamentaryItemStatusTypes.PENDING,
         }
 
-        # Try exact match first
-        result = status_mapping.get(value)
-        if result is None:
-            raise ValueError(f"Unknown parliamentary item status: {data}")
+        # Get status from values that include the votes ('Aangenomen 76-74')
+        for keyword, status in status_mapping.items():
+            if keyword in tokens:
+                return status
 
-        return result
+        raise ValueError(f"Unknown parliamentary item status: {data}")

@@ -109,7 +109,6 @@ class ParliamentApi:
         with transaction.atomic():
             for data in party_data:
                 fractie_dto: FractieDTO = FractieDTO.from_api(data)
-                print(fractie_dto.Id)
                 Party.objects.update_or_create(
                     api_id=fractie_dto.Id, defaults=party_from_dto(fractie_dto)
                 )

@@ -50,7 +50,6 @@ def prepare_df() -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     return prepared_df, df, labels
 
 
-# FIXME - test
 # FIXME - add loadings
 def run_pca_analysis(n_components: int = 3) -> None:
     """

@@ -1,13 +1,17 @@
 from pathlib import Path
 from types import ModuleType
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-
 local_secrets: ModuleType | None
 try:
     from .secrets import local as local_secrets
 except ImportError:
     local_secrets = None
+    raise ValueError("NO SECRETS LOADED")
+
+if local_secrets:
+    BASE_DIR = local_secrets.BASE_DIR
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = (
     local_secrets.SECRET_KEY if local_secrets else "django-insecure-dev"

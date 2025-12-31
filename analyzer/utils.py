@@ -27,10 +27,16 @@ def generate_dataframe() -> pd.DataFrame:
         row: dict[str, str | int]
         row = {"Motion Title": item.title}
         for party in parties:
-            party_vote = PartyVote.objects.get(
-                parliamentary_item=item, party=party
-            )
-            row[party.abbreviation] = party_vote_mapper(party_vote.vote)
+            try:
+                party_vote = PartyVote.objects.get(
+                    parliamentary_item=item, party=party
+                )
+                row[party.abbreviation] = party_vote_mapper(party_vote.vote)
+            except PartyVote.DoesNotExist:
+                print(
+                    f"\n\nparlimentary_item: {item} - {item.id}, party: {party} - {party.id}\n\n"
+                )
+                raise ValueError("FAAL")
         data.append(row)
 
     df = pd.DataFrame(

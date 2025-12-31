@@ -1,7 +1,7 @@
 from typing import Any
 from django.test import TestCase
 from scraper.utils import ParliamentApi
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from scraper.models import Party, PartyVote, ParliamentaryItem, VoteType
 from unittest import mock
 from scraper.tests.fixtures.utils_fixtures import (
     PARTY_API_RESPONSE,
@@ -48,3 +48,25 @@ class TestParliamentApi(TestCase):
         self.api.get_besluit()
         self.assertEqual(4, ParliamentaryItem.objects.count())
         self.assertEqual(12, PartyVote.objects.count())
+
+    @mock.patch("scraper.utils.requests.get")
+    def test_abstain_created_for_abstaining_party_votes(
+        self, mocked_get: mock.Mock
+    ) -> None:
+        mocked_get.side_effect = [
+            MockedResponse({"value": PARTY_API_RESPONSE}, 200),
+            MockedResponse({"value": BESLUIT_API_RESPONSE}, 200),
+        ]
+        self.api.import_parties()
+        # Create additional party that will not appear in the votes
+        missing_party: Party = Party.objects.create(
+            name="Another Party", abbreviation="AP", api_id="999"
+        )
+        self.api.get_besluit()
+        self.assertEqual(4, ParliamentaryItem.objects.count())
+        self.assertEqual(16, PartyVote.objects.count())
+        PartyVote.objects.get(
+            party=missing_party,
+            parliamentary_item=ParliamentaryItem.objects.first(),
+            vote=VoteType.ABSTAIN,
+        )

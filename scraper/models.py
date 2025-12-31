@@ -54,6 +54,9 @@ class PartyVote(models.Model):
     )
     vote = models.CharField(max_length=10, choices=VoteType.choices)
 
+    class Meta:
+        unique_together = ("party", "parliamentary_item")
+
     def __str__(self) -> str:
         return (
             f"{self.party.name} - {self.parliamentary_item.title} - {self.vote}"

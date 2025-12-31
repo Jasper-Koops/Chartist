@@ -1,6 +1,6 @@
 from typing import Any
 import requests
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from scraper.models import Party, PartyVote, ParliamentaryItem, VoteType
 from scraper.dto import (
     FractieDTO,
     AgendapuntZaakBesluitVolgordeDTO,
@@ -109,9 +109,22 @@ class ParliamentApi:
         with transaction.atomic():
             for data in party_data:
                 fractie_dto: FractieDTO = FractieDTO.from_api(data)
-                Party.objects.update_or_create(
-                    api_id=fractie_dto.Id, defaults=party_from_dto(fractie_dto)
-                )
+
+                try:
+                    Party.objects.update_or_create(
+                        api_id=fractie_dto.Id,
+                        defaults=party_from_dto(fractie_dto),
+                    )
+                except Exception:
+                    continue
+
+        # FIXME - remove when bug fixed
+        try:
+            vijftigplus = Party.objects.get(abbreviation="50PLUS")
+            vijftigplus.api_id = "a34bf6c8-834e-4dba-b4d2-f2f1b3957bd2"
+            vijftigplus.save()
+        except Party.DoesNotExist:
+            pass
 
     def get_besluit(self) -> None:
         """
@@ -123,6 +136,9 @@ class ParliamentApi:
 
         Ensures database integrity by using an atomic transaction.
         Skips votes for unknown parties.
+
+        Parties that did not vote (and are not included in the data, even as
+        abstains) are marked as abstaining.
         """
         filters: list[str] = [
             "GewijzigdOp gt 2025-11-01T00:00:00+01:00",
@@ -156,6 +172,10 @@ class ParliamentApi:
                     )[0]
                 )
 
+                # Not all parties participated in each vote. Those parties
+                # are not always marked as 'abstain', so we need to track which
+                # parties have voted and do this ourselves.
+                seen_party_ids: set[str] = set()
                 stemming_dto: StemmingDTO
                 for stemming_dto in azb_dto.Stemming:
 
@@ -166,9 +186,22 @@ class ParliamentApi:
                             stemming_dto.Fractie_Id,
                         )
                         continue
+                    seen_party_ids.add(stemming_dto.Fractie_Id)
 
                     PartyVote.objects.update_or_create(
                         party=party_lookup[stemming_dto.Fractie_Id],
                         parliamentary_item=parliamentary_item,
                         defaults=party_vote_from_dto(stemming_dto),
+                    )
+
+                # Parse abstains for parties that did not vote and mark them
+                # as abstain.
+                for party_id, party in party_lookup.items():
+                    if party_id in seen_party_ids:
+                        continue
+
+                    PartyVote.objects.create(
+                        party=party,
+                        parliamentary_item=parliamentary_item,
+                        vote=VoteType.ABSTAIN,
                     )

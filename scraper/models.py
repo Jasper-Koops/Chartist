@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+from django.core.exceptions import ValidationError
 
 
 class Party(models.Model):
@@ -39,6 +41,11 @@ class ParliamentaryItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.item_type} - {self.title} - {self.status}"
+
+    def clean(self) -> None:
+        super().clean()
+        if self.date and timezone.is_naive(self.date):
+            raise ValidationError({"date": "Datetime must be timezone-aware."})
 
 
 class VoteType(models.TextChoices):

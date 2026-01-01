@@ -7,6 +7,7 @@ from scraper.models import (
     ParliamentaryItemTypes,
     VoteType,
 )
+from django.utils import timezone
 from scraper.dto import AgendapuntZaakBesluitVolgordeDTO
 import random
 
@@ -25,7 +26,10 @@ class ParliamentaryItemFactory(factory.django.DjangoModelFactory):
     api_id = factory.Faker("uuid4")
     title = factory.Faker("sentence", nb_words=6)
     date = factory.Faker(
-        "date_time_this_decade", before_now=True, after_now=False, tzinfo=None
+        "date_time_this_decade",
+        before_now=True,
+        after_now=False,
+        tzinfo=timezone.get_current_timezone(),
     )
     item_type = ParliamentaryItemTypes.MOTION
     status = factory.Iterator(
@@ -53,7 +57,10 @@ class AgendapuntZaakBesluitVolgordeDTOFactory(factory.Factory):
         elements=["stemming: aangenomen.", "stemming: verworpen."],
     )
     GewijzigdOp = factory.Faker(
-        "date_time_this_decade", before_now=True, after_now=False, tzinfo=None
+        "date_time_this_decade",
+        before_now=True,
+        after_now=False,
+        tzinfo=timezone.get_current_timezone(),
     )
     Zaak = factory.List([{"Id": factory.Faker("uuid4")}])
     Stemming = factory.LazyAttribute(

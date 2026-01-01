@@ -48,3 +48,5 @@ repos:
         - djangorestframework
         - djangorestframework-stubs
         - pydantic[mypy]
+        - django-filter
+        - django-filter-stubs

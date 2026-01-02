@@ -6,3 +6,4 @@ __pycache__/
 design.md
 .env
 .venv
+dump.rdb

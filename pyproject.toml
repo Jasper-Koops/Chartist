@@ -15,5 +15,5 @@ exclude = "(^|/)migrations/|.*/tests/factories\\.py$"
 django_settings_module = "Chartist.settings"
 
 [[tool.mypy.overrides]]
-module = ["*.tests.factories", "*.tests.factories.*", "*.tasks", "*.tasks.*"]
+module = ["*.tests.factories", "*.tests.factories.*", "*.tasks", "*.tasks.*", "*.admin"]
 ignore_errors = true

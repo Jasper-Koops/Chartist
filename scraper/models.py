@@ -12,6 +12,10 @@ class Party(models.Model):
     name = models.CharField(max_length=100, unique=True)
     abbreviation = models.CharField(max_length=10, unique=True)
 
+    class Meta:
+        verbose_name = "Party"
+        verbose_name_plural = "Parties"
+
     def __str__(self) -> str:
         return self.name
 

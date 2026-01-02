@@ -22,6 +22,9 @@ python manage.py import_data
 
 # Run initial analysis
 python manage.py run_analysis
+
+# Create a superuser for admin access
+python manage.py createsuperuser
 ```
 
 ## Starting the server:
@@ -29,3 +32,7 @@ python manage.py run_analysis
 ```bash
 python manage.py runserver
 ```
+
+## Important urls
+- API Root (Interactive): `http://127.0.0.1/8000/api/v1/`
+- Admin Panel: `http://127.0.0.1/8000/admin/`

@@ -9,6 +9,10 @@ class PCAAnalysis(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        verbose_name = "PCA Analysis"
+        verbose_name_plural = "PCA Analyses"
+
     def __str__(self) -> str:
         return f"PCA Analysis at {self.created_at}"
 

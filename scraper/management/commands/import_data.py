@@ -11,6 +11,6 @@ class Command(BaseCommand):
     def handle(self, *args: list[str], **options: dict[str, str]) -> None:
         api: ParliamentApi = ParliamentApi()
         api.import_parties()
-        api.get_besluit()
+        api.import_votes()
 
         self.stdout.write(self.style.SUCCESS("Completed import"))

@@ -50,3 +50,5 @@ repos:
         - pydantic[mypy]
         - django-filter
         - django-filter-stubs
+        - celery
+        - django_celery_beat

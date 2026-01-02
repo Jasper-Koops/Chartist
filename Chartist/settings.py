@@ -1,5 +1,7 @@
 from pathlib import Path
 from types import ModuleType
+from celery.schedules import crontab
+
 
 local_secrets: ModuleType | None
 try:
@@ -41,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "django_filters",
+    "django_celery_beat",
     "scraper",
     "analyzer",
     "api",
@@ -126,3 +129,18 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Celery Settings
+CELERY_ENABLE_UTC = True
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    "import_votes": {
+        "task": "scraper.tasks.import_votes",
+        "schedule": crontab(minute=15, hour=0),
+    },
+    "run_analysis": {
+        "task": "scraper.tasks.run_scheduled_pca_analysis",
+        "schedule": crontab(minute=45, hour=0),
+    },
+}
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"

@@ -26,7 +26,7 @@ class ParliamentApi:
             optional filters, expansions, ordering, and top limit.
         - import_parties: Imports party data from the API into the local
             database.
-        - get_besluit: Fetches and processes 'Besluit' data, linking it to
+        - import_votes: Fetches and processes 'Besluit' data, linking it to
             parliamentary items and party votes.
     """
 
@@ -126,7 +126,7 @@ class ParliamentApi:
         except Party.DoesNotExist:
             pass
 
-    def get_besluit(self) -> None:
+    def import_votes(self) -> None:
         """
         Fetch parliamentary decisions and associated votes from the API.
 

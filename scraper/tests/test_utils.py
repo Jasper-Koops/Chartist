@@ -36,16 +36,16 @@ class TestParliamentApi(TestCase):
 
         pvdd: Party = Party.objects.get(abbreviation="PvdD")
         self.assertEqual(PARTY_API_RESPONSE[2]["NaamNL"], pvdd.name)
-        self.api.get_besluit()
+        self.api.import_votes()
 
     @mock.patch("scraper.utils.requests.get")
-    def test_get_besluit(self, mocked_get: mock.Mock) -> None:
+    def test_import_votes(self, mocked_get: mock.Mock) -> None:
         mocked_get.side_effect = [
             MockedResponse({"value": PARTY_API_RESPONSE}, 200),
             MockedResponse({"value": BESLUIT_API_RESPONSE}, 200),
         ]
         self.api.import_parties()
-        self.api.get_besluit()
+        self.api.import_votes()
         self.assertEqual(4, ParliamentaryItem.objects.count())
         self.assertEqual(12, PartyVote.objects.count())
 
@@ -62,7 +62,7 @@ class TestParliamentApi(TestCase):
         missing_party: Party = Party.objects.create(
             name="Another Party", abbreviation="AP", api_id="999"
         )
-        self.api.get_besluit()
+        self.api.import_votes()
         self.assertEqual(4, ParliamentaryItem.objects.count())
         self.assertEqual(16, PartyVote.objects.count())
         PartyVote.objects.get(

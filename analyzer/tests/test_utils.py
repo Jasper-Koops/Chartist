@@ -27,7 +27,7 @@ class TestGenerateDataFrame(TestCase):
         self.assertEqual(df.shape[1], len(self.parties) + 1)
 
         # Check that the columns are correct
-        expected_columns = ["Motion Title"] + [
+        expected_columns = ["Motion ID"] + [
             party.abbreviation
             for party in self.parties.order_by("abbreviation")
         ]
@@ -35,7 +35,7 @@ class TestGenerateDataFrame(TestCase):
 
         # Check that the data in the dataframe matches the votes in the database
         for index, item in enumerate(self.items):
-            self.assertEqual(df.iloc[index]["Motion Title"], item.title)
+            self.assertEqual(df.iloc[index]["Motion ID"], item.id)
             for party in self.parties:
                 party_vote = PartyVote.objects.get(
                     parliamentary_item=item, party=party

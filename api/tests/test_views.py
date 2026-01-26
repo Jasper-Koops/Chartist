@@ -9,7 +9,7 @@ from scraper.tests.utils.testing_utils import (
     generate_party_votes,
 )
 from analyzer.analysis import run_pca_analysis
-from analyzer.models import PCAAnalysis, PCAComponentPartyScore
+from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
 from scraper.models import Party, ParliamentaryItem, PartyVote, VoteType
 from scraper.tests.factories import ParliamentaryItemFactory
 
@@ -313,7 +313,6 @@ class TestPCAComponentPartyScoreViewSet(APITestCase):
             parties=generate_parties(),
         )
         run_pca_analysis(n_components=3)
-        run_pca_analysis(n_components=3)
 
     def test_list_returns_200(self) -> None:
         url = reverse("pcacomponentpartyscore-list")
@@ -390,3 +389,83 @@ class TestPCAComponentPartyScoreViewSet(APITestCase):
         self.assertEqual(response.status_code, 200)
         scores = [row["score"] for row in data]
         self.assertEqual(scores, sorted(scores))
+
+
+class TestPCAItemLoadingViewSet(APITestCase):
+    def setUp(self) -> None:
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(10),
+            parties=generate_parties(),
+        )
+        run_pca_analysis(n_components=3)
+
+    def test_list_returns_200(self) -> None:
+        url = reverse("pcaitemloading-list")
+        response = self.client.get(url)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        loadings: int = PCAItemLoading.objects.all().count()
+        loadings = loadings if loadings <= 100 else 100
+        self.assertEqual(len(data), loadings)
+
+    def test_filter_by_analysis_id(self) -> None:
+        # Run second analysis to create data that should not be included in the
+        # results.
+        run_pca_analysis(n_components=3)
+        url = reverse("pcaitemloading-list")
+        analysis = PCAAnalysis.objects.first()
+        assert analysis is not None
+        response = self.client.get(url, {"analysis": analysis.id})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        for row in data:
+            self.assertEqual(row["analysis"], analysis.id)
+
+    def test_filter_by_parliamentary_item_id(self) -> None:
+        url = reverse("pcaitemloading-list")
+        item = ParliamentaryItem.objects.first()
+        assert item is not None
+        response = self.client.get(url, {"parliamentary_item": item.id})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        for row in data:
+            self.assertEqual(row["parliamentary_item"], item.id)
+
+    def test_filter_by_component_number(self) -> None:
+        url = reverse("pcaitemloading-list")
+        component_number = 1
+        response = self.client.get(url, {"component": component_number})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        for row in data:
+            self.assertEqual(row["component"], component_number)
+
+    def test_filter_by_loading_gte(self) -> None:
+        pcal = PCAItemLoading.objects.first()
+        assert pcal is not None
+        url = reverse("pcaitemloading-list")
+        response = self.client.get(url, {"loading__gte": pcal.loading})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        for row in data:
+            self.assertGreaterEqual(row["loading"], pcal.loading)
+
+    def test_filter_by_loading_lte(self) -> None:
+        pcal = PCAItemLoading.objects.first()
+        assert pcal is not None
+        url = reverse("pcaitemloading-list")
+        response = self.client.get(url, {"loading__lte": pcal.loading})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        for row in data:
+            self.assertLessEqual(row["loading"], pcal.loading)
+
+    def test_filter_by_loading_exact(self) -> None:
+        pcal = PCAItemLoading.objects.first()
+        assert pcal is not None
+        url = reverse("pcaitemloading-list")
+        response = self.client.get(url, {"loading": pcal.loading})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        for row in data:
+            self.assertEqual(row["loading"], pcal.loading)

@@ -25,7 +25,7 @@ def generate_dataframe() -> pd.DataFrame:
     data = []
     for item in items:
         row: dict[str, str | int]
-        row = {"Motion Title": item.title}
+        row = {"Motion ID": item.id}
         for party in parties:
             try:
                 party_vote = PartyVote.objects.get(
@@ -41,6 +41,6 @@ def generate_dataframe() -> pd.DataFrame:
 
     df = pd.DataFrame(
         data,
-        columns=["Motion Title"] + [party.abbreviation for party in parties],
+        columns=["Motion ID"] + [party.abbreviation for party in parties],
     )
     return df

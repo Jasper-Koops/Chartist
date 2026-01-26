@@ -1,4 +1,4 @@
-from analyzer.models import PCAAnalysis, PCAComponentPartyScore
+from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
 from rest_framework import serializers
 
 
@@ -14,3 +14,15 @@ class PCAComponentPartyScoreSerializer(
     class Meta:
         model = PCAComponentPartyScore
         fields: list[str] = ["id", "analysis", "party", "component", "score"]
+
+
+class PCAItemLoadingSerializer(serializers.ModelSerializer[PCAItemLoading]):
+    class Meta:
+        model = PCAItemLoading
+        fields: list[str] = [
+            "id",
+            "analysis",
+            "parliamentary_item",
+            "component",
+            "loading",
+        ]

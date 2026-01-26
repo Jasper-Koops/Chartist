@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "debug_toolbar",
     "rest_framework",
     "django_filters",
     "django_celery_beat",
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -144,3 +146,9 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+
+
+# Debug Toolbar Settings
+INTERNAL_IPS = [
+    "127.0.0.1",
+]

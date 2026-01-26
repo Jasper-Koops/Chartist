@@ -1,14 +1,18 @@
+from django.db.models.functions import Abs
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from scraper.serializers import (
     PartySerializer,
     PartyVoteSerializer,
     ParliamentaryItemSerializer,
+    KeyParliamentaryItemSerializer,
 )
+from django.db.models import Sum, QuerySet
 from analyzer.serializers import (
     PCAAnalysisSerializer,
     PCAComponentPartyScoreSerializer,
+    PCAItemLoadingSerializer,
 )
-from analyzer.models import PCAAnalysis, PCAComponentPartyScore
+from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
 from scraper.models import Party, PartyVote, ParliamentaryItem
 
 
@@ -42,6 +46,29 @@ class ParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
     }
 
 
+# FIXME - test
+class KeyParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
+    serializer_class = KeyParliamentaryItemSerializer
+    filterset_fields = {
+        "id": ["exact"],
+        "title": ["exact", "icontains"],
+        "date": ["exact", "gte", "lte"],
+        "item_type": ["exact"],
+        "status": ["exact"],
+    }
+
+    def get_queryset(self) -> QuerySet[ParliamentaryItem]:
+        latest_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        queryset = (
+            ParliamentaryItem.objects.filter(
+                pca_loadings__analysis=latest_analysis
+            )
+            .annotate(total_loading=Sum(Abs("pca_loadings__loading")))
+            .order_by("-total_loading")[:10]
+        )
+        return queryset
+
+
 class PCAAnalysisViewSet(ReadOnlyModelViewSet[PCAAnalysis]):
     queryset = PCAAnalysis.objects.all()
     serializer_class = PCAAnalysisSerializer
@@ -60,4 +87,15 @@ class PCAComponentPartyScoreViewSet(
         "party": ["exact"],
         "component": ["exact"],
         "score": ["exact", "gte", "lte"],
+    }
+
+
+class PCAItemLoadingViewSet(ReadOnlyModelViewSet[PCAItemLoading]):
+    queryset = PCAItemLoading.objects.all()
+    serializer_class = PCAItemLoadingSerializer
+    filterset_fields = {
+        "analysis": ["exact"],
+        "parliamentary_item": ["exact"],
+        "component": ["exact"],
+        "loading": ["exact", "gte", "lte"],
     }

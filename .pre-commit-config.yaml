@@ -52,3 +52,4 @@ repos:
         - django-filter-stubs
         - celery
         - django_celery_beat
+        - django-debug-toolbar

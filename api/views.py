@@ -6,6 +6,7 @@ from scraper.serializers import (
     ParliamentaryItemSerializer,
     KeyParliamentaryItemSerializer,
 )
+from api.errors import NoAnalysisFoundException
 from django.db.models import Sum, QuerySet
 from analyzer.serializers import (
     PCAAnalysisSerializer,
@@ -51,14 +52,13 @@ class KeyParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
     serializer_class = KeyParliamentaryItemSerializer
     filterset_fields = {
         "id": ["exact"],
-        "title": ["exact", "icontains"],
-        "date": ["exact", "gte", "lte"],
-        "item_type": ["exact"],
-        "status": ["exact"],
     }
 
     def get_queryset(self) -> QuerySet[ParliamentaryItem]:
         latest_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        if not latest_analysis:
+            raise NoAnalysisFoundException
+
         queryset = (
             ParliamentaryItem.objects.filter(
                 pca_loadings__analysis=latest_analysis

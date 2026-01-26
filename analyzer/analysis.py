@@ -29,7 +29,7 @@ def prepare_df() -> tuple[pd.DataFrame, list[str]]:
     """
     Prepare the DataFrame for PCA analysis.
 
-    This function generates a DataFrame, extracts the motion titles as row indices,
+    This function generates a DataFrame, uses the motion IDS as row indices,
     and transposes the data for PCA analysis.
 
     The resulting DataFrame has parties as rows and parliamentary items.ids columns.
@@ -70,14 +70,20 @@ def run_pca_analysis(n_components: int = 3) -> None:
 
     analysis: PCAAnalysis = PCAAnalysis.objects.create()
     loadings = model.results.get("loadings")
+    item_loadings: list[PCAItemLoading] = []
     for index, row in loadings.transpose().iterrows():
         for pc_component_score in row.index:
-            PCAItemLoading.objects.create(
-                analysis=analysis,
-                parliamentary_item_id=int(index),
-                component=int(pc_component_score.strip("PC")),
-                loading=row[pc_component_score],
+            item_loadings.append(
+                PCAItemLoading(
+                    analysis=analysis,
+                    parliamentary_item_id=int(index),
+                    component=int(pc_component_score.strip("PC")),
+                    loading=row[pc_component_score],
+                )
             )
+
+    if item_loadings:
+        PCAItemLoading.objects.bulk_create(item_loadings)
 
     dict_version = components.to_dict()
     for component, party_scores in dict_version.items():

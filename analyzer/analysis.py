@@ -29,10 +29,11 @@ def prepare_df() -> tuple[pd.DataFrame, list[str]]:
     """
     Prepare the DataFrame for PCA analysis.
 
-    This function generates a DataFrame, uses the motion IDS as row indices,
+    This function generates a DataFrame, uses the motion IDs as row indices,
     and transposes the data for PCA analysis.
 
-    The resulting DataFrame has parties as rows and parliamentary items.ids columns.
+    The resulting DataFrame has parties as rows and parliamentary items IDs as
+    columns.
 
     Returns:
         tuple: A tuple containing:

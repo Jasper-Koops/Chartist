@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from typing import Any
-from analyzer.serializers import PCAItemLoadingSerializer
 from scraper.models import Party, PartyVote, ParliamentaryItem
 
 
@@ -48,5 +47,8 @@ class KeyParliamentaryItemSerializer(
         return PartyVoteSerializer(votes, many=True).data
 
     def get_loadings(self, obj: ParliamentaryItem) -> Any:
+        # Avoid circular import.
+        from analyzer.serializers import PCAItemLoadingSerializer
+
         loadings = obj.pca_loadings.all()
         return PCAItemLoadingSerializer(loadings, many=True).data

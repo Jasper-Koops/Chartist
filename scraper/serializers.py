@@ -1,12 +1,26 @@
 from rest_framework import serializers
 from typing import Any
+from analyzer.models import PCAAnalysis
 from scraper.models import Party, PartyVote, ParliamentaryItem
 
 
 class PartySerializer(serializers.ModelSerializer[Party]):
+    party_scores = serializers.SerializerMethodField()
+
     class Meta:
         model = Party
-        fields = ["id", "api_id", "name", "abbreviation"]
+        fields = ["id", "api_id", "name", "abbreviation", "party_scores"]
+
+    def get_party_scores(self, obj: Party) -> Any:
+        # Avoid circular import.
+        from analyzer.serializers import PCAComponentPartyScoreSerializer
+
+        # Get last PCA analysis scores for this party
+        last_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        if last_analysis is None:
+            return []
+        scores = obj.pca_scores.filter(analysis=last_analysis)
+        return PCAComponentPartyScoreSerializer(scores, many=True).data
 
 
 class PartyVoteSerializer(serializers.ModelSerializer[PartyVote]):

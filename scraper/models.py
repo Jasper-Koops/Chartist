@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 
 
 class Party(models.Model):
@@ -11,6 +12,13 @@ class Party(models.Model):
     api_id = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100, unique=True)
     abbreviation = models.CharField(max_length=10, unique=True)
+    participation_rate = models.FloatField(
+        help_text=_(
+            "Participation rate in parliamentary votes as a percentage."
+        ),
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         verbose_name = "Party"

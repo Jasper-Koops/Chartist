@@ -1,6 +1,6 @@
 from celery import shared_task
 from scraper.utils import ParliamentApi
-from analyzer.analysis import run_pca_analysis
+from analyzer.analysis import run_full_analysis
 
 
 @shared_task
@@ -12,4 +12,4 @@ def import_votes() -> None:
 
 @shared_task
 def run_scheduled_pca_analysis() -> None:
-    run_pca_analysis(n_components=3)
+    run_full_analysis(n_components=3)

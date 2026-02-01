@@ -20,6 +20,7 @@
 </head>
 <body>
   <h2>Dutch Political Parties - Principal Components Analysis</h2>
+  <p>Showing all 15 parties with complete data</p>
   <div id="container">
     <canvas id="myChart"></canvas>
   </div>
@@ -87,6 +88,18 @@
       console.log("Valid points:", points.length);
       console.log("Points:", points);
 
+      // Calculate dynamic axis ranges with 10% padding
+      const xValues = points.map(p => p.x);
+      const yValues = points.map(p => p.y);
+
+      const xMin = Math.min(...xValues);
+      const xMax = Math.max(...xValues);
+      const yMin = Math.min(...yValues);
+      const yMax = Math.max(...yValues);
+
+      const xPadding = (xMax - xMin) * 0.1;
+      const yPadding = (yMax - yMin) * 0.1;
+
       const ctx = document.getElementById("myChart");
       new Chart(ctx, {
         type: "scatter",
@@ -125,8 +138,8 @@
             x: {
               type: 'linear',
               position: 'bottom',
-              min: -20,  // Explicit minimum to show all data
-              max: 25,   // Explicit maximum to show all data
+              min: xMin - xPadding,  // Dynamic minimum based on data
+              max: xMax + xPadding,  // Dynamic maximum based on data
               title: {
                 display: true,
                 text: "Component 1 (PC1)",
@@ -142,8 +155,8 @@
             },
             y: {
               type: 'linear',
-              min: -16,  // Explicit minimum to show all data
-              max: 16,   // Explicit maximum to show all data
+              min: yMin - yPadding,  // Dynamic minimum based on data
+              max: yMax + yPadding,  // Dynamic maximum based on data
               title: {
                 display: true,
                 text: "Component 2 (PC2)",

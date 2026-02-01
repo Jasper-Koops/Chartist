@@ -1,6 +1,6 @@
 from typing import Any
 import requests
-from scraper.models import Party, PartyVote, ParliamentaryItem, VoteType
+from scraper.models import Party, PartyVote, ParliamentaryItem
 from scraper.dto import (
     FractieDTO,
     AgendapuntZaakBesluitVolgordeDTO,
@@ -12,6 +12,10 @@ from scraper.mapper import (
     party_vote_from_dto,
 )
 from django.db import transaction
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 API_URL: str = "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/"
@@ -115,7 +119,15 @@ class ParliamentApi:
                         api_id=fractie_dto.Id,
                         defaults=party_from_dto(fractie_dto),
                     )
-                except Exception:
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to import party data for {fractie_dto.NaamNL} with id {fractie_dto.Id}",
+                        extra={
+                            "party_id": fractie_dto.Id,
+                            "party_name": fractie_dto.NaamNL,
+                            "error": str(e),
+                        },
+                    )
                     continue
 
         # FIXME - remove when bug fixed
@@ -181,9 +193,9 @@ class ParliamentApi:
 
                     party = party_lookup.get(stemming_dto.Fractie_Id)
                     if party is None:
-                        print(
-                            "Skipping unknown party with id:",
-                            stemming_dto.Fractie_Id,
+                        logger.info(
+                            f"Skipping unknown party with id {stemming_dto.Fractie_Id} during vote import",
+                            extra={"party_id": stemming_dto.Fractie_Id},
                         )
                         continue
                     seen_party_ids.add(stemming_dto.Fractie_Id)
@@ -192,16 +204,4 @@ class ParliamentApi:
                         party=party_lookup[stemming_dto.Fractie_Id],
                         parliamentary_item=parliamentary_item,
                         defaults=party_vote_from_dto(stemming_dto),
-                    )
-
-                # Parse abstains for parties that did not vote and mark them
-                # as abstain.
-                for party_id, party in party_lookup.items():
-                    if party_id in seen_party_ids:
-                        continue
-
-                    PartyVote.objects.create(
-                        party=party,
-                        parliamentary_item=parliamentary_item,
-                        vote=VoteType.ABSTAIN,
                     )

@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+  <title>Political Parties PCA - All Points Visible</title>
+  <style>
+    body {
+      margin: 20px;
+      font-family: Arial, sans-serif;
+    }
+    #container {
+      width: 1000px;
+      height: 700px;
+      border: 1px solid #ddd;
+      padding: 10px;
+    }
+    h2 {
+      margin: 0 0 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h2>Dutch Political Parties - Principal Components Analysis</h2>
+  <div id="container">
+    <canvas id="myChart"></canvas>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    async function fetchGraphData(apiUrl) {
+      const response = await fetch(apiUrl, {
+        headers: { "Accept": "application/json" },
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
+    }
+
+    function normalizeParties(payload) {
+      if (payload && Array.isArray(payload.results)) return payload.results;
+      if (Array.isArray(payload)) return payload;
+      return [];
+    }
+
+    function toScatterPoints(parties) {
+      return parties
+        .map((party) => {
+          const scores = party.party_scores || [];
+
+          const byComponent = Object.fromEntries(
+            scores.map((s) => [Number(s.component), Number(s.score)])
+          );
+
+          const pc1 = byComponent[1];
+          const pc2 = byComponent[2];
+
+          if (!Number.isFinite(pc1) || !Number.isFinite(pc2)) return null;
+
+          return { x: pc1, y: pc2, label: party.abbreviation || party.name };
+        })
+        .filter(Boolean);
+    }
+
+    const labelPlugin = {
+      id: 'labelPlugin',
+      afterDatasetsDraw(chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach((dataset, i) => {
+          const meta = chart.getDatasetMeta(i);
+          meta.data.forEach((point, index) => {
+            const data = dataset.data[index];
+            ctx.fillStyle = 'black';
+            ctx.font = 'bold 11px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(data.label, point.x + 10, point.y);
+          });
+        });
+      }
+    };
+
+    (async () => {
+      const payload = await fetchGraphData("/api/v1/parties/");
+      const parties = normalizeParties(payload);
+      const points = toScatterPoints(parties);
+
+      console.log("Total parties:", parties.length);
+      console.log("Valid points:", points.length);
+      console.log("Points:", points);
+
+      const ctx = document.getElementById("myChart");
+      new Chart(ctx, {
+        type: "scatter",
+        data: {
+          datasets: [{
+            label: "Political Parties (PC1 vs PC2)",
+            data: points,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 2,
+            pointRadius: 7,
+            pointHoverRadius: 10,
+            pointHoverBackgroundColor: 'rgba(255, 99, 132, 0.8)',
+            pointHoverBorderColor: 'rgba(255, 99, 132, 1)'
+          }]
+        },
+        plugins: [labelPlugin],
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (context) => {
+                  const p = context.raw;
+                  return `${p.label}: (PC1: ${p.x.toFixed(2)}, PC2: ${p.y.toFixed(2)})`;
+                },
+              },
+            },
+            legend: {
+              display: true,
+              position: 'top'
+            }
+          },
+          scales: {
+            x: {
+              type: 'linear',
+              position: 'bottom',
+              min: -20,  // Explicit minimum to show all data
+              max: 25,   // Explicit maximum to show all data
+              title: {
+                display: true,
+                text: "Component 1 (PC1)",
+                font: { size: 14, weight: 'bold' }
+              },
+              grid: {
+                display: true,
+                color: 'rgba(0, 0, 0, 0.1)'
+              },
+              ticks: {
+                stepSize: 5
+              }
+            },
+            y: {
+              type: 'linear',
+              min: -16,  // Explicit minimum to show all data
+              max: 16,   // Explicit maximum to show all data
+              title: {
+                display: true,
+                text: "Component 2 (PC2)",
+                font: { size: 14, weight: 'bold' }
+              },
+              grid: {
+                display: true,
+                color: 'rgba(0, 0, 0, 0.1)'
+              },
+              ticks: {
+                stepSize: 5
+              }
+            },
+          },
+        },
+      });
+    })();
+  </script>
+</body>
+</html>

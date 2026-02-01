@@ -5,6 +5,7 @@ from scraper.tests.factories import (
     ParliamentaryItemFactory,
     PartyVoteFactory,
 )
+from analyzer.analysis import calculate_party_participation_rate
 from scraper.models import Party, VoteType, ParliamentaryItem
 from scraper.tests.fixtures.utils_fixtures import PARTIES
 import random
@@ -25,9 +26,20 @@ def generate_parliamentary_items(count: int = 5) -> QuerySet[ParliamentaryItem]:
 
 
 def generate_party_votes(
-    parliamentary_items: QuerySet[ParliamentaryItem], parties: QuerySet[Party]
+    parliamentary_items: QuerySet[ParliamentaryItem],
+    parties: QuerySet[Party],
+    calculate_participation_rate: bool = True,
 ) -> None:
+    """
+    Generate party votes for the given parliamentary items and parties.
 
+    :param parliamentary_items: Iterator[Item]: The parliamentary items to
+      generate votes for
+    :param parties: Iterator[Party]: The parties to generate votes for
+    :param calculate_participation_rate: bool: Flag to indicate whether to
+        calculate participation rates after generating votes
+    :return:
+    """
     item: ParliamentaryItem
     for item in parliamentary_items:
         party: Party
@@ -49,3 +61,6 @@ def generate_party_votes(
             item.status = "Rejected"
 
         item.save()
+
+    if calculate_participation_rate:
+        calculate_party_participation_rate()

@@ -109,6 +109,19 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 100,
 }
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -140,7 +153,7 @@ CELERY_BEAT_SCHEDULE = {
         "task": "scraper.tasks.import_votes",
         "schedule": crontab(minute=15, hour=0),
     },
-    "run_analysis": {
+    "run_scheduled_pca_analysis": {
         "task": "scraper.tasks.run_scheduled_pca_analysis",
         "schedule": crontab(minute=45, hour=0),
     },

@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.test import TestCase
 from scraper.tests.utils.testing_utils import (
     generate_parties,
@@ -32,6 +34,26 @@ class TestGeneratePartyVotes(TestCase):
     def setUp(self) -> None:
         self.parties = generate_parties()
         self.items = generate_parliamentary_items(5)
+
+    def test_verify_calculate_participation_rate_called(self) -> None:
+        with mock.patch(
+            "scraper.tests.utils.testing_utils.calculate_party_participation_rate"
+        ) as mocked_calculate:
+            generate_party_votes(
+                parliamentary_items=self.items, parties=self.parties
+            )
+            mocked_calculate.assert_called_once()
+
+    def test_verify_calculate_participation_rate_not_called(self) -> None:
+        with mock.patch(
+            "scraper.tests.utils.testing_utils.calculate_party_participation_rate"
+        ) as mocked_calculate:
+            generate_party_votes(
+                parliamentary_items=self.items,
+                parties=self.parties,
+                calculate_participation_rate=False,
+            )
+            mocked_calculate.assert_not_called()
 
     def test_generate_party_votes(self) -> None:
         generate_party_votes(

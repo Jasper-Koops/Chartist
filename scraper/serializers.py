@@ -17,6 +17,8 @@ class PartySerializer(serializers.ModelSerializer[Party]):
 
         # Get last PCA analysis scores for this party
         last_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        if last_analysis is None:
+            return []
         scores = obj.pca_scores.filter(analysis=last_analysis)
         return PCAComponentPartyScoreSerializer(scores, many=True).data
 

@@ -183,11 +183,6 @@ class ParliamentApi:
                         defaults=parliamentary_item_from_dto(azb_dto),
                     )[0]
                 )
-
-                # Not all parties participated in each vote. Those parties
-                # are not always marked as 'abstain', so we need to track which
-                # parties have voted and do this ourselves.
-                seen_party_ids: set[str] = set()
                 stemming_dto: StemmingDTO
                 for stemming_dto in azb_dto.Stemming:
 
@@ -198,7 +193,6 @@ class ParliamentApi:
                             extra={"party_id": stemming_dto.Fractie_Id},
                         )
                         continue
-                    seen_party_ids.add(stemming_dto.Fractie_Id)
 
                     PartyVote.objects.update_or_create(
                         party=party_lookup[stemming_dto.Fractie_Id],

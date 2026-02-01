@@ -21,6 +21,7 @@ def calculate_party_participation_rate() -> None:
     """
     parties: QuerySet[Party] = Party.objects.all()
     total_items: int = ParliamentaryItem.objects.count()
+    parties_to_update = []
     for party in parties:
         votes_cast: int = PartyVote.objects.filter(party=party).count()
         if total_items > 0:
@@ -28,7 +29,9 @@ def calculate_party_participation_rate() -> None:
         else:
             participation_rate = 0.0
         party.participation_rate = participation_rate
-        party.save()
+        parties_to_update.append(party)
+
+    Party.objects.bulk_update(parties_to_update, ["participation_rate"])
 
 
 # FIXME - test

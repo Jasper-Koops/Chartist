@@ -111,7 +111,7 @@ def generate_dataframe(log: AnalysisLogger) -> pd.DataFrame:
                     f"Party {party.abbreviation} did not vote for item: {item.id}",
                     extra={
                         "party_id": party.id,
-                        "party": {party.abbreviation},
+                        "party": party.abbreviation,
                         "item_id": item.id,
                     },
                 )

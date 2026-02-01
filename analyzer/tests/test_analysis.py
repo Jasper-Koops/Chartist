@@ -1,7 +1,7 @@
 from analyzer.analysis import run_pca_analysis, prepare_df
 from django.test import TestCase
 from django.db.models import QuerySet
-from scraper.models import ParliamentaryItem, PartyVote
+from scraper.models import ParliamentaryItem
 from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
 from analyzer.analysis import calculate_party_participation_rate
 from analyzer.utils import AnalysisLogger
@@ -23,6 +23,7 @@ class TestCalculatePartyParticipationRate(TestCase):
     def test_party_with_no_votes_has_zero_participation_rate(self) -> None:
         calculate_party_participation_rate()
         for party in self.parties:
+            party.refresh_from_db()
             self.assertEqual(party.participation_rate, 0.0)
 
     def test_party_with_votes_has_correct_participation_rate(self) -> None:
@@ -32,9 +33,9 @@ class TestCalculatePartyParticipationRate(TestCase):
             calculate_participation_rate=True,
         )
         for party in self.parties:
-            total_votes: int = PartyVote.objects.filter(party=party).count()
+            total_items: int = ParliamentaryItem.objects.count()
             votes_cast: int = party.partyvote_set.count()
-            expected_rate: float = (votes_cast / total_votes) * 100
+            expected_rate: float = (votes_cast / total_items) * 100
             party.refresh_from_db()
             self.assertEqual(party.participation_rate, expected_rate)
 

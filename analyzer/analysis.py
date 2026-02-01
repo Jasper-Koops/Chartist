@@ -5,6 +5,7 @@ from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
 from scraper.models import Party, PartyVote, ParliamentaryItem
 from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
 from typing import TextIO
+from django.db.transaction import atomic
 from django.core.management.base import OutputWrapper
 import logging
 
@@ -67,6 +68,10 @@ def prepare_df(log: AnalysisLogger) -> tuple[pd.DataFrame, list[str]]:
     Items on which not all parties have voted (i.e., rows with NaN values) are
     removed.
 
+    Args:
+      log (AnalysisLogger): Logger instance for tracking dataframe generation
+        and party exclusions.
+
     Returns:
         tuple: A tuple containing:
             - prepared_df (pd.DataFrame): The transposed DataFrame ready for PCA.
@@ -106,39 +111,42 @@ def run_pca_analysis(n_components: int = 3) -> None:
         n_components (int, optional): The number of principal components to
         compute. Defaults to 3.
     """
-    analysis: PCAAnalysis = PCAAnalysis.objects.create()
-    log = AnalysisLogger(logger, {"analysis_id": analysis.id})
+    with atomic():
+        analysis: PCAAnalysis = PCAAnalysis.objects.create()
+        log = AnalysisLogger(logger, {"analysis_id": analysis.id})
 
-    prepared_df, labels = prepare_df(log=log)
-    model = generate_pca_object(prepared_df, labels, n_components=n_components)
-    components = model.results.get("PC")
+        prepared_df, labels = prepare_df(log=log)
+        model = generate_pca_object(
+            prepared_df, labels, n_components=n_components
+        )
+        components = model.results.get("PC")
 
-    loadings = model.results.get("loadings")
-    item_loadings: list[PCAItemLoading] = []
-    for index, row in loadings.transpose().iterrows():
-        for pc_component_score in row.index:
-            item_loadings.append(
-                PCAItemLoading(
-                    analysis=analysis,
-                    parliamentary_item_id=int(index),
-                    component=int(pc_component_score.strip("PC")),
-                    loading=row[pc_component_score],
+        loadings = model.results.get("loadings")
+        item_loadings: list[PCAItemLoading] = []
+        for index, row in loadings.transpose().iterrows():
+            for pc_component_score in row.index:
+                item_loadings.append(
+                    PCAItemLoading(
+                        analysis=analysis,
+                        parliamentary_item_id=int(index),
+                        component=int(pc_component_score.strip("PC")),
+                        loading=row[pc_component_score],
+                    )
                 )
-            )
 
-    if item_loadings:
-        PCAItemLoading.objects.bulk_create(item_loadings)
+        if item_loadings:
+            PCAItemLoading.objects.bulk_create(item_loadings)
 
-    dict_version = components.to_dict()
-    for component, party_scores in dict_version.items():
-        for party_name, score in party_scores.items():
-            party = Party.objects.get(abbreviation=party_name)
-            PCAComponentPartyScore.objects.create(
-                analysis=analysis,
-                party=party,
-                component=int(component.removeprefix("PC")),
-                score=score,
-            )
+        dict_version = components.to_dict()
+        for component, party_scores in dict_version.items():
+            for party_name, score in party_scores.items():
+                party = Party.objects.get(abbreviation=party_name)
+                PCAComponentPartyScore.objects.create(
+                    analysis=analysis,
+                    party=party,
+                    component=int(component.removeprefix("PC")),
+                    score=score,
+                )
 
 
 # FIXME - test

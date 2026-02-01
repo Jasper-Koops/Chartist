@@ -33,9 +33,9 @@ def generate_party_votes(
     """
     Generate party votes for the given parliamentary items and parties.
 
-    :param parliamentary_items: Iterator[Item]: The parliamentary items to
+    :param parliamentary_items: QuerySet[ParliamentaryItem]: The parliamentary items to
       generate votes for
-    :param parties: Iterator[Party]: The parties to generate votes for
+    :param parties: QuerySet[Party]: The parties to generate votes for
     :param calculate_participation_rate: bool: Flag to indicate whether to
         calculate participation rates after generating votes
     :return:

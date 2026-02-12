@@ -9,7 +9,12 @@ from scraper.tests.utils.testing_utils import (
     generate_party_votes,
 )
 from analyzer.analysis import run_pca_analysis
-from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
+from analyzer.models import (
+    PCAAnalysis,
+    PCAComponent,
+    PCAComponentPartyScore,
+    PCAItemLoading,
+)
 from scraper.models import Party, ParliamentaryItem, PartyVote, VoteType
 from scraper.tests.factories import ParliamentaryItemFactory
 
@@ -253,12 +258,13 @@ class TestPCAAnalysisViewSet(APITestCase):
 
     def test_filter_by_id(self) -> None:
         url = reverse("pcaanalysis-list")
-        analysis_id = 1
-        response = self.client.get(url, {"id": analysis_id})
+        analysis = PCAAnalysis.objects.first()
+        assert analysis is not None
+        response = self.client.get(url, {"id": analysis.id})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["id"], analysis_id)
+        self.assertEqual(data[0]["id"], analysis.id)
 
     def test_filter_by_created_at_gte(self) -> None:
         analysis = PCAAnalysis.objects.first()
@@ -306,6 +312,99 @@ class TestPCAAnalysisViewSet(APITestCase):
             self.assertEqual(row_dt, analysis.created_at)
 
 
+class TestPCAComponentViewSet(APITestCase):
+    def setUp(self) -> None:
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(10),
+            parties=generate_parties(),
+        )
+        run_pca_analysis(n_components=3)
+
+    def test_list_returns_200(self) -> None:
+        url = reverse("pcacomponent-list")
+        response = self.client.get(url)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(data), PCAComponent.objects.count())
+
+    def test_filter_by_analysis(self) -> None:
+        url = reverse("pcacomponent-list")
+        analysis = PCAAnalysis.objects.first()
+        assert analysis is not None
+        response = self.client.get(url, {"analysis": analysis.id})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(data), 3)
+        for row in data:
+            self.assertEqual(row["analysis"], analysis.id)
+
+    def test_filter_by_number(self) -> None:
+        url = reverse("pcacomponent-list")
+        response = self.client.get(url, {"number": 1})
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        for row in data:
+            self.assertEqual(row["number"], 1)
+
+    def test_response_includes_explained_variance(self) -> None:
+        url = reverse("pcacomponent-list")
+        response = self.client.get(url)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        for row in data:
+            self.assertIn("explained_variance", row)
+            self.assertGreater(row["explained_variance"], 0)
+
+
+class TestPCAAnalysisSerializerNesting(APITestCase):
+    def setUp(self) -> None:
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(10),
+            parties=generate_parties(),
+        )
+        run_pca_analysis(n_components=3)
+
+    def test_analysis_response_includes_nested_components(self) -> None:
+        url = reverse("pcaanalysis-list")
+        response = self.client.get(url)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        analysis_data = data[0]
+        self.assertIn("components", analysis_data)
+        self.assertEqual(len(analysis_data["components"]), 3)
+        for component in analysis_data["components"]:
+            self.assertIn("number", component)
+            self.assertIn("explained_variance", component)
+
+
+class TestKeyParliamentaryItemViewSet(APITestCase):
+    def setUp(self) -> None:
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(10),
+            parties=generate_parties(),
+        )
+        run_pca_analysis(n_components=3)
+
+    def test_list_returns_200(self) -> None:
+        url = reverse("key-parliamentary-items-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_returns_at_most_10_items(self) -> None:
+        url = reverse("key-parliamentary-items-list")
+        response = self.client.get(url)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertLessEqual(len(data), 10)
+
+    def test_items_include_votes_and_loadings(self) -> None:
+        url = reverse("key-parliamentary-items-list")
+        response = self.client.get(url)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertGreater(len(data), 0)
+        for item in data:
+            self.assertIn("votes", item)
+            self.assertIn("loadings", item)
+
+
 class TestPCAComponentPartyScoreViewSet(APITestCase):
     def setUp(self) -> None:
         generate_party_votes(
@@ -327,11 +426,12 @@ class TestPCAComponentPartyScoreViewSet(APITestCase):
         url = reverse("pcacomponentpartyscore-list")
         analysis = PCAAnalysis.objects.first()
         assert analysis is not None
-        response = self.client.get(url, {"analysis": analysis.id})
+        response = self.client.get(url, {"component__analysis": analysis.id})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:
-            self.assertEqual(row["analysis"], analysis.id)
+            component = PCAComponent.objects.get(id=row["component"])
+            self.assertEqual(component.analysis_id, analysis.id)
 
     def test_filter_by_party_id(self) -> None:
         url = reverse("pcacomponentpartyscore-list")
@@ -345,12 +445,14 @@ class TestPCAComponentPartyScoreViewSet(APITestCase):
 
     def test_filter_by_component_number(self) -> None:
         url = reverse("pcacomponentpartyscore-list")
-        component_number = 1
-        response = self.client.get(url, {"component": component_number})
+        component = PCAComponent.objects.first()
+        assert component is not None
+        response = self.client.get(url, {"component__number": component.number})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:
-            self.assertEqual(row["component"], component_number)
+            comp = PCAComponent.objects.get(id=row["component"])
+            self.assertEqual(comp.number, component.number)
 
     def test_filter_by_score_gte(self) -> None:
         pcacpc = PCAComponentPartyScore.objects.first()
@@ -415,11 +517,12 @@ class TestPCAItemLoadingViewSet(APITestCase):
         url = reverse("pcaitemloading-list")
         analysis = PCAAnalysis.objects.first()
         assert analysis is not None
-        response = self.client.get(url, {"analysis": analysis.id})
+        response = self.client.get(url, {"component__analysis": analysis.id})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:
-            self.assertEqual(row["analysis"], analysis.id)
+            component = PCAComponent.objects.get(id=row["component"])
+            self.assertEqual(component.analysis_id, analysis.id)
 
     def test_filter_by_parliamentary_item_id(self) -> None:
         url = reverse("pcaitemloading-list")
@@ -433,12 +536,14 @@ class TestPCAItemLoadingViewSet(APITestCase):
 
     def test_filter_by_component_number(self) -> None:
         url = reverse("pcaitemloading-list")
-        component_number = 1
-        response = self.client.get(url, {"component": component_number})
+        component = PCAComponent.objects.first()
+        assert component is not None
+        response = self.client.get(url, {"component__number": component.number})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:
-            self.assertEqual(row["component"], component_number)
+            comp = PCAComponent.objects.get(id=row["component"])
+            self.assertEqual(comp.number, component.number)
 
     def test_filter_by_loading_gte(self) -> None:
         pcal = PCAItemLoading.objects.first()

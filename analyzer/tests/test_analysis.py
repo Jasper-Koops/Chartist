@@ -2,7 +2,12 @@ from analyzer.analysis import run_pca_analysis, prepare_df
 from django.test import TestCase
 from django.db.models import QuerySet
 from scraper.models import ParliamentaryItem
-from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
+from analyzer.models import (
+    PCAAnalysis,
+    PCAComponent,
+    PCAComponentPartyScore,
+    PCAItemLoading,
+)
 from analyzer.analysis import calculate_party_participation_rate
 from analyzer.utils import AnalysisLogger
 from scraper.tests.utils.testing_utils import (
@@ -38,6 +43,25 @@ class TestCalculatePartyParticipationRate(TestCase):
             expected_rate: float = (votes_cast / total_items) * 100
             party.refresh_from_db()
             self.assertEqual(party.participation_rate, expected_rate)
+
+    def test_partial_participation_rate(self) -> None:
+        """Test that a party voting on only some items gets a rate < 100%."""
+        subset = self.items[:3]
+        party = self.parties.first()
+        assert party is not None
+        from scraper.tests.factories import PartyVoteFactory
+        from scraper.models import VoteType
+
+        for item in subset:
+            PartyVoteFactory(
+                party=party, parliamentary_item=item, vote=VoteType.FOR
+            )
+        calculate_party_participation_rate()
+        party.refresh_from_db()
+        expected_rate = (len(subset) / self.items.count()) * 100
+        self.assertEqual(party.participation_rate, expected_rate)
+        assert party.participation_rate is not None
+        self.assertLess(party.participation_rate, 100.0)
 
 
 class TestPrepareDF(TestCase):
@@ -76,12 +100,56 @@ class TestPrepareDF(TestCase):
 
 
 class TestRunPCAAnalysis(TestCase):
-    def test_function_runs_without_error(self) -> None:
+    def setUp(self) -> None:
+        self.parties = generate_parties()
+        self.items = generate_parliamentary_items(10)
         generate_party_votes(
-            parliamentary_items=generate_parliamentary_items(10),
-            parties=generate_parties(),
+            parliamentary_items=self.items,
+            parties=self.parties,
         )
+
+    def test_creates_correct_record_counts(self) -> None:
         run_pca_analysis(n_components=3)
         self.assertEqual(1, PCAAnalysis.objects.count())
+        self.assertEqual(3, PCAComponent.objects.count())
         self.assertEqual(45, PCAComponentPartyScore.objects.count())
         self.assertEqual(10 * 3, PCAItemLoading.objects.count())
+
+    def test_components_have_valid_explained_variance(self) -> None:
+        run_pca_analysis(n_components=3)
+        components = list(
+            PCAComponent.objects.order_by("number").values_list(
+                "explained_variance", flat=True
+            )
+        )
+        self.assertEqual(len(components), 3)
+        # Each variance is between 0 and 1
+        for variance in components:
+            self.assertGreater(variance, 0)
+            self.assertLessEqual(variance, 1)
+        # Total explained variance cannot exceed 1
+        self.assertLessEqual(sum(components), 1)
+        # Components are in descending order of explained variance
+        self.assertEqual(components, sorted(components, reverse=True))
+
+    def test_scores_and_loadings_link_to_correct_components(self) -> None:
+        run_pca_analysis(n_components=3)
+        analysis = PCAAnalysis.objects.first()
+        assert analysis is not None
+        for pca_component in PCAComponent.objects.filter(analysis=analysis):
+            # Each component should have exactly 15 party scores (one per party)
+            scores = PCAComponentPartyScore.objects.filter(
+                component=pca_component
+            )
+            self.assertEqual(scores.count(), self.parties.count())
+            # Each component should have exactly 10 item loadings (one per item)
+            loadings = PCAItemLoading.objects.filter(component=pca_component)
+            self.assertEqual(loadings.count(), self.items.count())
+
+    def test_cascade_delete_removes_all_related_records(self) -> None:
+        run_pca_analysis(n_components=3)
+        self.assertEqual(1, PCAAnalysis.objects.count())
+        PCAAnalysis.objects.all().delete()
+        self.assertEqual(0, PCAComponent.objects.count())
+        self.assertEqual(0, PCAComponentPartyScore.objects.count())
+        self.assertEqual(0, PCAItemLoading.objects.count())

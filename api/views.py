@@ -10,10 +10,16 @@ from api.errors import NoAnalysisFoundException
 from django.db.models import Sum, QuerySet
 from analyzer.serializers import (
     PCAAnalysisSerializer,
+    PCAComponentSerializer,
     PCAComponentPartyScoreSerializer,
     PCAItemLoadingSerializer,
 )
-from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
+from analyzer.models import (
+    PCAAnalysis,
+    PCAComponent,
+    PCAComponentPartyScore,
+    PCAItemLoading,
+)
 from scraper.models import Party, PartyVote, ParliamentaryItem
 
 
@@ -61,7 +67,7 @@ class KeyParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
 
         queryset = (
             ParliamentaryItem.objects.filter(
-                pca_loadings__analysis=latest_analysis
+                pca_loadings__component__analysis=latest_analysis
             )
             .annotate(total_loading=Sum(Abs("pca_loadings__loading")))
             .order_by("-total_loading")[:10]
@@ -77,15 +83,25 @@ class PCAAnalysisViewSet(ReadOnlyModelViewSet[PCAAnalysis]):
     }
 
 
+class PCAComponentViewSet(ReadOnlyModelViewSet[PCAComponent]):
+    queryset = PCAComponent.objects.all()
+    serializer_class = PCAComponentSerializer
+    filterset_fields = {
+        "analysis": ["exact"],
+        "number": ["exact"],
+    }
+
+
 class PCAComponentPartyScoreViewSet(
     ReadOnlyModelViewSet[PCAComponentPartyScore]
 ):
     queryset = PCAComponentPartyScore.objects.all()
     serializer_class = PCAComponentPartyScoreSerializer
     filterset_fields = {
-        "analysis": ["exact"],
-        "party": ["exact"],
         "component": ["exact"],
+        "component__analysis": ["exact"],
+        "component__number": ["exact"],
+        "party": ["exact"],
         "score": ["exact", "gte", "lte"],
     }
 
@@ -94,8 +110,9 @@ class PCAItemLoadingViewSet(ReadOnlyModelViewSet[PCAItemLoading]):
     queryset = PCAItemLoading.objects.all()
     serializer_class = PCAItemLoadingSerializer
     filterset_fields = {
-        "analysis": ["exact"],
-        "parliamentary_item": ["exact"],
         "component": ["exact"],
+        "component__analysis": ["exact"],
+        "component__number": ["exact"],
+        "parliamentary_item": ["exact"],
         "loading": ["exact", "gte", "lte"],
     }

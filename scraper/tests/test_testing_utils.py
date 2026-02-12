@@ -7,7 +7,7 @@ from scraper.tests.utils.testing_utils import (
     generate_party_votes,
 )
 from scraper.tests.fixtures.utils_fixtures import PARTIES
-from scraper.models import Party
+from scraper.models import Party, ParliamentaryItemStatusTypes
 
 
 class TestGenerateParties(TestCase):
@@ -69,9 +69,11 @@ class TestGeneratePartyVotes(TestCase):
             for_votes = item.partyvote_set.filter(vote="For").count()
             against_votes = item.partyvote_set.filter(vote="Against").count()
 
-            # If more 'for' votes than 'against', status should be 'Passed'
             if for_votes > against_votes:
-                self.assertEqual(item.status, "Passed")
-            # If more 'against' votes than 'for', status should be 'Rejected'
+                self.assertEqual(
+                    item.status, ParliamentaryItemStatusTypes.ACCEPTED
+                )
             elif against_votes >= for_votes:
-                self.assertEqual(item.status, "Rejected")
+                self.assertEqual(
+                    item.status, ParliamentaryItemStatusTypes.REJECTED
+                )

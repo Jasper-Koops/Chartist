@@ -6,7 +6,12 @@ from scraper.tests.factories import (
     PartyVoteFactory,
 )
 from analyzer.analysis import calculate_party_participation_rate
-from scraper.models import Party, VoteType, ParliamentaryItem
+from scraper.models import (
+    Party,
+    VoteType,
+    ParliamentaryItem,
+    ParliamentaryItemStatusTypes,
+)
 from scraper.tests.fixtures.utils_fixtures import PARTIES
 import random
 
@@ -56,9 +61,9 @@ def generate_party_votes(
         for_votes = item.partyvote_set.filter(vote=VoteType.FOR).count()
         against_votes = item.partyvote_set.filter(vote=VoteType.AGAINST).count()
         if for_votes > against_votes:
-            item.status = "Passed"
+            item.status = ParliamentaryItemStatusTypes.ACCEPTED
         elif against_votes >= for_votes:
-            item.status = "Rejected"
+            item.status = ParliamentaryItemStatusTypes.REJECTED
 
         item.save()
 

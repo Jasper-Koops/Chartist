@@ -19,7 +19,7 @@ class PartySerializer(serializers.ModelSerializer[Party]):
         last_analysis = PCAAnalysis.objects.order_by("-created_at").first()
         if last_analysis is None:
             return []
-        scores = obj.pca_scores.filter(analysis=last_analysis)
+        scores = obj.pca_scores.filter(component__analysis=last_analysis)
         return PCAComponentPartyScoreSerializer(scores, many=True).data
 
 
@@ -64,5 +64,8 @@ class KeyParliamentaryItemSerializer(
         # Avoid circular import.
         from analyzer.serializers import PCAItemLoadingSerializer
 
-        loadings = obj.pca_loadings.all()
+        last_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        if last_analysis is None:
+            return []
+        loadings = obj.pca_loadings.filter(component__analysis=last_analysis)
         return PCAItemLoadingSerializer(loadings, many=True).data

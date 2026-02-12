@@ -53,6 +53,7 @@ class PCAComponentPartyScore(models.Model):
     class Meta:
         verbose_name = "PCA Component Party Score"
         verbose_name_plural = "PCA Component Party Scores"
+        unique_together = ("component", "party")
 
     def __str__(self) -> str:
         return f"{self.party} PC{self.component.number} - score: {self.score}"
@@ -74,6 +75,7 @@ class PCAItemLoading(models.Model):
     class Meta:
         verbose_name = "PCA Item Loading"
         verbose_name_plural = "PCA Item Loadings"
+        unique_together = ("component", "parliamentary_item")
 
     def __str__(self) -> str:
         return f"Item ID: {self.parliamentary_item_id} PC{self.component.number} - loading: {self.loading}"

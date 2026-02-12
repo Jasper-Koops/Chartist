@@ -1,4 +1,5 @@
 from analyzer.analysis import run_pca_analysis, prepare_df
+from django.db import IntegrityError
 from django.test import TestCase
 from django.db.models import QuerySet
 from scraper.models import ParliamentaryItem
@@ -153,3 +154,25 @@ class TestRunPCAAnalysis(TestCase):
         self.assertEqual(0, PCAComponent.objects.count())
         self.assertEqual(0, PCAComponentPartyScore.objects.count())
         self.assertEqual(0, PCAItemLoading.objects.count())
+
+    def test_duplicate_party_score_raises_integrity_error(self) -> None:
+        run_pca_analysis(n_components=3)
+        existing = PCAComponentPartyScore.objects.first()
+        assert existing is not None
+        with self.assertRaises(IntegrityError):
+            PCAComponentPartyScore.objects.create(
+                component=existing.component,
+                party=existing.party,
+                score=0.0,
+            )
+
+    def test_duplicate_item_loading_raises_integrity_error(self) -> None:
+        run_pca_analysis(n_components=3)
+        existing = PCAItemLoading.objects.first()
+        assert existing is not None
+        with self.assertRaises(IntegrityError):
+            PCAItemLoading.objects.create(
+                component=existing.component,
+                parliamentary_item=existing.parliamentary_item,
+                loading=0.0,
+            )

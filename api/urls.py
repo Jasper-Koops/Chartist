@@ -5,6 +5,7 @@ from api.views import (
     ParliamentaryItemViewSet,
     KeyParliamentaryItemViewSet,
     PCAAnalysisViewSet,
+    PCAComponentViewSet,
     PCAComponentPartyScoreViewSet,
     PCAItemLoadingViewSet,
 )
@@ -19,6 +20,7 @@ router.register(
     "key-items", KeyParliamentaryItemViewSet, basename="key-parliamentary-items"
 )
 router.register("analysis", PCAAnalysisViewSet)
+router.register("pca-components", PCAComponentViewSet)
 router.register("pca-scores", PCAComponentPartyScoreViewSet)
 router.register("pca-loadings", PCAItemLoadingViewSet)
 

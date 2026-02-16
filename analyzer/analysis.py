@@ -3,7 +3,12 @@ from pca import pca
 from django.db.models import QuerySet
 from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
 from scraper.models import Party, PartyVote, ParliamentaryItem
-from analyzer.models import PCAAnalysis, PCAComponentPartyScore, PCAItemLoading
+from analyzer.models import (
+    PCAAnalysis,
+    PCAComponent,
+    PCAComponentPartyScore,
+    PCAItemLoading,
+)
 from typing import TextIO
 from django.db.transaction import atomic
 from django.core.management.base import OutputWrapper
@@ -119,32 +124,43 @@ def run_pca_analysis(n_components: int = 3) -> None:
         model = generate_pca_object(
             prepared_df, labels, n_components=n_components
         )
-        components = model.results.get("PC")
 
+        # Create PCAComponent records with explained variance
+        explained_variances = model.results.get("variance_ratio")
+        pca_components: dict[str, PCAComponent] = {}
+        for i, variance in enumerate(explained_variances, start=1):
+            pca_component = PCAComponent.objects.create(
+                analysis=analysis,
+                number=i,
+                explained_variance=variance,
+            )
+            pca_components[f"PC{i}"] = pca_component
+
+        # Save item loadings
         loadings = model.results.get("loadings")
         item_loadings: list[PCAItemLoading] = []
         for index, row in loadings.transpose().iterrows():
-            for pc_component_score in row.index:
+            for pc_label in row.index:
                 item_loadings.append(
                     PCAItemLoading(
-                        analysis=analysis,
+                        component=pca_components[pc_label],
                         parliamentary_item_id=int(index),
-                        component=int(pc_component_score.strip("PC")),
-                        loading=row[pc_component_score],
+                        loading=row[pc_label],
                     )
                 )
 
         if item_loadings:
             PCAItemLoading.objects.bulk_create(item_loadings)
 
+        # Save party scores
+        components = model.results.get("PC")
         dict_version = components.to_dict()
-        for component, party_scores in dict_version.items():
+        for pc_label, party_scores in dict_version.items():
             for party_name, score in party_scores.items():
                 party = Party.objects.get(abbreviation=party_name)
                 PCAComponentPartyScore.objects.create(
-                    analysis=analysis,
+                    component=pca_components[pc_label],
                     party=party,
-                    component=int(component.removeprefix("PC")),
                     score=score,
                 )
 

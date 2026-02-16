@@ -20,6 +20,7 @@ from analyzer.models import (
     PCAComponentPartyScore,
     PCAItemLoading,
 )
+from api.filters import PCAComponentPartyScoreFilter, PCAItemLoadingFilter
 from scraper.models import Party, PartyVote, ParliamentaryItem
 
 
@@ -97,22 +98,10 @@ class PCAComponentPartyScoreViewSet(
 ):
     queryset = PCAComponentPartyScore.objects.all()
     serializer_class = PCAComponentPartyScoreSerializer
-    filterset_fields = {
-        "component": ["exact"],
-        "component__analysis": ["exact"],
-        "component__number": ["exact"],
-        "party": ["exact"],
-        "score": ["exact", "gte", "lte"],
-    }
+    filterset_class = PCAComponentPartyScoreFilter
 
 
 class PCAItemLoadingViewSet(ReadOnlyModelViewSet[PCAItemLoading]):
     queryset = PCAItemLoading.objects.all()
     serializer_class = PCAItemLoadingSerializer
-    filterset_fields = {
-        "component": ["exact"],
-        "component__analysis": ["exact"],
-        "component__number": ["exact"],
-        "parliamentary_item": ["exact"],
-        "loading": ["exact", "gte", "lte"],
-    }
+    filterset_class = PCAItemLoadingFilter

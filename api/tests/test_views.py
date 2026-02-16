@@ -426,7 +426,7 @@ class TestPCAComponentPartyScoreViewSet(APITestCase):
         url = reverse("pcacomponentpartyscore-list")
         analysis = PCAAnalysis.objects.first()
         assert analysis is not None
-        response = self.client.get(url, {"component__analysis": analysis.id})
+        response = self.client.get(url, {"analysis": analysis.id})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:
@@ -447,7 +447,7 @@ class TestPCAComponentPartyScoreViewSet(APITestCase):
         url = reverse("pcacomponentpartyscore-list")
         component = PCAComponent.objects.first()
         assert component is not None
-        response = self.client.get(url, {"component__number": component.number})
+        response = self.client.get(url, {"number": component.number})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:
@@ -517,7 +517,7 @@ class TestPCAItemLoadingViewSet(APITestCase):
         url = reverse("pcaitemloading-list")
         analysis = PCAAnalysis.objects.first()
         assert analysis is not None
-        response = self.client.get(url, {"component__analysis": analysis.id})
+        response = self.client.get(url, {"analysis": analysis.id})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:
@@ -538,7 +538,7 @@ class TestPCAItemLoadingViewSet(APITestCase):
         url = reverse("pcaitemloading-list")
         component = PCAComponent.objects.first()
         assert component is not None
-        response = self.client.get(url, {"component__number": component.number})
+        response = self.client.get(url, {"number": component.number})
         data: list[dict[str, Any]] = response.data.get("results", response.data)
         self.assertEqual(response.status_code, 200)
         for row in data:

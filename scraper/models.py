@@ -50,6 +50,7 @@ class ParliamentaryItem(models.Model):
         choices=ParliamentaryItemStatusTypes.choices,
         default=ParliamentaryItemStatusTypes.PENDING,
     )
+    text = models.JSONField(blank=True, null=True)
 
     def __str__(self) -> str:
         return f"{self.item_type} - {self.title} - {self.status}"

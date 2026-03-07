@@ -10,7 +10,6 @@ from scraper.models import ParliamentaryItemStatusTypes, VoteType
 class FractieInput(BaseModel):
     Id: str
     NaamNL: str
-    NaamEN: str
     Afkorting: str
     AantalZetels: int
     AantalStemmen: int
@@ -27,7 +26,6 @@ class FractieDTO:
     Attributes:
         Id (str): Unique identifier of the party.
         NaamNL (str): Name of the party in Dutch.
-        NaamEN (str): Name of the party in English.
         Afkorting (str): Abbreviation of the party name.
         AantalZetels (int): Number of seats held by the party.
         AantalStemmen (int): Number of votes received by the party.
@@ -37,7 +35,6 @@ class FractieDTO:
 
     Id: str
     NaamNL: str
-    NaamEN: str
     Afkorting: str
     AantalZetels: int
     AantalStemmen: int
@@ -66,76 +63,11 @@ class FractieDTO:
         return cls(
             Id=validated.Id,
             NaamNL=validated.NaamNL,
-            NaamEN=validated.NaamEN,
             Afkorting=validated.Afkorting,
             AantalZetels=validated.AantalZetels,
             AantalStemmen=validated.AantalStemmen,
             DatumActief=validated.DatumActief,
             DatumInactief=validated.DatumInactief,
-        )
-
-
-class ZaakInput(BaseModel):
-    Id: str
-    Soort: str
-    Titel: str
-    Onderwerp: str
-    Vergaderjaar: str
-    GestartOp: datetime
-    GewijzigdOp: datetime
-
-
-@dataclass
-@typechecked
-class ZaakDTO:
-    """
-    Data Transfer Object (DTO) for a parliamentary item (Zaak).
-
-    Attributes:
-        Id (str): Unique identifier of the item.
-        Soort (str): Type of the item.
-        Titel (str): Title of the item.
-        Onderwerp (str): Subject of the item.
-        Vergaderjaar (str): Parliamentary year of the item.
-        GestartOp (datetime): Start date of the item.
-        GewijzigdOp (datetime): Last modified date of the item.
-    """
-
-    Id: str
-    Soort: str
-    Titel: str
-    Onderwerp: str
-    Vergaderjaar: str
-    GestartOp: datetime
-    GewijzigdOp: datetime
-
-    @classmethod
-    def from_api(cls, data: Mapping[str, Any]) -> "ZaakDTO":
-        """
-        Create a ZaakDTO instance from API data.
-
-        Args:
-            data (ZaakInput): The API data containing item information.
-
-        Returns:
-            ZaakDTO: An instance of ZaakDTO.
-
-        Raises:
-            ValueError: If any required field is missing or None.
-        """
-        try:
-            validated = ZaakInput.model_validate(data)
-        except ValidationError as e:
-            raise ValueError(str(e)) from e
-
-        return cls(
-            Id=validated.Id,
-            Soort=validated.Soort,
-            Titel=validated.Titel,
-            Onderwerp=validated.Onderwerp,
-            Vergaderjaar=validated.Vergaderjaar,
-            GestartOp=validated.GestartOp,
-            GewijzigdOp=validated.GewijzigdOp,
         )
 
 
@@ -208,67 +140,52 @@ class StemmingDTO:
         return result
 
 
-class AgendapuntZaakBesluitVolgordeInput(BaseModel):
+class BesluitInput(BaseModel):
     Id: str
     Agendapunt_Id: str
     BesluitSoort: str
-    BesluitTekst: str
     GewijzigdOp: datetime
-    Zaak: list[Mapping[str, Any]]
     Stemming: list[Mapping[str, Any]]
 
 
 @dataclass
 @typechecked
-class AgendapuntZaakBesluitVolgordeDTO:
+class BesluitDTO:
     """
-    Data Transfer Object (DTO) for an agenda item, item, and decision sequence.
+    Data Transfer Object (DTO) for a parliamentary decision (Besluit).
 
     Attributes:
-        Id (str): Unique identifier of the agenda item.
+        Id (str): Unique identifier of the decision.
         Agendapunt_Id (str): Identifier of the agenda point.
-        BesluitSoort (str): Type of the decision.
-        BesluitTekst (str): Text describing the decision.
+        BesluitSoort (ParliamentaryItemStatusTypes): Status of the decision.
         GewijzigdOp (datetime): Last modified date of the decision.
-        Zaak (list[ZaakDTO]): List of associated items.
         Stemming (list[StemmingDTO]): List of associated votes.
     """
 
     Id: str
     Agendapunt_Id: str
-    BesluitSoort: str
+    BesluitSoort: ParliamentaryItemStatusTypes
     GewijzigdOp: datetime
-    Zaak: list[ZaakDTO]
     Stemming: list[StemmingDTO]
 
     @classmethod
-    def from_api(
-        cls, data: Mapping[str, Any]
-    ) -> "AgendapuntZaakBesluitVolgordeDTO":
+    def from_api(cls, data: Mapping[str, Any]) -> "BesluitDTO":
         """
-        Create an AgendapuntZaakBesluitVolgordeDTO instance from API data.
+        Create a BesluitDTO instance from API data.
 
         Args:
-            data (AgendapuntZaakBesluitVolgordeInput): The API data containing agenda item, item, and
-            decision information.
+            data (BesluitInput): The API data containing decision information.
 
         Returns:
-            AgendapuntZaakBesluitVolgordeDTO: An instance of
-            AgendapuntZaakBesluitVolgordeDTO.
+            BesluitDTO: An instance of BesluitDTO.
 
         Raises:
-            ValueError: If any required field is missing or None, or if there
-            is not exactly one item.
+            ValueError: If any required field is missing or None.
         """
         try:
-            validated = AgendapuntZaakBesluitVolgordeInput.model_validate(data)
+            validated = BesluitInput.model_validate(data)
         except ValidationError as e:
             raise ValueError(str(e)) from e
-
-        if len(data["Zaak"]) != 1:
-            raise ValueError(
-                f"Expected one, got {len(data['Zaak'])} Zaak items"
-            )
 
         return cls(
             Id=validated.Id,
@@ -277,10 +194,7 @@ class AgendapuntZaakBesluitVolgordeDTO:
                 validated.BesluitSoort
             ),
             GewijzigdOp=validated.GewijzigdOp,
-            Zaak=[ZaakDTO.from_api(zaak) for zaak in validated.Zaak],
-            Stemming=[
-                StemmingDTO.from_api(vote) for vote in validated.Stemming
-            ],
+            Stemming=[StemmingDTO.from_api(s) for s in validated.Stemming],
         )
 
     @staticmethod
@@ -333,3 +247,71 @@ class AgendapuntZaakBesluitVolgordeDTO:
                 return status
 
         raise ValueError(f"Unknown parliamentary item status: {data}")
+
+
+class ZaakBesluitInput(BaseModel):
+    Id: str
+    Onderwerp: str
+    Vergaderjaar: str
+    GestartOp: datetime
+    GewijzigdOp: datetime
+    Besluit: list[Mapping[str, Any]]
+    Document: list[Mapping[str, Any]]
+
+
+@dataclass
+@typechecked
+class ZaakBesluitDTO:
+    """
+    Data Transfer Object (DTO) for a Zaak with nested Besluit and Document.
+
+    Attributes:
+        Id (str): Unique identifier of the Zaak.
+        Onderwerp (str): Subject of the Zaak.
+        GestartOp (datetime): Start date of the Zaak.
+        GewijzigdOp (datetime): Last modified date of the Zaak.
+        Besluit (list[BesluitDTO]): List of associated decisions.
+        Document (list[dict]): List of associated documents.
+    """
+
+    Id: str
+    Onderwerp: str
+    Vergaderjaar: str
+    GestartOp: datetime
+    GewijzigdOp: datetime
+    Besluit: list[BesluitDTO]
+    Document: list[dict[str, Any]]
+
+    @classmethod
+    def from_api(cls, data: Mapping[str, Any]) -> "ZaakBesluitDTO":
+        """
+        Create a ZaakBesluitDTO instance from API data.
+
+        Args:
+            data (ZaakBesluitInput): The API data containing Zaak, Besluit,
+            and Document information.
+
+        Returns:
+            ZaakBesluitDTO: An instance of ZaakBesluitDTO.
+
+        Raises:
+            ValueError: If any required field is missing or None, or if
+            Besluit is empty.
+        """
+        try:
+            validated = ZaakBesluitInput.model_validate(data)
+        except ValidationError as e:
+            raise ValueError(str(e)) from e
+
+        if not validated.Besluit:
+            raise ValueError("Expected at least one Besluit, got 0")
+
+        return cls(
+            Id=validated.Id,
+            Onderwerp=validated.Onderwerp,
+            Vergaderjaar=validated.Vergaderjaar,
+            GestartOp=validated.GestartOp,
+            GewijzigdOp=validated.GewijzigdOp,
+            Besluit=[BesluitDTO.from_api(b) for b in validated.Besluit],
+            Document=[dict(d) for d in validated.Document],
+        )

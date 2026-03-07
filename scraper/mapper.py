@@ -1,7 +1,7 @@
 from datetime import datetime
 from scraper.dto import (
     FractieDTO,
-    AgendapuntZaakBesluitVolgordeDTO,
+    ZaakBesluitDTO,
     StemmingDTO,
 )
 
@@ -19,15 +19,14 @@ def party_from_dto(fractie_dto: FractieDTO) -> dict[str, str]:
 
 
 def parliamentary_item_from_dto(
-    dto: AgendapuntZaakBesluitVolgordeDTO,
+    dto: ZaakBesluitDTO,
 ) -> dict[str, str | datetime]:
-    zaak_dto = dto.Zaak[0]
     return {
-        "api_id": zaak_dto.Id,
-        "title": zaak_dto.Onderwerp,
-        "date": dto.GewijzigdOp,
+        "api_id": dto.Id,
+        "title": dto.Onderwerp,
+        "date": dto.Besluit[0].GewijzigdOp,
         "item_type": ParliamentaryItemType.MOTION,
-        "status": dto.BesluitSoort,
+        "status": dto.Besluit[0].BesluitSoort,
     }
 
 

@@ -8,8 +8,7 @@ from scraper.models import (
     VoteType,
 )
 from django.utils import timezone
-from scraper.dto import AgendapuntZaakBesluitVolgordeDTO
-import random
+from scraper.dto import BesluitDTO, ZaakBesluitDTO
 
 
 class PartyFactory(factory.django.DjangoModelFactory):
@@ -46,15 +45,17 @@ class PartyVoteFactory(factory.django.DjangoModelFactory):
     vote = VoteType.FOR
 
 
-class AgendapuntZaakBesluitVolgordeDTOFactory(factory.Factory):
+class BesluitDTOFactory(factory.Factory):
     class Meta:
-        model = AgendapuntZaakBesluitVolgordeDTO
+        model = BesluitDTO
 
     Id = factory.Faker("uuid4")
     Agendapunt_Id = factory.Faker("uuid4")
-    BesluitSoort = factory.Faker(
-        "random_element",
-        elements=["stemming: aangenomen.", "stemming: verworpen."],
+    BesluitSoort = factory.Iterator(
+        [
+            ParliamentaryItemStatusTypes.ACCEPTED,
+            ParliamentaryItemStatusTypes.REJECTED,
+        ]
     )
     GewijzigdOp = factory.Faker(
         "date_time_this_decade",
@@ -62,13 +63,27 @@ class AgendapuntZaakBesluitVolgordeDTOFactory(factory.Factory):
         after_now=False,
         tzinfo=timezone.get_current_timezone(),
     )
-    Zaak = factory.List([{"Id": factory.Faker("uuid4")}])
-    Stemming = factory.LazyAttribute(
-        lambda _: [
-            {
-                "Fractie_Id": factory.Faker("uuid4"),
-                "Soort": random.choice(["Voor", "Tegen"]),
-            }
-            for _ in range(10)
-        ]
+    Stemming = factory.List([])
+
+
+class ZaakBesluitDTOFactory(factory.Factory):
+    class Meta:
+        model = ZaakBesluitDTO
+
+    Id = factory.Faker("uuid4")
+    Onderwerp = factory.Faker("sentence", nb_words=10)
+    Vergaderjaar = "2025-2026"
+    GestartOp = factory.Faker(
+        "date_time_this_decade",
+        before_now=True,
+        after_now=False,
+        tzinfo=timezone.get_current_timezone(),
     )
+    GewijzigdOp = factory.Faker(
+        "date_time_this_decade",
+        before_now=True,
+        after_now=False,
+        tzinfo=timezone.get_current_timezone(),
+    )
+    Besluit = factory.LazyAttribute(lambda _: [BesluitDTOFactory()])
+    Document = factory.List([])

@@ -185,7 +185,7 @@ class ParliamentApi:
         filters: list[str] = [
             "Verwijderd eq false",
             "Soort eq 'Motie'",
-            "GewijzigdOp gt 2025-11-01T00:00:00+01:00",
+            "GestartOp gt 2025-11-12T00:00:00+01:00",
         ]
         expand: list[str] = [
             "Besluit($filter=Verwijderd eq false and StemmingsSoort ne null;"

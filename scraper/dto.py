@@ -229,8 +229,11 @@ class BesluitDTO:
 
         tokens = value.split()
 
-        # Detect negations, because I do not trust this API to keep its values
-        # standardized.
+        # "niet aangenomen" is semantically equivalent to "verworpen".
+        if {"niet", "aangenomen"}.issubset(tokens):
+            return ParliamentaryItemStatusTypes.REJECTED
+
+        # Detect remaining negations — the API is not to be trusted.
         if negations.intersection(tokens):
             raise ValueError(f"Negation detected in: {data}")
 

@@ -152,16 +152,23 @@ class TestZaakBesluitDTO(TestCase):
             dto.get_parliamentary_item_status("Stemming: Aangenomen."),
         )
 
-    def test_negation_detected(self) -> None:
+    def test_niet_aangenomen_maps_to_rejected(self) -> None:
         dto: BesluitDTO = BesluitDTOFactory()
-        with self.assertRaisesMessage(
-            ValueError, "Negation detected in: niet Aangenomen"
-        ):
-            dto.get_parliamentary_item_status("niet Aangenomen")
+        self.assertEqual(
+            ParliamentaryItemStatusTypes.REJECTED,
+            dto.get_parliamentary_item_status("niet Aangenomen"),
+        )
 
-    def test_case_insensitive_negation_detection(self) -> None:
+    def test_niet_aangenomen_case_insensitive(self) -> None:
+        dto: BesluitDTO = BesluitDTOFactory()
+        self.assertEqual(
+            ParliamentaryItemStatusTypes.REJECTED,
+            dto.get_parliamentary_item_status(" NiEt. Aangenomen"),
+        )
+
+    def test_other_negations_raise_error(self) -> None:
         dto: BesluitDTO = BesluitDTOFactory()
         with self.assertRaisesMessage(
-            ValueError, "Negation detected in:  NiEt. Aangenomen"
+            ValueError, "Negation detected in: niet verworpen"
         ):
-            dto.get_parliamentary_item_status(" NiEt. Aangenomen")
+            dto.get_parliamentary_item_status("niet verworpen")

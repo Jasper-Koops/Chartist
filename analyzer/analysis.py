@@ -141,6 +141,9 @@ def run_pca_analysis(n_components: int = 3) -> None:
             )
             pca_components[f"PC{i}"] = pca_component
 
+        analysis.total_explained_variance = sum(explained_variances)
+        analysis.save(update_fields=["total_explained_variance"])
+
         # Save item loadings
         loadings = model.results.get("loadings")
         item_loadings: list[PCAItemLoading] = []

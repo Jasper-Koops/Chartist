@@ -112,7 +112,7 @@ class ParliamentApi:
         # Iterate over pages
         items: list[dict[str, Any]] = []
         while True:
-            r = requests.get(url, params=params)
+            r = requests.get(url, params=params, timeout=30)
             r.raise_for_status()
             payload = r.json()
             items.extend(payload.get("value", []))
@@ -245,7 +245,8 @@ class ParliamentApi:
                 )
                 if externe_id:
                     xml_resp = requests.get(
-                        f"https://zoek.officielebekendmakingen.nl/{externe_id}.xml"
+                        f"https://zoek.officielebekendmakingen.nl/{externe_id}.xml",
+                        timeout=30,
                     )
                     if xml_resp.ok:
                         bullets = extract_motion_bullet_points(xml_resp.content)

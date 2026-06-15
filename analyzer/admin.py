@@ -9,8 +9,8 @@ from analyzer.models import (
 
 @admin.register(PCAAnalysis)
 class PCAAnalysisAdmin(admin.ModelAdmin):
-    list_display = ["id", "created_at"]
-    readonly_fields = ["created_at"]
+    list_display = ["id", "created_at", "total_explained_variance"]
+    readonly_fields = ["created_at", "total_explained_variance"]
 
 
 @admin.register(PCAComponent)

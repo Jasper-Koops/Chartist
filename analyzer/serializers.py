@@ -18,7 +18,12 @@ class PCAAnalysisSerializer(serializers.ModelSerializer[PCAAnalysis]):
 
     class Meta:
         model = PCAAnalysis
-        fields: list[str] = ["id", "created_at", "components"]
+        fields: list[str] = [
+            "id",
+            "created_at",
+            "total_explained_variance",
+            "components",
+        ]
 
 
 class PCAComponentPartyScoreSerializer(

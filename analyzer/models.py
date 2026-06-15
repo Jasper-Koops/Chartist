@@ -8,6 +8,7 @@ class PCAAnalysis(models.Model):
     """
 
     created_at = models.DateTimeField(auto_now_add=True)
+    total_explained_variance = models.FloatField(default=0.0)
 
     class Meta:
         verbose_name = "PCA Analysis"

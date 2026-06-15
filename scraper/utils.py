@@ -1,9 +1,10 @@
 from typing import Any
+import xml.etree.ElementTree as ET
 import requests
 from scraper.models import Party, PartyVote, ParliamentaryItem
 from scraper.dto import (
     FractieDTO,
-    AgendapuntZaakBesluitVolgordeDTO,
+    ZaakBesluitDTO,
     StemmingDTO,
 )
 from scraper.mapper import (
@@ -21,6 +22,33 @@ logger = logging.getLogger(__name__)
 API_URL: str = "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/"
 
 
+def extract_motion_bullet_points(xml_content: bytes) -> list[str]:
+    """Extract key bullet points from motion XML.
+
+    Accepts raw bytes so that ElementTree can read the encoding declaration
+    and handle the UTF-8 BOM correctly.
+
+    Filters on lines starting with constaterende, overwegende, verzoekt,
+    or spreekt uit. Strips trailing commas. Excludes boilerplate lines such
+    as 'De Kamer,', 'gehoord de beraadslaging,', author names, and
+    'en gaat over tot de orde van de dag.' by prefix matching.
+
+    Args:
+        xml_content (bytes): Raw XML bytes of the motion document.
+
+    Returns:
+        list[str]: Extracted bullet point strings.
+    """
+    prefixes = ["constaterende", "overwegende", "verzoekt", "spreekt uit"]
+    root = ET.fromstring(xml_content)
+    bullets = []
+    for elem in root.iter("al"):
+        text = "".join(elem.itertext()).strip().rstrip(",")
+        if text and any(text.lower().startswith(p) for p in prefixes):
+            bullets.append(text)
+    return bullets
+
+
 class ParliamentApi:
     """
     API client for the Dutch Parliament OData API.
@@ -30,7 +58,7 @@ class ParliamentApi:
             optional filters, expansions, ordering, and top limit.
         - import_parties: Imports party data from the API into the local
             database.
-        - import_votes: Fetches and processes 'Besluit' data, linking it to
+        - import_votes: Fetches and processes 'Zaak' data, linking it to
             parliamentary items and party votes.
     """
 
@@ -53,7 +81,7 @@ class ParliamentApi:
 
         Args:
             object_name (str): The name of the object to fetch (e.g.,
-                "Fractie", "Besluit").
+                "Fractie", "Zaak").
             filters (list[str] | None): Optional list of OData filter strings.
             expand (list[str] | None): Optional list of related entities to
                 expand.
@@ -84,7 +112,7 @@ class ParliamentApi:
         # Iterate over pages
         items: list[dict[str, Any]] = []
         while True:
-            r = requests.get(url, params=params)
+            r = requests.get(url, params=params, timeout=30)
             r.raise_for_status()
             payload = r.json()
             items.extend(payload.get("value", []))
@@ -112,19 +140,18 @@ class ParliamentApi:
         )
         with transaction.atomic():
             for data in party_data:
-                fractie_dto: FractieDTO = FractieDTO.from_api(data)
-
                 try:
+                    fractie_dto: FractieDTO = FractieDTO.from_api(data)
                     Party.objects.update_or_create(
                         api_id=fractie_dto.Id,
                         defaults=party_from_dto(fractie_dto),
                     )
                 except Exception as e:
                     logger.warning(
-                        f"Failed to import party data for {fractie_dto.NaamNL} with id {fractie_dto.Id}",
+                        f"Failed to import party data for {data.get('NaamNL')} with id {data.get('Id')}: {e}",
                         extra={
-                            "party_id": fractie_dto.Id,
-                            "party_name": fractie_dto.NaamNL,
+                            "party_id": data.get("Id"),
+                            "party_name": data.get("NaamNL"),
                             "error": str(e),
                         },
                     )
@@ -140,11 +167,14 @@ class ParliamentApi:
 
     def import_votes(self) -> None:
         """
-        Fetch parliamentary decisions and associated votes from the API.
+        Fetch parliamentary motions and associated votes from the API.
 
-        Retrieves data about decisions and their related votes, links them to parties,
-        and updates or creates corresponding `ParliamentaryItem` and `PartyVote` model
-        instances in the database.
+        Retrieves Zaak records of type Motie with their nested Besluit and
+        Stemming data, links votes to parties, and updates or creates
+        corresponding `ParliamentaryItem` and `PartyVote` model instances.
+
+        For newly created items, fetches the motion text via DocumentVersie
+        and logs the extracted bullet points at DEBUG level.
 
         Ensures database integrity by using an atomic transaction.
         Skips votes for unknown parties.
@@ -153,49 +183,72 @@ class ParliamentApi:
         abstains) are marked as abstaining.
         """
         filters: list[str] = [
-            "GewijzigdOp gt 2025-11-01T00:00:00+01:00",
-            "StemmingsSoort ne null",
+            "Verwijderd eq false",
+            "Soort eq 'Motie'",
+            "GestartOp gt 2025-11-12T00:00:00+01:00",
         ]
-        order_by: str = ""
         expand: list[str] = [
-            "Zaak($filter=Soort eq 'Motie')",
-            "Stemming($filter=Vergissing eq false;$select=Soort,Fractie_Id)",
+            "Besluit($filter=Verwijderd eq false and StemmingsSoort ne null;"
+            "$expand=Stemming($filter=Verwijderd eq false and Vergissing eq false;$select=Soort,Fractie_Id);"
+            "$select=Id,Agendapunt_Id,BesluitSoort,GewijzigdOp)",
+            "Document($expand=HuidigeDocumentVersie($select=ExterneIdentifier);$select=Id)",
         ]
         vote_data = self.fetch(
-            object_name="Besluit",
+            object_name="Zaak",
             filters=filters,
-            order_by=order_by,
             expand=expand,
         )
         party_lookup = {p.api_id: p for p in Party.objects.all()}
 
-        with transaction.atomic():
-            for data in vote_data:
-                # Skip if no Zaak linked
-                if not data.get("Zaak"):
-                    continue
-                azb_dto: AgendapuntZaakBesluitVolgordeDTO = (
-                    AgendapuntZaakBesluitVolgordeDTO.from_api(data)
+        for data in vote_data:
+            if not data.get("Besluit"):
+                continue
+            try:
+                dto: ZaakBesluitDTO = ZaakBesluitDTO.from_api(data)
+            except ValueError as e:
+                logger.warning(
+                    f"Skipping invalid Zaak record {data.get('Id')}: {e}",
+                    extra={"zaak_id": data.get("Id"), "error": str(e)},
                 )
-                parliamentary_item: ParliamentaryItem = (
-                    ParliamentaryItem.objects.update_or_create(
-                        api_id=azb_dto.Zaak[0].Id,
-                        defaults=parliamentary_item_from_dto(azb_dto),
-                    )[0]
-                )
-                stemming_dto: StemmingDTO
-                for stemming_dto in azb_dto.Stemming:
+                continue
 
-                    party = party_lookup.get(stemming_dto.Fractie_Id)
-                    if party is None:
-                        logger.info(
-                            f"Skipping unknown party with id {stemming_dto.Fractie_Id} during vote import",
-                            extra={"party_id": stemming_dto.Fractie_Id},
+            with transaction.atomic():
+                (
+                    parliamentary_item,
+                    created,
+                ) = ParliamentaryItem.objects.update_or_create(
+                    api_id=dto.Id,
+                    defaults=parliamentary_item_from_dto(dto),
+                )
+                if created:
+                    stemming_dto: StemmingDTO
+                    for stemming_dto in dto.Besluit[0].Stemming:
+                        party = party_lookup.get(stemming_dto.Fractie_Id)
+                        if party is None:
+                            logger.info(
+                                f"Skipping unknown party with id {stemming_dto.Fractie_Id} during vote import",
+                                extra={"party_id": stemming_dto.Fractie_Id},
+                            )
+                            continue
+
+                        PartyVote.objects.update_or_create(
+                            party=party_lookup[stemming_dto.Fractie_Id],
+                            parliamentary_item=parliamentary_item,
+                            defaults=party_vote_from_dto(stemming_dto),
                         )
-                        continue
 
-                    PartyVote.objects.update_or_create(
-                        party=party_lookup[stemming_dto.Fractie_Id],
-                        parliamentary_item=parliamentary_item,
-                        defaults=party_vote_from_dto(stemming_dto),
+            if (created or not parliamentary_item.text) and dto.Document:
+                externe_id = (
+                    dto.Document[0]
+                    .get("HuidigeDocumentVersie", {})
+                    .get("ExterneIdentifier")
+                )
+                if externe_id:
+                    xml_resp = requests.get(
+                        f"https://zoek.officielebekendmakingen.nl/{externe_id}.xml",
+                        timeout=30,
                     )
+                    if xml_resp.ok:
+                        bullets = extract_motion_bullet_points(xml_resp.content)
+                        parliamentary_item.text = bullets
+                        parliamentary_item.save(update_fields=["text"])

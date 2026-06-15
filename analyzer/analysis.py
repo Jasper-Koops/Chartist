@@ -92,6 +92,11 @@ def prepare_df(log: AnalysisLogger) -> tuple[pd.DataFrame, list[str]]:
         f"Removed {removed} parliamentary items with missing votes.",
         extra={"removed": removed, "before": before, "after": len(df)},
     )
+    if df.empty:
+        raise ValueError(
+            "No parliamentary items available for PCA analysis. "
+            "Run import_data first."
+        )
     labels = df.columns[1:]
     item_ids = df["Motion ID"]
     prepared_df = pd.DataFrame(data=df.iloc[:, 1:], columns=labels)
@@ -135,6 +140,9 @@ def run_pca_analysis(n_components: int = 3) -> None:
                 explained_variance=variance,
             )
             pca_components[f"PC{i}"] = pca_component
+
+        analysis.total_explained_variance = sum(explained_variances)
+        analysis.save(update_fields=["total_explained_variance"])
 
         # Save item loadings
         loadings = model.results.get("loadings")

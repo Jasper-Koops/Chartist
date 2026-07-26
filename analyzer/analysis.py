@@ -1,8 +1,8 @@
 import pandas as pd
 from pca import pca
-from django.db.models import QuerySet
+from django.db.models import Count, QuerySet
 from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from scraper.models import Party, ParliamentaryItem
 from analyzer.models import (
     PCAAnalysis,
     PCAComponent,
@@ -25,11 +25,13 @@ def calculate_party_participation_rate() -> None:
     participation rate in parliamentary votes, and updates the corresponding
     field in the Party model.
     """
-    parties: QuerySet[Party] = Party.objects.all()
     total_items: int = ParliamentaryItem.objects.count()
+    parties: QuerySet[Party] = Party.objects.annotate(
+        votes_cast=Count("partyvote")
+    )
     parties_to_update = []
     for party in parties:
-        votes_cast: int = PartyVote.objects.filter(party=party).count()
+        votes_cast: int = party.votes_cast  # type: ignore[attr-defined]
         if total_items > 0:
             participation_rate: float = (votes_cast / total_items) * 100
         else:
@@ -163,14 +165,22 @@ def run_pca_analysis(n_components: int = 3) -> None:
         # Save party scores
         components = model.results.get("PC")
         dict_version = components.to_dict()
+        party_lookup: dict[str, Party] = {
+            party.abbreviation: party for party in Party.objects.all()
+        }
+        party_scores_to_create: list[PCAComponentPartyScore] = []
         for pc_label, party_scores in dict_version.items():
             for party_name, score in party_scores.items():
-                party = Party.objects.get(abbreviation=party_name)
-                PCAComponentPartyScore.objects.create(
-                    component=pca_components[pc_label],
-                    party=party,
-                    score=score,
+                party_scores_to_create.append(
+                    PCAComponentPartyScore(
+                        component=pca_components[pc_label],
+                        party=party_lookup[party_name],
+                        score=score,
+                    )
                 )
+
+        if party_scores_to_create:
+            PCAComponentPartyScore.objects.bulk_create(party_scores_to_create)
 
 
 # FIXME - test

@@ -95,18 +95,24 @@ def generate_dataframe(log: AnalysisLogger) -> pd.DataFrame:
         ParliamentaryItem
     ] = ParliamentaryItem.objects.all().order_by("-date")
 
+    vote_lookup: dict[tuple[int, int], str] = {
+        (vote["parliamentary_item_id"], vote["party_id"]): vote["vote"]
+        for vote in PartyVote.objects.filter(
+            party__in=included_parties,
+            parliamentary_item__in=items,
+        ).values("parliamentary_item_id", "party_id", "vote")
+    }
+
     # Add row for each motion and fill in votes
     data = []
     for item in items:
         row: dict[str, str | int]
         row = {"Motion ID": item.id}
         for party in included_parties:
-            try:
-                party_vote = PartyVote.objects.get(
-                    parliamentary_item=item, party=party
-                )
-                row[party.abbreviation] = party_vote_mapper(party_vote.vote)
-            except PartyVote.DoesNotExist:
+            vote = vote_lookup.get((item.id, party.id))
+            if vote is not None:
+                row[party.abbreviation] = party_vote_mapper(vote)
+            else:
                 log.info(
                     f"Party {party.abbreviation} did not vote for item: {item.id}",
                     extra={
@@ -115,7 +121,6 @@ def generate_dataframe(log: AnalysisLogger) -> pd.DataFrame:
                         "item_id": item.id,
                     },
                 )
-                continue
         data.append(row)
 
     df = pd.DataFrame(

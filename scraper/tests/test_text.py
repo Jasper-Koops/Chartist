@@ -74,3 +74,111 @@ class TestExtractMotionBulletPoints(TestCase):
     def test_empty_xml_returns_empty_list(self) -> None:
         bullets = extract_motion_bullet_points(b"<root></root>")
         self.assertEqual([], bullets)
+
+
+def motion_xml(*lines: str) -> bytes:
+    body = "".join(f"<al>{line}</al>" for line in lines)
+    return f'<?xml version="1.0" encoding="UTF-8"?><kamerstuk>{body}</kamerstuk>'.encode()
+
+
+class TestExtractMotionBoundaries(TestCase):
+    def test_motion_of_no_confidence(self) -> None:
+        xml = motion_xml(
+            "De Kamer,",
+            "gehoord de beraadslaging,",
+            "zegt het vertrouwen in het kabinet op,",
+            "en gaat over tot de orde van de dag.",
+            "Wilders",
+        )
+        self.assertEqual(
+            ["zegt het vertrouwen in het kabinet op"],
+            extract_motion_bullet_points(xml),
+        )
+
+    def test_keeps_sub_points_and_other_openings(self) -> None:
+        xml = motion_xml(
+            "De Kamer,",
+            "gehoord de beraadslaging,",
+            "constaterende dat de wereldwijde minimumbelasting bestaat;",
+            "van oordeel dat Pijler 2 moet bijdragen aan doelbereik;",
+            "verzoekt de regering krachtig in te zetten op:",
+            "een gelijk speelveld;",
+            "forse vermindering van regeldruk",
+            "en gaat over tot de orde van de dag.",
+            "Vermeer",
+        )
+        self.assertEqual(
+            [
+                "constaterende dat de wereldwijde minimumbelasting bestaat;",
+                "van oordeel dat Pijler 2 moet bijdragen aan doelbereik;",
+                "verzoekt de regering krachtig in te zetten op:",
+                "een gelijk speelveld;",
+                "forse vermindering van regeldruk",
+            ],
+            extract_motion_bullet_points(xml),
+        )
+
+    def test_end_marker_without_period(self) -> None:
+        xml = motion_xml(
+            "De Kamer,",
+            "gehoord de beraadslaging,",
+            "neemt de inhoud van dit advies over;",
+            "en gaat over tot de orde van de dag",
+            "Jetten",
+            "Bontenbal",
+        )
+        self.assertEqual(
+            ["neemt de inhoud van dit advies over;"],
+            extract_motion_bullet_points(xml),
+        )
+
+    def test_excludes_signatories(self) -> None:
+        bullets = extract_motion_bullet_points(
+            motion_xml(
+                "gehoord de beraadslaging,",
+                "verzoekt de regering iets te doen,",
+                "en gaat over tot de orde van de dag.",
+                "Wilders",
+            )
+        )
+        self.assertNotIn("Wilders", bullets)
+
+    def test_fallback_without_end_marker(self) -> None:
+        xml = motion_xml(
+            "gehoord de beraadslaging,",
+            "verzoekt de regering iets te doen,",
+            "Wilders",
+        )
+        self.assertEqual(
+            ["verzoekt de regering iets te doen"],
+            extract_motion_bullet_points(xml),
+        )
+
+    def test_start_without_gehoord_de_beraadslaging(self) -> None:
+        xml = motion_xml(
+            "De Kamer,",
+            "constaterende dat defensiebedrijven investeren,",
+            "verzoekt de regering capaciteit te borgen,",
+            "en gaat over tot de orde van de dag.",
+            "Ceulemans",
+        )
+        self.assertEqual(
+            [
+                "constaterende dat defensiebedrijven investeren",
+                "verzoekt de regering capaciteit te borgen",
+            ],
+            extract_motion_bullet_points(xml),
+        )
+
+    def test_end_marker_without_en(self) -> None:
+        xml = motion_xml(
+            "De Kamer,",
+            "gehoord de beraadslaging,",
+            "te en maken voor toezichthouders;",
+            "gaat over tot de orde van de dag.",
+            "Bromet",
+        )
+        self.assertEqual(
+            ["te en maken voor toezichthouders;"],
+            extract_motion_bullet_points(xml),
+        )

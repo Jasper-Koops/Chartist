@@ -304,8 +304,9 @@ class ParliamentApi:
 
         Afterwards, downloads the motion text for new items and items
         without text (or all items when `refetch_texts` is set), using a
-        small thread pool. Failed downloads are logged and skipped; they are
-        retried on the next run.
+        small thread pool. Failed downloads are logged and skipped. Nothing
+        is stored about the failure: the item simply keeps no text, so the
+        next run selects it again.
 
         Each item is saved in its own atomic transaction.
         Skips votes for unknown parties.

@@ -57,8 +57,9 @@ def build_session() -> requests.Session:
     """
     Create a requests Session with connection pooling and automatic retries.
 
-    Retries connection errors, read timeouts and 429/5xx responses with
-    exponential backoff, honouring Retry-After headers.
+    Retries GET requests up to 3 times on connection errors, read timeouts
+    and 429, 500, 502, 503 and 504 responses, with exponential backoff,
+    honouring Retry-After headers.
 
     Returns:
         requests.Session: The configured session.
@@ -152,7 +153,8 @@ class VoteImportResult:
         motions (int): Number of motions with a decision that were processed.
         created (int): Number of newly created parliamentary items.
         texts_fetched (int): Number of motion texts downloaded and stored.
-        texts_failed (int): Number of motion texts that could not be fetched.
+        texts_failed (int): Number of motion texts that could not be
+            downloaded or parsed.
     """
 
     motions: int = 0
@@ -211,7 +213,7 @@ class ParliamentApi:
             order_by (str | None): Optional field to order the results by.
             top (int | None): Optional limit on the number of results to fetch.
             stage (str | None): Optional progress stage name. When given,
-                progress is reported per page.
+                `$count=true` is requested and progress is reported per page.
 
         Returns:
             list[dict[str, str | int | None | bool]]: A list of dictionaries
@@ -304,19 +306,20 @@ class ParliamentApi:
 
         Afterwards, downloads the motion text for new items and items
         without text (or all items when `refetch_texts` is set), using a
-        small thread pool. Failed downloads are logged and skipped. Nothing
-        is stored about the failure: the item simply keeps no text, so the
-        next run selects it again.
+        small thread pool. Failed downloads are logged and skipped; the item
+        keeps its current text, so an item without text is selected again on
+        the next run.
 
-        Each item is saved in its own atomic transaction.
+        Each item and its votes are saved in one atomic transaction; the text
+        is saved separately afterwards.
         Skips votes for unknown parties.
 
-        Parties that did not vote (and are not included in the data, even as
-        abstains) are marked as abstaining.
+        Votes recorded as 'Niet deelgenomen' are stored as abstentions.
+        Parties missing from the vote data get no `PartyVote`.
 
         Args:
-            refetch_texts (bool): Re-download the text of every motion, also
-                those that already have text.
+            refetch_texts (bool): Re-download the text of every motion that
+                has a document, also those that already have text.
 
         Returns:
             VoteImportResult: Counts of processed items and fetched texts.
@@ -426,7 +429,8 @@ class ParliamentApi:
         Download motion texts in parallel and store them.
 
         Downloads run in a thread pool; database writes happen on the calling
-        thread. Failures are logged and counted, not raised.
+        thread. Network and XML parse errors are logged and counted, not
+        raised; other exceptions propagate.
 
         Args:
             text_todo (list[tuple[ParliamentaryItem, str]]): Items paired with

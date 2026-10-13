@@ -17,3 +17,8 @@ django_settings_module = "Chartist.settings"
 [[tool.mypy.overrides]]
 module = ["*.tests.factories", "*.tests.factories.*", "*.tasks", "*.tasks.*", "*.admin"]
 ignore_errors = true
+
+[tool.ruff.lint]
+# Pin to the rules used before the ruff 0.16 upgrade, which enables many more
+# rules by default. Adopting new rules is a separate decision.
+select = ["E4", "E7", "E9", "F"]

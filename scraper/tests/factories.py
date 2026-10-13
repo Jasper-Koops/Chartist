@@ -16,6 +16,9 @@ class PartyFactory(factory.django.DjangoModelFactory):
         model = Party
 
     api_id = factory.Faker("uuid4")
+    # Name and abbreviation are unique on the model.
+    name = factory.Sequence(lambda n: f"Party {n}")
+    abbreviation = factory.Sequence(lambda n: f"P{n}")
 
 
 class ParliamentaryItemFactory(factory.django.DjangoModelFactory):

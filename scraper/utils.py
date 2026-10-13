@@ -26,7 +26,6 @@ from scraper.mapper import (
 from django.db import transaction
 import logging
 
-
 logger = logging.getLogger(__name__)
 
 

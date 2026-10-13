@@ -3,7 +3,6 @@ from pathlib import Path
 from types import ModuleType
 from celery.schedules import crontab
 
-
 local_secrets: ModuleType | None
 try:
     from .secrets import local as local_secrets

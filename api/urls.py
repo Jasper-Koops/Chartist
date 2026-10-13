@@ -11,7 +11,6 @@ from api.views import (
 )
 from django.urls import path, include
 
-
 router = routers.DefaultRouter()
 router.register("parties", PartyViewSet)
 router.register("votes", PartyVoteViewSet)

@@ -6,7 +6,6 @@ from scraper.models import Party, PartyVote, ParliamentaryItem
 from typing import List, TextIO, MutableMapping, Any, Mapping, cast
 import logging
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -91,9 +90,9 @@ def generate_dataframe(log: AnalysisLogger) -> pd.DataFrame:
         },
     )
 
-    items: QuerySet[
-        ParliamentaryItem
-    ] = ParliamentaryItem.objects.all().order_by("-date")
+    items: QuerySet[ParliamentaryItem] = (
+        ParliamentaryItem.objects.all().order_by("-date")
+    )
 
     vote_lookup: dict[tuple[int, int], str] = {
         (vote["parliamentary_item_id"], vote["party_id"]): vote["vote"]

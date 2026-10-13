@@ -66,18 +66,14 @@ class TestParticipationFromPartyStart(TestCase):
         self.items = [
             self.item(start + timedelta(days=day)) for day in range(10)
         ]
-        self.established = self.party("EST")
+        self.established = self.party()
 
     def item(self, date: datetime) -> ParliamentaryItem:
         item: ParliamentaryItem = ParliamentaryItemFactory(date=date)
         return item
 
-    def party(self, abbreviation: str) -> Party:
-        party: Party = PartyFactory(
-            abbreviation=abbreviation,
-            name=f"Party {abbreviation}",
-            api_id=f"id-{abbreviation}",
-        )
+    def party(self) -> Party:
+        party: Party = PartyFactory()
         return party
 
     def vote(self, party: Party, items: list[ParliamentaryItem]) -> None:
@@ -94,21 +90,21 @@ class TestParticipationFromPartyStart(TestCase):
 
     def test_party_formed_later_is_not_penalised(self) -> None:
         self.vote(self.established, self.items)
-        newcomer = self.party("NEW")
+        newcomer = self.party()
         self.vote(newcomer, self.items[6:])
         self.assertEqual(100.0, self.rate(newcomer))
         self.assertEqual(100.0, self.rate(self.established))
 
     def test_missed_votes_after_start_count(self) -> None:
         self.vote(self.established, self.items)
-        newcomer = self.party("NEW")
+        newcomer = self.party()
         # Starts at item 2, then misses items 4 and 5: 6 of 8.
         self.vote(newcomer, self.items[2:4] + self.items[6:])
         self.assertEqual(75.0, self.rate(newcomer))
 
     def test_party_that_stopped_voting_drops(self) -> None:
         self.vote(self.established, self.items)
-        former = self.party("OLD")
+        former = self.party()
         self.vote(former, self.items[:4])
         self.assertEqual(40.0, self.rate(former))
 
@@ -121,7 +117,7 @@ class TestParticipationFromPartyStart(TestCase):
         same_time = self.items[0].date
         twins = [self.item(same_time) for _ in range(3)]
         self.vote(self.established, self.items + twins)
-        partial = self.party("PART")
+        partial = self.party()
         self.vote(partial, self.items)
         self.assertAlmostEqual(100.0 * 10 / 13, self.rate(partial))
 

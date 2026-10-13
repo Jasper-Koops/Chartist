@@ -4,10 +4,12 @@ from scraper.serializers import (
     PartySerializer,
     PartyVoteSerializer,
     ParliamentaryItemSerializer,
+    ParliamentaryItemDetailSerializer,
     KeyParliamentaryItemSerializer,
 )
 from api.errors import NoAnalysisFoundException
 from django.db.models import Sum, QuerySet
+from rest_framework.serializers import BaseSerializer
 from analyzer.serializers import (
     PCAAnalysisSerializer,
     PCAComponentSerializer,
@@ -52,6 +54,12 @@ class ParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
         "item_type": ["exact"],
         "status": ["exact"],
     }
+
+    def get_serializer_class(self) -> type[BaseSerializer[ParliamentaryItem]]:
+        # The motion text is only included on the detail route.
+        if self.action == "retrieve":
+            return ParliamentaryItemDetailSerializer
+        return ParliamentaryItemSerializer
 
 
 class KeyParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):

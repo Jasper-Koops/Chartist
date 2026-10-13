@@ -4,7 +4,13 @@ import requests
 from django.test import TestCase
 from scraper.dto import StemmingDTO
 from scraper.utils import ParliamentApi, aggregate_party_votes
-from scraper.models import Party, PartyVote, ParliamentaryItem, VoteType
+from scraper.models import (
+    Party,
+    PartyVote,
+    ParliamentaryItem,
+    ParliamentaryItemStatusTypes,
+    VoteType,
+)
 from unittest import mock
 from scraper.tests.fixtures.utils_fixtures import (
     PARTY_API_RESPONSE,
@@ -165,7 +171,7 @@ class TestParliamentApi(TestCase):
             call.args[0]: call.args[1:] for call in progress.call_args_list
         }
         self.assertEqual((4, 4), final["Fetching motions"])
-        self.assertEqual((4, 4), final["Saving votes"])
+        self.assertEqual((4, 4), final["Syncing votes"])
         self.assertEqual((4, 4), final["Fetching motion texts"])
 
 
@@ -246,3 +252,128 @@ class TestImportRollCallVote(TestCase):
         votes = PartyVote.objects.filter(party__api_id=party_id)
         self.assertEqual(1, votes.count())
         self.assertEqual(VoteType.AGAINST, votes.get().vote)
+
+
+class TestVoteSync(TestCase):
+    """Votes are synced with the API on every run, not only on creation."""
+
+    def setUp(self) -> None:
+        self.api = ParliamentApi()
+        patcher = mock.patch("scraper.utils.requests.Session.get")
+        self.mocked_get = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.zaken = copy.deepcopy(ZAAK_API_RESPONSE)
+        self.run_import(self.zaken)
+        self.zaak = self.zaken[0]
+        self.item = ParliamentaryItem.objects.get(api_id=self.zaak["Id"])
+
+    def run_import(self, zaken: list[dict[str, Any]]) -> Any:
+        self.mocked_get.side_effect = route_responses(zaken)
+        self.api.import_parties()
+        return self.api.import_votes()
+
+    def stemmingen(self) -> list[dict[str, Any]]:
+        stemmingen: list[dict[str, Any]] = self.zaak["Besluit"][0]["Stemming"]
+        return stemmingen
+
+    def known_stemming(self) -> dict[str, Any]:
+        """A vote of a party that exists; votes of unknown parties are
+        skipped by the import."""
+        known = {party["Id"] for party in PARTY_API_RESPONSE}
+        return next(s for s in self.stemmingen() if s["Fractie_Id"] in known)
+
+    def test_unchanged_run_writes_nothing(self) -> None:
+        result = self.run_import(self.zaken)
+        self.assertEqual(0, result.created)
+        self.assertEqual(
+            (0, 0, 0, 0),
+            (
+                result.votes_created,
+                result.votes_updated,
+                result.votes_deleted,
+                result.stale,
+            ),
+        )
+        self.assertFalse(result.has_vote_changes)
+
+    def test_changed_vote_is_updated(self) -> None:
+        stemming = self.known_stemming()
+        stemming["Soort"] = "Voor" if stemming["Soort"] == "Tegen" else "Tegen"
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(1, result.votes_updated)
+        self.assertTrue(result.has_vote_changes)
+        vote = PartyVote.objects.get(
+            parliamentary_item=self.item,
+            party__api_id=stemming["Fractie_Id"],
+        )
+        self.assertEqual(
+            StemmingDTO.get_party_vote_type(stemming["Soort"]), vote.vote
+        )
+
+    def test_removed_vote_is_deleted(self) -> None:
+        removed = self.known_stemming()
+        self.stemmingen().remove(removed)
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(1, result.votes_deleted)
+        self.assertFalse(
+            PartyVote.objects.filter(
+                parliamentary_item=self.item,
+                party__api_id=removed["Fractie_Id"],
+            ).exists()
+        )
+
+    def test_missing_vote_is_added(self) -> None:
+        missing = self.known_stemming()
+        PartyVote.objects.filter(
+            parliamentary_item=self.item, party__api_id=missing["Fractie_Id"]
+        ).delete()
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(1, result.votes_created)
+        self.assertTrue(
+            PartyVote.objects.filter(
+                parliamentary_item=self.item,
+                party__api_id=missing["Fractie_Id"],
+            ).exists()
+        )
+
+    def test_item_without_vote_anymore_is_reset(self) -> None:
+        votes_before = PartyVote.objects.count()
+        item_votes = self.item.partyvote_set.count()
+        result = self.run_import(self.zaken[1:])
+
+        self.assertEqual(1, result.stale)
+        self.assertEqual(item_votes, result.votes_deleted)
+        self.item.refresh_from_db()
+        self.assertEqual(ParliamentaryItemStatusTypes.PENDING, self.item.status)
+        self.assertEqual(0, self.item.partyvote_set.count())
+        self.assertEqual(votes_before - item_votes, PartyVote.objects.count())
+        # Already reset items are not reported again.
+        self.assertEqual(0, self.run_import(self.zaken[1:]).stale)
+
+    def test_empty_download_does_not_wipe_votes(self) -> None:
+        votes_before = PartyVote.objects.count()
+        result = self.run_import([])
+        self.assertEqual(0, result.stale)
+        self.assertEqual(votes_before, PartyVote.objects.count())
+
+    def test_invalid_record_leaves_item_untouched(self) -> None:
+        item_votes = self.item.partyvote_set.count()
+        self.zaak["Besluit"][0]["BesluitSoort"] = "Onbekend"
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(0, result.stale)
+        self.assertEqual(item_votes, self.item.partyvote_set.count())
+
+    def test_mistake_votes_are_requested(self) -> None:
+        self.run_import(self.zaken)
+        zaak_calls = [
+            call
+            for call in self.mocked_get.call_args_list
+            if call.args[0].endswith("Zaak")
+        ]
+        expand = zaak_calls[-1].kwargs["params"]["$expand"]
+        self.assertIn("Stemming(", expand)
+        self.assertNotIn("Vergissing", expand)

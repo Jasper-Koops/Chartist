@@ -61,7 +61,10 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Completed import: {result.motions} motions, "
-                f"{result.created} new, {result.texts_fetched} texts fetched, "
+                f"{result.created} new; votes {result.votes_created} added, "
+                f"{result.votes_updated} changed, {result.votes_deleted} "
+                f"removed; {result.stale} motions without a vote anymore; "
+                f"{result.texts_fetched} texts fetched, "
                 f"{result.texts_failed} texts failed"
             )
         )

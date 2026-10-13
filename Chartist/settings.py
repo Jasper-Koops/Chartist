@@ -148,13 +148,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CELERY_ENABLE_UTC = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULE = {
-    "import_votes": {
-        "task": "scraper.tasks.import_votes",
+    "import_and_analyze": {
+        "task": "scraper.tasks.import_and_analyze",
         "schedule": crontab(minute=15, hour=0),
-    },
-    "run_scheduled_pca_analysis": {
-        "task": "scraper.tasks.run_scheduled_pca_analysis",
-        "schedule": crontab(minute=45, hour=0),
     },
 }
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"

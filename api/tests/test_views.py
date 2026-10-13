@@ -241,6 +241,22 @@ class TestParliamentaryItemViewSet(APITestCase):
         self.assertEqual(dates, sorted(dates, reverse=True))
 
 
+class TestParliamentaryItemText(APITestCase):
+    def setUp(self) -> None:
+        self.item = ParliamentaryItemFactory(text=["verzoekt de regering"])
+
+    def test_list_excludes_text(self) -> None:
+        response = self.client.get(reverse("parliamentaryitem-list"))
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertNotIn("text", data[0])
+
+    def test_detail_includes_text(self) -> None:
+        response = self.client.get(
+            reverse("parliamentaryitem-detail", args=[self.item.id])
+        )
+        self.assertEqual(["verzoekt de regering"], response.data["text"])
+
+
 class TestPCAAnalysisViewSet(APITestCase):
     def setUp(self) -> None:
         generate_party_votes(
@@ -435,6 +451,7 @@ class TestKeyParliamentaryItemViewSet(APITestCase):
         for item in data:
             self.assertIn("votes", item)
             self.assertIn("loadings", item)
+            self.assertIn("text", item)
 
     def _expected_top_ids(self, analysis: PCAAnalysis) -> list[int]:
         totals: dict[int, float] = {}

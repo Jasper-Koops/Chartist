@@ -40,7 +40,7 @@ class ParliamentaryItemStatusTypes(models.TextChoices):
 
 class ParliamentaryItem(models.Model):
     api_id = models.CharField(max_length=50, unique=True)
-    title = models.CharField(max_length=200)
+    title = models.TextField()
     date = models.DateTimeField()
     item_type = models.CharField(
         max_length=20, choices=ParliamentaryItemTypes.choices

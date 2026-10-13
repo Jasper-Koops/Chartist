@@ -1,6 +1,8 @@
+from bisect import bisect_left
+
 import pandas as pd
 from pca import pca
-from django.db.models import Count, QuerySet
+from django.db.models import Count, Min, QuerySet
 from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
 from scraper.models import Party, ParliamentaryItem
 from analyzer.models import (
@@ -9,6 +11,7 @@ from analyzer.models import (
     PCAComponentPartyScore,
     PCAItemLoading,
 )
+from datetime import datetime
 from typing import TextIO
 from django.db.transaction import atomic
 from django.core.management.base import OutputWrapper
@@ -21,21 +24,36 @@ def calculate_party_participation_rate() -> None:
     """
     Calculate and update the participation rate for each party.
 
-    This function iterates through all parties in the database, calculates their
-    participation rate in parliamentary votes, and updates the corresponding
-    field in the Party model.
+    The rate is measured from each party's own start: the share of voted
+    items, dated on or after the party's first vote, on which the party has
+    a vote. A party that formed during the period (e.g. a split) is
+    therefore not penalised for items from before it existed.
+
+    Only items with at least one vote count; items whose votes are not
+    published yet are ignored. Parties without votes get 0%.
     """
-    total_items: int = ParliamentaryItem.objects.count()
+    # Distinct on the item, not the date: many items share a timestamp.
+    voted_item_dates: list[datetime] = sorted(
+        date
+        for _, date in ParliamentaryItem.objects.filter(partyvote__isnull=False)
+        .distinct()
+        .values_list("id", "date")
+    )
     parties: QuerySet[Party] = Party.objects.annotate(
-        votes_cast=Count("partyvote")
+        votes_cast=Count("partyvote"),
+        first_vote=Min("partyvote__parliamentary_item__date"),
     )
     parties_to_update = []
     for party in parties:
         votes_cast: int = party.votes_cast  # type: ignore[attr-defined]
-        if total_items > 0:
-            participation_rate: float = (votes_cast / total_items) * 100
+        first_vote: datetime | None = party.first_vote  # type: ignore[attr-defined]
+        if first_vote is None:
+            participation_rate: float = 0.0
         else:
-            participation_rate = 0.0
+            eligible = len(voted_item_dates) - bisect_left(
+                voted_item_dates, first_vote
+            )
+            participation_rate = (votes_cast / eligible) * 100
         party.participation_rate = participation_rate
         parties_to_update.append(party)
 

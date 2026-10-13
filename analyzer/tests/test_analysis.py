@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from io import StringIO
 
 import numpy as np
@@ -11,7 +12,12 @@ from analyzer.analysis import (
 from django.db import IntegrityError
 from django.test import TestCase
 from django.db.models import QuerySet
-from scraper.models import Party, ParliamentaryItem
+from scraper.models import Party, ParliamentaryItem, VoteType
+from scraper.tests.factories import (
+    ParliamentaryItemFactory,
+    PartyFactory,
+    PartyVoteFactory,
+)
 from analyzer.models import (
     PCAAnalysis,
     PCAComponent,
@@ -41,37 +47,83 @@ class TestCalculatePartyParticipationRate(TestCase):
             party.refresh_from_db()
             self.assertEqual(party.participation_rate, 0.0)
 
-    def test_party_with_votes_has_correct_participation_rate(self) -> None:
+    def test_party_voting_on_everything_has_100_percent(self) -> None:
         generate_party_votes(
             parliamentary_items=self.items,
             parties=self.parties,
             calculate_participation_rate=True,
         )
         for party in self.parties:
-            total_items: int = ParliamentaryItem.objects.count()
-            votes_cast: int = party.partyvote_set.count()
-            expected_rate: float = (votes_cast / total_items) * 100
             party.refresh_from_db()
-            self.assertEqual(party.participation_rate, expected_rate)
+            self.assertEqual(100.0, party.participation_rate)
 
-    def test_partial_participation_rate(self) -> None:
-        """Test that a party voting on only some items gets a rate < 100%."""
-        subset = self.items[:3]
-        party = self.parties.first()
-        assert party is not None
-        from scraper.tests.factories import PartyVoteFactory
-        from scraper.models import VoteType
 
-        for item in subset:
+class TestParticipationFromPartyStart(TestCase):
+    """Participation is measured from each party's own first vote."""
+
+    def setUp(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        self.items = [
+            self.item(start + timedelta(days=day)) for day in range(10)
+        ]
+        self.established = self.party("EST")
+
+    def item(self, date: datetime) -> ParliamentaryItem:
+        item: ParliamentaryItem = ParliamentaryItemFactory(date=date)
+        return item
+
+    def party(self, abbreviation: str) -> Party:
+        party: Party = PartyFactory(
+            abbreviation=abbreviation,
+            name=f"Party {abbreviation}",
+            api_id=f"id-{abbreviation}",
+        )
+        return party
+
+    def vote(self, party: Party, items: list[ParliamentaryItem]) -> None:
+        for item in items:
             PartyVoteFactory(
                 party=party, parliamentary_item=item, vote=VoteType.FOR
             )
+
+    def rate(self, party: Party) -> float:
         calculate_party_participation_rate()
         party.refresh_from_db()
-        expected_rate = (len(subset) / self.items.count()) * 100
-        self.assertEqual(party.participation_rate, expected_rate)
         assert party.participation_rate is not None
-        self.assertLess(party.participation_rate, 100.0)
+        return party.participation_rate
+
+    def test_party_formed_later_is_not_penalised(self) -> None:
+        self.vote(self.established, self.items)
+        newcomer = self.party("NEW")
+        self.vote(newcomer, self.items[6:])
+        self.assertEqual(100.0, self.rate(newcomer))
+        self.assertEqual(100.0, self.rate(self.established))
+
+    def test_missed_votes_after_start_count(self) -> None:
+        self.vote(self.established, self.items)
+        newcomer = self.party("NEW")
+        # Starts at item 2, then misses items 4 and 5: 6 of 8.
+        self.vote(newcomer, self.items[2:4] + self.items[6:])
+        self.assertEqual(75.0, self.rate(newcomer))
+
+    def test_party_that_stopped_voting_drops(self) -> None:
+        self.vote(self.established, self.items)
+        former = self.party("OLD")
+        self.vote(former, self.items[:4])
+        self.assertEqual(40.0, self.rate(former))
+
+    def test_items_without_votes_are_ignored(self) -> None:
+        # Items whose votes are not published yet do not count.
+        self.vote(self.established, self.items[:5])
+        self.assertEqual(100.0, self.rate(self.established))
+
+    def test_items_sharing_a_timestamp_are_counted_separately(self) -> None:
+        same_time = self.items[0].date
+        twins = [self.item(same_time) for _ in range(3)]
+        self.vote(self.established, self.items + twins)
+        partial = self.party("PART")
+        self.vote(partial, self.items)
+        self.assertAlmostEqual(100.0 * 10 / 13, self.rate(partial))
 
 
 class TestPrepareDF(TestCase):

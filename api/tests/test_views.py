@@ -376,6 +376,38 @@ class TestPCAAnalysisSerializerNesting(APITestCase):
             self.assertIn("explained_variance", component)
 
 
+class TestPartyScoresNesting(APITestCase):
+    def setUp(self) -> None:
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(10),
+            parties=generate_parties(),
+        )
+        # Run twice so component ids no longer match component numbers.
+        run_pca_analysis(n_components=3)
+        run_pca_analysis(n_components=3)
+
+    def test_party_scores_are_keyed_by_component_number(self) -> None:
+        url = reverse("party-list")
+        response = self.client.get(url)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(response.status_code, 200)
+        last_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        for party_data in data:
+            expected = {
+                score.component.number: score.score
+                for score in PCAComponentPartyScore.objects.filter(
+                    party_id=party_data["id"],
+                    component__analysis=last_analysis,
+                )
+            }
+            actual = {
+                row["component"]: row["score"]
+                for row in party_data["party_scores"]
+            }
+            self.assertEqual(set(actual), {1, 2, 3})
+            self.assertEqual(actual, expected)
+
+
 class TestKeyParliamentaryItemViewSet(APITestCase):
     def setUp(self) -> None:
         generate_party_votes(

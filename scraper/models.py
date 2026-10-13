@@ -88,3 +88,36 @@ class PartyVote(models.Model):
         return (
             f"{self.party.name} - {self.parliamentary_item.title} - {self.vote}"
         )
+
+
+class PartySuccession(models.Model):
+    """
+    A party that continues another party under a new identity, e.g. a rename
+    such as GroenLinks-PvdA -> PRO. Splits and mergers are not successions.
+
+    Detected during the import (see `ParliamentApi.import_successions`) and
+    correctable in the admin. In the analysis, the successor inherits the
+    predecessor's votes; both parties stay visible.
+    """
+
+    predecessor = models.OneToOneField(
+        Party, on_delete=models.CASCADE, related_name="succession"
+    )
+    successor = models.OneToOneField(
+        Party, on_delete=models.CASCADE, related_name="predecession"
+    )
+    date = models.DateField(help_text=_("Date the successor became active."))
+    member_overlap = models.FloatField(
+        help_text=_(
+            "Lowest share of members shared by both parties around the "
+            "succession date: of the predecessor's last and of the "
+            "successor's first members."
+        )
+    )
+
+    class Meta:
+        verbose_name = "Party Succession"
+        verbose_name_plural = "Party Successions"
+
+    def __str__(self) -> str:
+        return f"{self.predecessor} -> {self.successor} ({self.date})"

@@ -2,13 +2,15 @@ from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Any
+from datetime import date, datetime, timedelta
+from typing import Any, cast
 import xml.etree.ElementTree as ET
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from scraper.models import (
     Party,
+    PartySuccession,
     PartyVote,
     ParliamentaryItem,
     ParliamentaryItemStatusTypes,
@@ -31,6 +33,16 @@ logger = logging.getLogger(__name__)
 
 API_URL: str = "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/"
 MOTION_XML_URL: str = "https://zoek.officielebekendmakingen.nl/{}.xml"
+
+# Start of the analysed period: installation of the current parliament.
+PERIOD_START: str = "2025-11-12T00:00:00+01:00"
+
+# A successor must start within this many days of its predecessor ending,
+# and share at least this share of members in both directions. Strict on
+# purpose: only a continuation under a new identity (e.g. GroenLinks-PvdA
+# -> PRO) qualifies, not a split or a merger.
+SUCCESSION_MAX_GAP_DAYS: int = 7
+SUCCESSION_MIN_MEMBER_OVERLAP: float = 0.9
 
 # (connect, read) timeouts in seconds. Motion XML documents occasionally stall
 # server-side; a short read timeout plus a retry recovers faster than waiting.
@@ -315,14 +327,21 @@ class ParliamentApi:
 
     def import_parties(self) -> None:
         """
-        Import active parties from the API into the local database.
+        Import parties from the API into the local database.
+
+        Imports every party that was active at some point since PERIOD_START,
+        so the votes of parties that ended during the period (e.g. a party
+        continued under a new name) can still be linked.
 
         Fetches party data from the API, converts it into DTOs, and updates or
         creates corresponding `Party` model instances in the database.
 
         Ensures database integrity by using an atomic transaction.
         """
-        filters: list[str] = ["Verwijderd eq false", "DatumInactief eq null"]
+        filters: list[str] = [
+            "Verwijderd eq false",
+            f"(DatumInactief eq null or DatumInactief ge {PERIOD_START})",
+        ]
         party_data: list[dict[str, str | int | None | bool]] = self.fetch(
             object_name="Fractie", filters=filters, order_by=None
         )
@@ -352,6 +371,113 @@ class ParliamentApi:
             vijftigplus.save()
         except Party.DoesNotExist:
             pass
+
+    def _members(self, fractie_id: str, on: date) -> set[str]:
+        """
+        Get the members (Persoon ids) of a party on a given date.
+
+        Args:
+            fractie_id (str): The party's API id.
+            on (date): The date to get the members for.
+
+        Returns:
+            set[str]: The Persoon ids of the members on that date.
+        """
+        # Expanded rows contain nested lists, unlike fetch's flat row type.
+        seats = cast(
+            list[dict[str, Any]],
+            self.fetch(
+                object_name="FractieZetel",
+                filters=["Verwijderd eq false", f"Fractie_Id eq {fractie_id}"],
+                expand=[
+                    "FractieZetelPersoon($filter=Verwijderd eq false;"
+                    "$select=Persoon_Id,Van,TotEnMet)"
+                ],
+            ),
+        )
+        day = on.isoformat()
+        members: set[str] = set()
+        for seat in seats:
+            for member in seat.get("FractieZetelPersoon") or []:
+                start = str(member["Van"])[:10]
+                end = member["TotEnMet"]
+                if start <= day and (end is None or str(end)[:10] >= day):
+                    members.add(str(member["Persoon_Id"]))
+        return members
+
+    def import_successions(self) -> int:
+        """
+        Detect parties that continue another party under a new identity.
+
+        A party B succeeds a party A when A ended at most
+        SUCCESSION_MAX_GAP_DAYS from B's start, and at least
+        SUCCESSION_MIN_MEMBER_OVERLAP of A's last members are B's first
+        members and vice versa. A split (the original party continues) or a
+        merger (members come from several parties) does not qualify.
+
+        Only parties that exist locally are considered. Detected successions
+        are created or updated, never deleted, so corrections made in the
+        admin are kept unless the data contradicts them.
+
+        Returns:
+            int: The number of successions detected.
+        """
+        fracties = self.fetch(
+            object_name="Fractie",
+            filters=[
+                "Verwijderd eq false",
+                f"(DatumActief ge {PERIOD_START} "
+                f"or DatumInactief ge {PERIOD_START})",
+            ],
+        )
+        parties = {p.api_id: p for p in Party.objects.all()}
+
+        def day(value: Any) -> date:
+            return datetime.fromisoformat(str(value)).date()
+
+        ended = [
+            f for f in fracties if f.get("DatumInactief") and f["Id"] in parties
+        ]
+        started = [
+            f
+            for f in fracties
+            if f.get("DatumActief")
+            and day(f["DatumActief"]) >= day(PERIOD_START)
+            and f["Id"] in parties
+        ]
+
+        detected = 0
+        for old in ended:
+            end = day(old["DatumInactief"])
+            for new in started:
+                start = day(new["DatumActief"])
+                if new["Id"] == old["Id"] or (
+                    abs((start - end).days) > SUCCESSION_MAX_GAP_DAYS
+                ):
+                    continue
+                before = self._members(str(old["Id"]), end - timedelta(days=1))
+                after = self._members(str(new["Id"]), start + timedelta(days=1))
+                if not before or not after:
+                    continue
+                shared = len(before & after)
+                overlap = min(shared / len(before), shared / len(after))
+                if overlap < SUCCESSION_MIN_MEMBER_OVERLAP:
+                    continue
+                PartySuccession.objects.update_or_create(
+                    predecessor=parties[str(old["Id"])],
+                    defaults={
+                        "successor": parties[str(new["Id"])],
+                        "date": start,
+                        "member_overlap": overlap,
+                    },
+                )
+                detected += 1
+                logger.info(
+                    f"Detected succession {old['Afkorting']} -> "
+                    f"{new['Afkorting']} ({overlap:.0%} shared members)",
+                    extra={"predecessor": old["Id"], "successor": new["Id"]},
+                )
+        return detected
 
     def import_votes(self, refetch_texts: bool = False) -> VoteImportResult:
         """
@@ -396,7 +522,7 @@ class ParliamentApi:
         filters: list[str] = [
             "Verwijderd eq false",
             "Soort eq 'Motie'",
-            "GestartOp gt 2025-11-12T00:00:00+01:00",
+            f"GestartOp gt {PERIOD_START}",
         ]
         expand: list[str] = [
             "Besluit($filter=Verwijderd eq false and StemmingsSoort ne null;"

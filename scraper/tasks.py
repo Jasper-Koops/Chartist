@@ -18,6 +18,7 @@ def import_votes() -> bool:
     """
     api = ParliamentApi()
     api.import_parties()
+    api.import_successions()
     result = api.import_votes()
     return result.has_vote_changes
 

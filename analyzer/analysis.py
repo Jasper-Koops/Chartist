@@ -3,9 +3,9 @@ from bisect import bisect_left
 import pandas as pd
 from pca import pca
 from analyzer.agreement import run_agreement_analysis
-from django.db.models import Count, Min, QuerySet
+from analyzer.votes import party_votes
 from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
-from scraper.models import Party, ParliamentaryItem
+from scraper.models import Party, ParliamentaryItem, PartyVote
 from analyzer.models import (
     PCAAnalysis,
     PCAComponent,
@@ -32,25 +32,29 @@ def calculate_party_participation_rate() -> None:
 
     Only items with at least one vote count; items whose votes are not
     published yet are ignored. Parties without votes get 0%.
+
+    Inherited votes count (see `party_votes`): a party that continues another
+    party is measured from its predecessor's start.
     """
+    item_dates: dict[int, datetime] = dict(
+        ParliamentaryItem.objects.values_list("id", "date")
+    )
     # Distinct on the item, not the date: many items share a timestamp.
     voted_item_dates: list[datetime] = sorted(
-        date
-        for _, date in ParliamentaryItem.objects.filter(partyvote__isnull=False)
-        .distinct()
-        .values_list("id", "date")
+        item_dates[item_id]
+        for item_id in PartyVote.objects.values_list(
+            "parliamentary_item_id", flat=True
+        ).distinct()
     )
-    parties: QuerySet[Party] = Party.objects.annotate(
-        votes_cast=Count("partyvote"),
-        first_vote=Min("partyvote__parliamentary_item__date"),
-    )
+    votes = party_votes()
     parties_to_update = []
-    for party in parties:
-        votes_cast: int = party.votes_cast  # type: ignore[attr-defined]
-        first_vote: datetime | None = party.first_vote  # type: ignore[attr-defined]
-        if first_vote is None:
+    for party in Party.objects.all():
+        own_votes = votes.get(party.id, {})
+        votes_cast = len(own_votes)
+        if not votes_cast:
             participation_rate: float = 0.0
         else:
+            first_vote = min(item_dates[item_id] for item_id in own_votes)
             eligible = len(voted_item_dates) - bisect_left(
                 voted_item_dates, first_vote
             )

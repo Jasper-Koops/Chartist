@@ -4,9 +4,11 @@ from typing import Any
 import requests
 from django.test import TestCase
 from scraper.dto import BesluitDTO, StemmingDTO
+from scraper.tests.factories import PartyFactory
 from scraper.utils import ParliamentApi, aggregate_party_votes
 from scraper.models import (
     Party,
+    PartySuccession,
     PartyVote,
     ParliamentaryItem,
     ParliamentaryItemStatusTypes,
@@ -409,3 +411,111 @@ class TestVoteDate(TestCase):
 
         item = ParliamentaryItem.objects.get(api_id=zaak["Id"])
         self.assertEqual(date(2026, 4, 21), item.vote_date)
+
+
+def fractie(
+    fractie_id: str, abbreviation: str, start: str, end: str | None = None
+) -> dict[str, Any]:
+    return {
+        "Id": fractie_id,
+        "Afkorting": abbreviation,
+        "DatumActief": f"{start}T00:00:00+02:00",
+        "DatumInactief": f"{end}T00:00:00+02:00" if end else None,
+    }
+
+
+def seat(members: list[str], start: str, end: str | None) -> dict[str, Any]:
+    return {
+        "FractieZetelPersoon": [
+            {
+                "Persoon_Id": member,
+                "Van": f"{start}T00:00:00+02:00",
+                "TotEnMet": f"{end}T00:00:00+02:00" if end else None,
+            }
+            for member in members
+        ]
+    }
+
+
+class TestImportSuccessions(TestCase):
+    def setUp(self) -> None:
+        patcher = mock.patch("scraper.utils.requests.Session.get")
+        self.mocked_get = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.fracties: list[dict[str, Any]] = []
+        self.seats: dict[str, list[dict[str, Any]]] = {}
+        self.mocked_get.side_effect = self.respond
+        self.api = ParliamentApi()
+
+    def respond(self, url: str, *args: Any, **kwargs: Any) -> MockedResponse:
+        if url.endswith("FractieZetel"):
+            fractie_id = kwargs["params"]["$filter"].split("Fractie_Id eq ")[1]
+            return MockedResponse(
+                {"value": self.seats.get(fractie_id, [])}, 200
+            )
+        return MockedResponse({"value": self.fracties}, 200)
+
+    def add(
+        self,
+        fractie_id: str,
+        start: str,
+        end: str | None,
+        members: list[str],
+    ) -> None:
+        PartyFactory(api_id=fractie_id)
+        self.fracties.append(fractie(fractie_id, fractie_id, start, end))
+        self.seats[fractie_id] = [seat(members, start, end)]
+
+    def detect(self) -> list[tuple[str, str]]:
+        self.api.import_successions()
+        return list(
+            PartySuccession.objects.values_list(
+                "predecessor__api_id", "successor__api_id"
+            )
+        )
+
+    def members(self, n: int, prefix: str = "m") -> list[str]:
+        return [f"{prefix}{i}" for i in range(n)]
+
+    def test_rename_is_detected(self) -> None:
+        # GroenLinks-PvdA -> PRO: 19 of 20 members continue.
+        self.add("gl", "2023-10-27", "2026-06-10", self.members(20))
+        self.add("pro", "2026-06-09", None, self.members(19) + ["newcomer"])
+        self.assertEqual([("gl", "pro")], self.detect())
+        succession = PartySuccession.objects.get()
+        self.assertEqual(date(2026, 6, 9), succession.date)
+        self.assertAlmostEqual(0.95, succession.member_overlap)
+
+    def test_split_is_not_a_succession(self) -> None:
+        # PVV -> Groep Markuszower: the original party continues.
+        self.add("pvv", "2006-11-30", None, self.members(26))
+        self.add("mk", "2026-01-20", None, self.members(7))
+        self.assertEqual([], self.detect())
+
+    def test_split_off_from_ended_party_is_not_a_succession(self) -> None:
+        # Only part of the members continue in the new party.
+        self.add("old", "2023-10-27", "2026-06-10", self.members(20))
+        self.add("new", "2026-06-09", None, self.members(10))
+        self.assertEqual([], self.detect())
+
+    def test_merger_is_not_a_succession(self) -> None:
+        self.add("a", "2023-10-27", "2026-06-10", self.members(10, "a"))
+        self.add("b", "2023-10-27", "2026-06-10", self.members(10, "b"))
+        self.add(
+            "ab",
+            "2026-06-09",
+            None,
+            self.members(10, "a") + self.members(10, "b"),
+        )
+        self.assertEqual([], self.detect())
+
+    def test_large_gap_is_not_a_succession(self) -> None:
+        self.add("old", "2023-10-27", "2026-03-01", self.members(20))
+        self.add("new", "2026-06-09", None, self.members(20))
+        self.assertEqual([], self.detect())
+
+    def test_unknown_parties_are_ignored(self) -> None:
+        self.add("gl", "2023-10-27", "2026-06-10", self.members(20))
+        self.fracties.append(fractie("pro", "pro", "2026-06-09"))
+        self.seats["pro"] = [seat(self.members(20), "2026-06-09", None)]
+        self.assertEqual([], self.detect())

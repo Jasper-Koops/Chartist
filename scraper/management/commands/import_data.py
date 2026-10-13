@@ -56,6 +56,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(self.style.SUCCESS("Importing party data"))
         api.import_parties()
+        api.import_successions()
         self.stdout.write(self.style.SUCCESS("Importing vote data"))
         result = api.import_votes(refetch_texts=options["refetch_texts"])
         self.stdout.write(

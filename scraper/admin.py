@@ -1,5 +1,5 @@
 from django.contrib import admin
-from scraper.models import Party, ParliamentaryItem, PartyVote
+from scraper.models import Party, ParliamentaryItem, PartySuccession, PartyVote
 
 
 @admin.register(Party)
@@ -27,3 +27,8 @@ class PartyVoteAdmin(admin.ModelAdmin):
         "parliamentary_item__title",
     ]
     raw_id_fields = ["party", "parliamentary_item"]
+
+
+@admin.register(PartySuccession)
+class PartySuccessionAdmin(admin.ModelAdmin):
+    list_display = ["predecessor", "successor", "date", "member_overlap"]

@@ -1,7 +1,8 @@
 import pandas as pd
 from django.core.management.base import OutputWrapper
 from django.db.models import QuerySet
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from analyzer.votes import party_votes
+from scraper.models import Party, ParliamentaryItem
 from typing import TextIO, MutableMapping, Any, Mapping, cast
 import logging
 
@@ -87,12 +88,12 @@ def generate_dataframe(log: AnalysisLogger) -> pd.DataFrame:
         ParliamentaryItem.objects.all().order_by("-date")
     )
 
+    # Includes votes inherited from a predecessor party.
+    votes = party_votes()
     vote_lookup: dict[tuple[int, int], str] = {
-        (vote["parliamentary_item_id"], vote["party_id"]): vote["vote"]
-        for vote in PartyVote.objects.filter(
-            party__in=included_parties,
-            parliamentary_item__in=items,
-        ).values("parliamentary_item_id", "party_id", "vote")
+        (item_id, party.id): vote
+        for party in included_parties
+        for item_id, vote in votes.get(party.id, {}).items()
     }
 
     # Add row for each motion and fill in votes

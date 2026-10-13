@@ -1,12 +1,16 @@
 import pandas as pd
 from django.core.management.base import OutputWrapper
 from django.db.models import QuerySet
-import statistics
 from scraper.models import Party, PartyVote, ParliamentaryItem
-from typing import List, TextIO, MutableMapping, Any, Mapping, cast
+from typing import TextIO, MutableMapping, Any, Mapping, cast
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Minimum participation rate (in %, measured from each party's own start) for
+# a party to be included in the analysis. Filters out parties that are not
+# really active, e.g. a group that stopped voting.
+PARTICIPATION_THRESHOLD: float = 90.0
 
 
 class AnalysisLogger(logging.LoggerAdapter[logging.Logger]):
@@ -51,23 +55,12 @@ def generate_dataframe(log: AnalysisLogger) -> pd.DataFrame:
     """
     Load data from the database and return it as a pandas DataFrame.
 
-    Since we skip ParliamentaryItems where Parties did not vote, we use
-    the IQR method to determine a participation cutoff threshold for Parties.
-    Only Parties with a participation rate above this threshold are included
-    in the DataFrame. This way, we ensure that the PCA analysis is not skewed
-    by Parties with very low participation rates.
+    Since we skip ParliamentaryItems where Parties did not vote, only Parties
+    with a participation rate of at least PARTICIPATION_THRESHOLD are
+    included in the DataFrame. This way, we ensure that the PCA analysis is
+    not skewed by Parties that are not really active.
     """
-    # Use IQR to determine participation cutoff threshold
-    participation_rates: List[float] = list(
-        Party.objects.values_list(
-            "participation_rate", flat=True  # type: ignore[arg-type]
-        )
-    )
-    q1, _, q3 = statistics.quantiles(
-        participation_rates, n=4, method="inclusive"
-    )
-    iqr: float = q3 - q1
-    party_participation_cutoff_threshold: float = q1 - 1.5 * iqr
+    party_participation_cutoff_threshold: float = PARTICIPATION_THRESHOLD
 
     included_parties = Party.objects.filter(
         participation_rate__gte=party_participation_cutoff_threshold

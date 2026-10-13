@@ -42,7 +42,6 @@ def calculate_party_participation_rate() -> None:
     Party.objects.bulk_update(parties_to_update, ["participation_rate"])
 
 
-# FIXME - test
 def generate_pca_object(
     prepared_df: pd.DataFrame, labels: list[str], n_components: int = 5
 ) -> pca:
@@ -183,7 +182,6 @@ def run_pca_analysis(n_components: int = 3) -> None:
             PCAComponentPartyScore.objects.bulk_create(party_scores_to_create)
 
 
-# FIXME - test
 def run_full_analysis(
     n_components: int, stdout: TextIO | OutputWrapper | None = None
 ) -> None:

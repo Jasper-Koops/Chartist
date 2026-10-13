@@ -436,6 +436,86 @@ class TestKeyParliamentaryItemViewSet(APITestCase):
             self.assertIn("votes", item)
             self.assertIn("loadings", item)
 
+    def _expected_top_ids(self, analysis: PCAAnalysis) -> list[int]:
+        totals: dict[int, float] = {}
+        for loading in PCAItemLoading.objects.filter(
+            component__analysis=analysis
+        ):
+            item_id = loading.parliamentary_item_id
+            totals[item_id] = totals.get(item_id, 0.0) + abs(loading.loading)
+        return sorted(totals, key=lambda i: totals[i], reverse=True)[:10]
+
+    def test_returns_top_10_by_total_absolute_loading(self) -> None:
+        # 15 items in total, so the top 10 is a real selection.
+        new_ids = [ParliamentaryItemFactory().id for _ in range(5)]
+        generate_party_votes(
+            parliamentary_items=ParliamentaryItem.objects.filter(
+                id__in=new_ids
+            ),
+            parties=Party.objects.all(),
+        )
+        PCAAnalysis.objects.all().delete()
+        run_pca_analysis(n_components=3)
+        analysis = PCAAnalysis.objects.get()
+
+        response = self.client.get(reverse("key-parliamentary-items-list"))
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(
+            self._expected_top_ids(analysis), [item["id"] for item in data]
+        )
+
+    def test_uses_latest_analysis_only(self) -> None:
+        old_analysis = PCAAnalysis.objects.get()
+        run_pca_analysis(n_components=3)
+        latest = PCAAnalysis.objects.exclude(pk=old_analysis.pk).get()
+        # Make the old analysis favour a different item than the latest one.
+        PCAItemLoading.objects.filter(component__analysis=old_analysis).update(
+            loading=0
+        )
+        outlier = PCAItemLoading.objects.filter(
+            component__analysis=old_analysis
+        ).first()
+        assert outlier is not None
+        outlier.loading = 1000
+        outlier.save()
+
+        response = self.client.get(reverse("key-parliamentary-items-list"))
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual(
+            self._expected_top_ids(latest), [item["id"] for item in data]
+        )
+
+    def test_no_analysis_returns_404(self) -> None:
+        PCAAnalysis.objects.all().delete()
+        response = self.client.get(reverse("key-parliamentary-items-list"))
+        self.assertEqual(404, response.status_code)
+
+    def test_filter_by_id(self) -> None:
+        item_id = ParliamentaryItem.objects.first().id  # type: ignore[union-attr]
+        response = self.client.get(
+            reverse("key-parliamentary-items-list"), {"id": item_id}
+        )
+        self.assertEqual(200, response.status_code)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        self.assertEqual([item_id], [item["id"] for item in data])
+
+    def test_ordering_param(self) -> None:
+        response = self.client.get(
+            reverse("key-parliamentary-items-list"), {"ordering": "title"}
+        )
+        self.assertEqual(200, response.status_code)
+        data: list[dict[str, Any]] = response.data.get("results", response.data)
+        titles = [item["title"] for item in data]
+        self.assertEqual(sorted(titles), titles)
+
+    def test_detail_route(self) -> None:
+        item_id = ParliamentaryItem.objects.first().id  # type: ignore[union-attr]
+        response = self.client.get(
+            reverse("key-parliamentary-items-detail", args=[item_id])
+        )
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(item_id, response.data["id"])
+
 
 class TestPCAComponentPartyScoreViewSet(APITestCase):
     def setUp(self) -> None:

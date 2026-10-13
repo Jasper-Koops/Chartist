@@ -54,8 +54,12 @@ class ParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
     }
 
 
-# FIXME - test
 class KeyParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
+    """
+    The 10 items with the highest total absolute loading across all
+    components of the latest analysis.
+    """
+
     serializer_class = KeyParliamentaryItemSerializer
     filterset_fields = {
         "id": ["exact"],
@@ -66,14 +70,18 @@ class KeyParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
         if not latest_analysis:
             raise NoAnalysisFoundException
 
-        queryset = (
-            ParliamentaryItem.objects.filter(
-                pca_loadings__component__analysis=latest_analysis
-            )
-            .annotate(total_loading=Sum(Abs("pca_loadings__loading")))
-            .order_by("-total_loading")[:10]
+        queryset = ParliamentaryItem.objects.filter(
+            pca_loadings__component__analysis=latest_analysis
+        ).annotate(total_loading=Sum(Abs("pca_loadings__loading")))
+
+        # Select the top 10 ids first and return an unsliced queryset, so the
+        # filter and ordering backends and the detail route can still apply.
+        top_ids = list(
+            queryset.order_by("-total_loading").values_list("id", flat=True)[
+                :10
+            ]
         )
-        return queryset
+        return queryset.filter(id__in=top_ids).order_by("-total_loading")
 
 
 class PCAAnalysisViewSet(ReadOnlyModelViewSet[PCAAnalysis]):

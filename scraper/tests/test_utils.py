@@ -2,8 +2,9 @@ import copy
 from typing import Any
 import requests
 from django.test import TestCase
-from scraper.utils import ParliamentApi
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from scraper.dto import StemmingDTO
+from scraper.utils import ParliamentApi, aggregate_party_votes
+from scraper.models import Party, PartyVote, ParliamentaryItem, VoteType
 from unittest import mock
 from scraper.tests.fixtures.utils_fixtures import (
     PARTY_API_RESPONSE,
@@ -173,3 +174,75 @@ def mocked_xml_url(zaak: dict[str, Any]) -> str:
         "ExterneIdentifier"
     ]
     return f"https://{MOTION_XML_HOST}/{externe_id}.xml"
+
+
+def stemming(fractie_id: str, vote: VoteType) -> StemmingDTO:
+    return StemmingDTO(Soort=vote, Fractie_Id=fractie_id)
+
+
+class TestAggregatePartyVotes(TestCase):
+    def test_show_of_hands_one_record_per_party(self) -> None:
+        votes = aggregate_party_votes(
+            [
+                stemming("a", VoteType.FOR),
+                stemming("b", VoteType.AGAINST),
+                stemming("c", VoteType.ABSTAIN),
+            ]
+        )
+        self.assertEqual(
+            {"a": VoteType.FOR, "b": VoteType.AGAINST, "c": VoteType.ABSTAIN},
+            votes,
+        )
+
+    def test_roll_call_absent_member_does_not_override_party(self) -> None:
+        # Order matters for a naive "last record wins" implementation.
+        votes = aggregate_party_votes(
+            [
+                stemming("a", VoteType.AGAINST),
+                stemming("a", VoteType.AGAINST),
+                stemming("a", VoteType.ABSTAIN),
+            ]
+        )
+        self.assertEqual({"a": VoteType.AGAINST}, votes)
+
+    def test_roll_call_majority_wins_split_party(self) -> None:
+        votes = aggregate_party_votes(
+            [stemming("a", VoteType.FOR)] * 5
+            + [stemming("a", VoteType.AGAINST)] * 4
+        )
+        self.assertEqual({"a": VoteType.FOR}, votes)
+
+    def test_roll_call_even_split_is_abstain(self) -> None:
+        votes = aggregate_party_votes(
+            [stemming("a", VoteType.FOR), stemming("a", VoteType.AGAINST)]
+        )
+        self.assertEqual({"a": VoteType.ABSTAIN}, votes)
+
+    def test_roll_call_all_absent_is_abstain(self) -> None:
+        votes = aggregate_party_votes(
+            [stemming("a", VoteType.ABSTAIN), stemming("a", VoteType.ABSTAIN)]
+        )
+        self.assertEqual({"a": VoteType.ABSTAIN}, votes)
+
+
+class TestImportRollCallVote(TestCase):
+    @mock.patch("scraper.utils.requests.Session.get")
+    def test_roll_call_stores_one_majority_vote_per_party(
+        self, mocked_get: mock.Mock
+    ) -> None:
+        zaak = copy.deepcopy(ZAAK_API_RESPONSE[0])
+        party_id = PARTY_API_RESPONSE[0]["Id"]
+        member = {"Fractie_Id": party_id}
+        zaak["Besluit"][0]["Stemming"] = [
+            {**member, "Soort": "Tegen"},
+            {**member, "Soort": "Tegen"},
+            {**member, "Soort": "Niet deelgenomen"},
+        ]
+        mocked_get.side_effect = route_responses([zaak])
+        api = ParliamentApi()
+        api.import_parties()
+        api.import_votes()
+
+        votes = PartyVote.objects.filter(party__api_id=party_id)
+        self.assertEqual(1, votes.count())
+        self.assertEqual(VoteType.AGAINST, votes.get().vote)

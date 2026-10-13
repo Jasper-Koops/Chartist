@@ -14,3 +14,4 @@ django-filter==25.2
 celery==5.6.1
 django-celery-beat==2.8.1
 redis==7.1.0
+typeguard==4.4.4

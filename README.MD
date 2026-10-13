@@ -11,10 +11,14 @@ This application is the backend server for Chartist, a tool designed to analyze 
 ## Installation
 
 ```bash
-# Install dependencies
+# Install dependencies (use requirements/base.txt for production)
 pip install -r requirements/dev.txt
 
-# run migrations
+# Create the local settings file, then set SECRET_KEY (and DATABASES,
+# ALLOWED_HOSTS, DEBUG as needed). Settings refuse to load without it.
+cp Chartist/secrets/secrets.example.py Chartist/secrets/local.py
+
+# Run migrations
 python manage.py migrate
 
 # Load initial data
@@ -34,5 +38,5 @@ python manage.py runserver
 ```
 
 ## Important urls
-- API Root (Interactive): `http://127.0.0.1/8000/api/v1/`
-- Admin Panel: `http://127.0.0.1/8000/admin/`
+- API Root (Interactive): `http://127.0.0.1:8000/api/v1/`
+- Admin Panel: `http://127.0.0.1:8000/admin/`

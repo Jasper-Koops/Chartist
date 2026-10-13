@@ -1,8 +1,17 @@
-from analyzer.analysis import run_pca_analysis, prepare_df
+from io import StringIO
+
+import numpy as np
+import pandas as pd
+from analyzer.analysis import (
+    generate_pca_object,
+    run_full_analysis,
+    run_pca_analysis,
+    prepare_df,
+)
 from django.db import IntegrityError
 from django.test import TestCase
 from django.db.models import QuerySet
-from scraper.models import ParliamentaryItem
+from scraper.models import Party, ParliamentaryItem
 from analyzer.models import (
     PCAAnalysis,
     PCAComponent,
@@ -176,3 +185,70 @@ class TestRunPCAAnalysis(TestCase):
                 parliamentary_item=existing.parliamentary_item,
                 loading=0.0,
             )
+
+
+class TestGeneratePCAObject(TestCase):
+    def setUp(self) -> None:
+        rng = np.random.default_rng(seed=0)
+        self.parties = ["A", "B", "C", "D", "E", "F"]
+        self.items = list(range(100, 120))
+        self.df = pd.DataFrame(
+            rng.choice([-1, 0, 1], size=(len(self.parties), len(self.items))),
+            index=self.parties,
+            columns=self.items,
+        )
+
+    def test_party_scores_per_component(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=3)
+        scores = model.results["PC"]
+        self.assertEqual(self.parties, list(scores.index))
+        self.assertEqual(["PC1", "PC2", "PC3"], list(scores.columns))
+
+    def test_loadings_per_item(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=3)
+        loadings = model.results["loadings"]
+        self.assertEqual(["PC1", "PC2", "PC3"], list(loadings.index))
+        self.assertEqual(self.items, list(loadings.columns))
+
+    def test_variance_ratio_is_valid_and_descending(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=3)
+        variance = list(model.results["variance_ratio"])
+        self.assertEqual(3, len(variance))
+        self.assertTrue(all(0 <= v <= 1 for v in variance))
+        self.assertLessEqual(sum(variance), 1 + 1e-9)
+        self.assertEqual(sorted(variance, reverse=True), variance)
+
+    def test_n_components_is_respected(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=2)
+        self.assertEqual(["PC1", "PC2"], list(model.results["PC"].columns))
+
+
+class TestRunFullAnalysis(TestCase):
+    def setUp(self) -> None:
+        self.parties = generate_parties()
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(10),
+            parties=self.parties,
+            calculate_participation_rate=False,
+        )
+
+    def test_calculates_participation_rates(self) -> None:
+        self.assertFalse(
+            Party.objects.filter(participation_rate__isnull=False).exists()
+        )
+        run_full_analysis(n_components=3, stdout=StringIO())
+        for party in Party.objects.all():
+            self.assertEqual(100.0, party.participation_rate)
+
+    def test_creates_analysis_with_requested_components(self) -> None:
+        run_full_analysis(n_components=2, stdout=StringIO())
+        analysis = PCAAnalysis.objects.get()
+        self.assertEqual(2, analysis.components.count())
+
+    def test_reports_progress_to_stdout(self) -> None:
+        stdout = StringIO()
+        run_full_analysis(n_components=3, stdout=stdout)
+        output = stdout.getvalue()
+        self.assertIn("Calculating party participation rates", output)
+        self.assertIn("Running PCA analysis", output)
+        self.assertIn("PCA analysis completed", output)

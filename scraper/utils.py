@@ -1,3 +1,4 @@
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -6,7 +7,7 @@ import xml.etree.ElementTree as ET
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from scraper.models import Party, PartyVote, ParliamentaryItem, VoteType
 from scraper.dto import (
     FractieDTO,
     ZaakBesluitDTO,
@@ -15,7 +16,6 @@ from scraper.dto import (
 from scraper.mapper import (
     party_from_dto,
     parliamentary_item_from_dto,
-    party_vote_from_dto,
 )
 from django.db import transaction
 import logging
@@ -142,6 +142,39 @@ def extract_motion_bullet_points(
         for line, low in zip(lines, lowered)
         if low.startswith(MOTION_FALLBACK_PREFIXES)
     ]
+
+
+def aggregate_party_votes(stemmingen: list[StemmingDTO]) -> dict[str, VoteType]:
+    """
+    Reduce vote records to a single vote per party.
+
+    A vote by show of hands ('Met handopsteken') has one record per party. A
+    roll-call vote ('Hoofdelijk') has one record per member, so a party can
+    have many records, including members who did not take part.
+
+    The party vote is the majority of FOR and AGAINST votes among its members;
+    members who did not take part are ignored. If no member took part, or the
+    party is split evenly, the party vote is ABSTAIN.
+
+    Args:
+        stemmingen (list[StemmingDTO]): The vote records of a decision.
+
+    Returns:
+        dict[str, VoteType]: The vote per party, keyed by Fractie_Id.
+    """
+    counts: defaultdict[str, Counter[VoteType]] = defaultdict(Counter)
+    for stemming in stemmingen:
+        counts[stemming.Fractie_Id][VoteType(stemming.Soort)] += 1
+
+    votes: dict[str, VoteType] = {}
+    for fractie_id, count in counts.items():
+        if count[VoteType.FOR] > count[VoteType.AGAINST]:
+            votes[fractie_id] = VoteType.FOR
+        elif count[VoteType.AGAINST] > count[VoteType.FOR]:
+            votes[fractie_id] = VoteType.AGAINST
+        else:
+            votes[fractie_id] = VoteType.ABSTAIN
+    return votes
 
 
 @dataclass
@@ -314,8 +347,10 @@ class ParliamentApi:
         is saved separately afterwards.
         Skips votes for unknown parties.
 
-        Votes recorded as 'Niet deelgenomen' are stored as abstentions.
-        Parties missing from the vote data get no `PartyVote`.
+        Each party gets one vote; for roll-call votes this is the majority of
+        its members (see `aggregate_party_votes`). Votes recorded as 'Niet
+        deelgenomen' are stored as abstentions. Parties missing from the vote
+        data get no `PartyVote`.
 
         Args:
             refetch_texts (bool): Re-download the text of every motion that
@@ -368,20 +403,20 @@ class ParliamentApi:
                 )
                 if created:
                     result.created += 1
-                    stemming_dto: StemmingDTO
-                    for stemming_dto in dto.Besluit[0].Stemming:
-                        party = party_lookup.get(stemming_dto.Fractie_Id)
+                    party_votes = aggregate_party_votes(dto.Besluit[0].Stemming)
+                    for fractie_id, vote in party_votes.items():
+                        party = party_lookup.get(fractie_id)
                         if party is None:
                             logger.info(
-                                f"Skipping unknown party with id {stemming_dto.Fractie_Id} during vote import",
-                                extra={"party_id": stemming_dto.Fractie_Id},
+                                f"Skipping unknown party with id {fractie_id} during vote import",
+                                extra={"party_id": fractie_id},
                             )
                             continue
 
                         PartyVote.objects.update_or_create(
-                            party=party_lookup[stemming_dto.Fractie_Id],
+                            party=party,
                             parliamentary_item=parliamentary_item,
-                            defaults=party_vote_from_dto(stemming_dto),
+                            defaults={"vote": vote},
                         )
 
             if (

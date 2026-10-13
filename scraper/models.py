@@ -41,7 +41,14 @@ class ParliamentaryItemStatusTypes(models.TextChoices):
 class ParliamentaryItem(models.Model):
     api_id = models.CharField(max_length=50, unique=True)
     title = models.TextField()
+    # Last modified timestamp of the decision; changes when the record is
+    # edited, e.g. when votes are published. Use vote_date for timelines.
     date = models.DateTimeField()
+    vote_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text=_("Date of the voting session."),
+    )
     item_type = models.CharField(
         max_length=20, choices=ParliamentaryItemTypes.choices
     )

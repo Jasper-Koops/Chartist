@@ -1,8 +1,9 @@
 import copy
+from datetime import date
 from typing import Any
 import requests
 from django.test import TestCase
-from scraper.dto import StemmingDTO
+from scraper.dto import BesluitDTO, StemmingDTO
 from scraper.utils import ParliamentApi, aggregate_party_votes
 from scraper.models import (
     Party,
@@ -377,3 +378,34 @@ class TestVoteSync(TestCase):
         expand = zaak_calls[-1].kwargs["params"]["$expand"]
         self.assertIn("Stemming(", expand)
         self.assertNotIn("Vergissing", expand)
+
+
+class TestVoteDate(TestCase):
+    def test_vote_date_from_session_uses_local_date(self) -> None:
+        agendapunt = {"Activiteit": {"Datum": "2026-04-21T00:30:00+02:00"}}
+        # 00:30 local is still 22:30 UTC the day before.
+        self.assertEqual(
+            date(2026, 4, 21), BesluitDTO.get_vote_date(agendapunt)
+        )
+
+    def test_missing_session_gives_none(self) -> None:
+        self.assertIsNone(BesluitDTO.get_vote_date(None))
+        self.assertIsNone(BesluitDTO.get_vote_date({"Activiteit": None}))
+        self.assertIsNone(
+            BesluitDTO.get_vote_date({"Activiteit": {"Datum": None}})
+        )
+
+    @mock.patch("scraper.utils.requests.Session.get")
+    def test_import_stores_vote_date(self, mocked_get: mock.Mock) -> None:
+        zaak = copy.deepcopy(ZAAK_API_RESPONSE[0])
+        zaak["Besluit"][0]["Agendapunt"] = {
+            "Id": "agendapunt",
+            "Activiteit": {"Datum": "2026-04-21T15:00:00+02:00"},
+        }
+        mocked_get.side_effect = route_responses([zaak])
+        api = ParliamentApi()
+        api.import_parties()
+        api.import_votes()
+
+        item = ParliamentaryItem.objects.get(api_id=zaak["Id"])
+        self.assertEqual(date(2026, 4, 21), item.vote_date)

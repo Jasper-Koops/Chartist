@@ -400,7 +400,8 @@ class ParliamentApi:
         ]
         expand: list[str] = [
             "Besluit($filter=Verwijderd eq false and StemmingsSoort ne null;"
-            "$expand=Stemming($filter=Verwijderd eq false;$select=Soort,Fractie_Id);"
+            "$expand=Stemming($filter=Verwijderd eq false;$select=Soort,Fractie_Id),"
+            "Agendapunt($select=Id;$expand=Activiteit($select=Datum));"
             "$select=Id,Agendapunt_Id,BesluitSoort,GewijzigdOp)",
             "Document($expand=HuidigeDocumentVersie($select=ExterneIdentifier);$select=Id)",
         ]

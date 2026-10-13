@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Mapping, Any
 from typeguard import typechecked
-from datetime import datetime
+from datetime import date, datetime
 from pydantic import BaseModel, ValidationError
 
 from scraper.models import ParliamentaryItemStatusTypes, VoteType
@@ -146,6 +146,7 @@ class BesluitInput(BaseModel):
     BesluitSoort: str
     GewijzigdOp: datetime
     Stemming: list[Mapping[str, Any]]
+    Agendapunt: Mapping[str, Any] | None = None
 
 
 @dataclass
@@ -160,6 +161,8 @@ class BesluitDTO:
         BesluitSoort (ParliamentaryItemStatusTypes): Status of the decision.
         GewijzigdOp (datetime): Last modified date of the decision.
         Stemming (list[StemmingDTO]): List of associated votes.
+        VoteDate (date | None): Date of the voting session, from the
+            expanded Agendapunt -> Activiteit. None when not provided.
     """
 
     Id: str
@@ -167,6 +170,7 @@ class BesluitDTO:
     BesluitSoort: ParliamentaryItemStatusTypes
     GewijzigdOp: datetime
     Stemming: list[StemmingDTO]
+    VoteDate: date | None = None
 
     @classmethod
     def from_api(cls, data: Mapping[str, Any]) -> "BesluitDTO":
@@ -195,7 +199,32 @@ class BesluitDTO:
             ),
             GewijzigdOp=validated.GewijzigdOp,
             Stemming=[StemmingDTO.from_api(s) for s in validated.Stemming],
+            VoteDate=cls.get_vote_date(validated.Agendapunt),
         )
+
+    @staticmethod
+    def get_vote_date(agendapunt: Mapping[str, Any] | None) -> date | None:
+        """
+        Get the date of the voting session from an expanded Agendapunt.
+
+        The session datetime carries its local (Dutch) offset, so taking the
+        date part gives the local date.
+
+        Args:
+            agendapunt (Mapping[str, Any] | None): The expanded Agendapunt,
+                with a nested Activiteit.
+
+        Returns:
+            date | None: The voting date, or None if not available.
+
+        Raises:
+            ValueError: If the Activiteit date is not a valid ISO datetime.
+        """
+        activiteit = (agendapunt or {}).get("Activiteit") or {}
+        session = activiteit.get("Datum")
+        if not session:
+            return None
+        return datetime.fromisoformat(session).date()
 
     @staticmethod
     def get_parliamentary_item_status(

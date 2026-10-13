@@ -36,7 +36,15 @@ class ParliamentaryItemSerializer(
 ):
     class Meta:
         model = ParliamentaryItem
-        fields = ["id", "api_id", "title", "date", "item_type", "status"]
+        fields = [
+            "id",
+            "api_id",
+            "title",
+            "date",
+            "vote_date",
+            "item_type",
+            "status",
+        ]
 
 
 class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
@@ -59,6 +67,7 @@ class KeyParliamentaryItemSerializer(
             "api_id",
             "title",
             "date",
+            "vote_date",
             "item_type",
             "status",
             "text",

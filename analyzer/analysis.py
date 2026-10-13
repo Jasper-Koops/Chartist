@@ -1,14 +1,18 @@
+from bisect import bisect_left
+
 import pandas as pd
 from pca import pca
-from django.db.models import Count, QuerySet
+from analyzer.agreement import run_agreement_analysis
+from analyzer.votes import party_votes
 from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
-from scraper.models import Party, ParliamentaryItem
+from scraper.models import Party, ParliamentaryItem, PartyVote
 from analyzer.models import (
     PCAAnalysis,
     PCAComponent,
     PCAComponentPartyScore,
     PCAItemLoading,
 )
+from datetime import datetime
 from typing import TextIO
 from django.db.transaction import atomic
 from django.core.management.base import OutputWrapper
@@ -21,28 +25,46 @@ def calculate_party_participation_rate() -> None:
     """
     Calculate and update the participation rate for each party.
 
-    This function iterates through all parties in the database, calculates their
-    participation rate in parliamentary votes, and updates the corresponding
-    field in the Party model.
+    The rate is measured from each party's own start: the share of voted
+    items, dated on or after the party's first vote, on which the party has
+    a vote. A party that formed during the period (e.g. a split) is
+    therefore not penalised for items from before it existed.
+
+    Only items with at least one vote count; items whose votes are not
+    published yet are ignored. Parties without votes get 0%.
+
+    Inherited votes count (see `party_votes`): a party that continues another
+    party is measured from its predecessor's start.
     """
-    total_items: int = ParliamentaryItem.objects.count()
-    parties: QuerySet[Party] = Party.objects.annotate(
-        votes_cast=Count("partyvote")
+    item_dates: dict[int, datetime] = dict(
+        ParliamentaryItem.objects.values_list("id", "date")
     )
+    # Distinct on the item, not the date: many items share a timestamp.
+    voted_item_dates: list[datetime] = sorted(
+        item_dates[item_id]
+        for item_id in PartyVote.objects.values_list(
+            "parliamentary_item_id", flat=True
+        ).distinct()
+    )
+    votes = party_votes()
     parties_to_update = []
-    for party in parties:
-        votes_cast: int = party.votes_cast  # type: ignore[attr-defined]
-        if total_items > 0:
-            participation_rate: float = (votes_cast / total_items) * 100
+    for party in Party.objects.all():
+        own_votes = votes.get(party.id, {})
+        votes_cast = len(own_votes)
+        if not votes_cast:
+            participation_rate: float = 0.0
         else:
-            participation_rate = 0.0
+            first_vote = min(item_dates[item_id] for item_id in own_votes)
+            eligible = len(voted_item_dates) - bisect_left(
+                voted_item_dates, first_vote
+            )
+            participation_rate = (votes_cast / eligible) * 100
         party.participation_rate = participation_rate
         parties_to_update.append(party)
 
     Party.objects.bulk_update(parties_to_update, ["participation_rate"])
 
 
-# FIXME - test
 def generate_pca_object(
     prepared_df: pd.DataFrame, labels: list[str], n_components: int = 5
 ) -> pca:
@@ -183,17 +205,22 @@ def run_pca_analysis(n_components: int = 3) -> None:
             PCAComponentPartyScore.objects.bulk_create(party_scores_to_create)
 
 
-# FIXME - test
 def run_full_analysis(
     n_components: int, stdout: TextIO | OutputWrapper | None = None
 ) -> None:
     """
     Run the full analysis pipeline.
 
-    This function calculates party participation rates and performs PCA analysis.
+    This function calculates party participation rates, performs PCA analysis
+    and calculates the party agreement matrix.
     """
     log_to_stdout(msg="Calculating party participation rates...", stdout=stdout)
     calculate_party_participation_rate()
     log_to_stdout(msg="Done.\nRunning PCA analysis...", stdout=stdout)
     run_pca_analysis(n_components=n_components)
-    log_to_stdout(msg="PCA analysis completed.", stdout=stdout)
+    log_to_stdout(
+        msg="PCA analysis completed.\nCalculating agreement matrix...",
+        stdout=stdout,
+    )
+    run_agreement_analysis()
+    log_to_stdout(msg="Agreement matrix completed.", stdout=stdout)

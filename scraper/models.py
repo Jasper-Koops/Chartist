@@ -40,8 +40,15 @@ class ParliamentaryItemStatusTypes(models.TextChoices):
 
 class ParliamentaryItem(models.Model):
     api_id = models.CharField(max_length=50, unique=True)
-    title = models.CharField(max_length=200)
+    title = models.TextField()
+    # Last modified timestamp of the decision; changes when the record is
+    # edited, e.g. when votes are published. Use vote_date for timelines.
     date = models.DateTimeField()
+    vote_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text=_("Date of the voting session."),
+    )
     item_type = models.CharField(
         max_length=20, choices=ParliamentaryItemTypes.choices
     )
@@ -81,3 +88,36 @@ class PartyVote(models.Model):
         return (
             f"{self.party.name} - {self.parliamentary_item.title} - {self.vote}"
         )
+
+
+class PartySuccession(models.Model):
+    """
+    A party that continues another party under a new identity, e.g. a rename
+    such as GroenLinks-PvdA -> PRO. Splits and mergers are not successions.
+
+    Detected during the import (see `ParliamentApi.import_successions`) and
+    correctable in the admin. In the analysis, the successor inherits the
+    predecessor's votes; both parties stay visible.
+    """
+
+    predecessor = models.OneToOneField(
+        Party, on_delete=models.CASCADE, related_name="succession"
+    )
+    successor = models.OneToOneField(
+        Party, on_delete=models.CASCADE, related_name="predecession"
+    )
+    date = models.DateField(help_text=_("Date the successor became active."))
+    member_overlap = models.FloatField(
+        help_text=_(
+            "Lowest share of members shared by both parties around the "
+            "succession date: of the predecessor's last and of the "
+            "successor's first members."
+        )
+    )
+
+    class Meta:
+        verbose_name = "Party Succession"
+        verbose_name_plural = "Party Successions"
+
+    def __str__(self) -> str:
+        return f"{self.predecessor} -> {self.successor} ({self.date})"

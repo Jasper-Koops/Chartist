@@ -1,9 +1,25 @@
-from analyzer.analysis import run_pca_analysis, prepare_df
+from datetime import datetime, timedelta, timezone
+from io import StringIO
+
+import numpy as np
+import pandas as pd
+from analyzer.analysis import (
+    generate_pca_object,
+    run_full_analysis,
+    run_pca_analysis,
+    prepare_df,
+)
 from django.db import IntegrityError
 from django.test import TestCase
 from django.db.models import QuerySet
-from scraper.models import ParliamentaryItem
+from scraper.models import Party, ParliamentaryItem, VoteType
+from scraper.tests.factories import (
+    ParliamentaryItemFactory,
+    PartyFactory,
+    PartyVoteFactory,
+)
 from analyzer.models import (
+    AgreementMatrix,
     PCAAnalysis,
     PCAComponent,
     PCAComponentPartyScore,
@@ -32,37 +48,79 @@ class TestCalculatePartyParticipationRate(TestCase):
             party.refresh_from_db()
             self.assertEqual(party.participation_rate, 0.0)
 
-    def test_party_with_votes_has_correct_participation_rate(self) -> None:
+    def test_party_voting_on_everything_has_100_percent(self) -> None:
         generate_party_votes(
             parliamentary_items=self.items,
             parties=self.parties,
             calculate_participation_rate=True,
         )
         for party in self.parties:
-            total_items: int = ParliamentaryItem.objects.count()
-            votes_cast: int = party.partyvote_set.count()
-            expected_rate: float = (votes_cast / total_items) * 100
             party.refresh_from_db()
-            self.assertEqual(party.participation_rate, expected_rate)
+            self.assertEqual(100.0, party.participation_rate)
 
-    def test_partial_participation_rate(self) -> None:
-        """Test that a party voting on only some items gets a rate < 100%."""
-        subset = self.items[:3]
-        party = self.parties.first()
-        assert party is not None
-        from scraper.tests.factories import PartyVoteFactory
-        from scraper.models import VoteType
 
-        for item in subset:
+class TestParticipationFromPartyStart(TestCase):
+    """Participation is measured from each party's own first vote."""
+
+    def setUp(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        self.items = [
+            self.item(start + timedelta(days=day)) for day in range(10)
+        ]
+        self.established = self.party()
+
+    def item(self, date: datetime) -> ParliamentaryItem:
+        item: ParliamentaryItem = ParliamentaryItemFactory(date=date)
+        return item
+
+    def party(self) -> Party:
+        party: Party = PartyFactory()
+        return party
+
+    def vote(self, party: Party, items: list[ParliamentaryItem]) -> None:
+        for item in items:
             PartyVoteFactory(
                 party=party, parliamentary_item=item, vote=VoteType.FOR
             )
+
+    def rate(self, party: Party) -> float:
         calculate_party_participation_rate()
         party.refresh_from_db()
-        expected_rate = (len(subset) / self.items.count()) * 100
-        self.assertEqual(party.participation_rate, expected_rate)
         assert party.participation_rate is not None
-        self.assertLess(party.participation_rate, 100.0)
+        return party.participation_rate
+
+    def test_party_formed_later_is_not_penalised(self) -> None:
+        self.vote(self.established, self.items)
+        newcomer = self.party()
+        self.vote(newcomer, self.items[6:])
+        self.assertEqual(100.0, self.rate(newcomer))
+        self.assertEqual(100.0, self.rate(self.established))
+
+    def test_missed_votes_after_start_count(self) -> None:
+        self.vote(self.established, self.items)
+        newcomer = self.party()
+        # Starts at item 2, then misses items 4 and 5: 6 of 8.
+        self.vote(newcomer, self.items[2:4] + self.items[6:])
+        self.assertEqual(75.0, self.rate(newcomer))
+
+    def test_party_that_stopped_voting_drops(self) -> None:
+        self.vote(self.established, self.items)
+        former = self.party()
+        self.vote(former, self.items[:4])
+        self.assertEqual(40.0, self.rate(former))
+
+    def test_items_without_votes_are_ignored(self) -> None:
+        # Items whose votes are not published yet do not count.
+        self.vote(self.established, self.items[:5])
+        self.assertEqual(100.0, self.rate(self.established))
+
+    def test_items_sharing_a_timestamp_are_counted_separately(self) -> None:
+        same_time = self.items[0].date
+        twins = [self.item(same_time) for _ in range(3)]
+        self.vote(self.established, self.items + twins)
+        partial = self.party()
+        self.vote(partial, self.items)
+        self.assertAlmostEqual(100.0 * 10 / 13, self.rate(partial))
 
 
 class TestPrepareDF(TestCase):
@@ -176,3 +234,77 @@ class TestRunPCAAnalysis(TestCase):
                 parliamentary_item=existing.parliamentary_item,
                 loading=0.0,
             )
+
+
+class TestGeneratePCAObject(TestCase):
+    def setUp(self) -> None:
+        rng = np.random.default_rng(seed=0)
+        self.parties = ["A", "B", "C", "D", "E", "F"]
+        self.items = list(range(100, 120))
+        self.df = pd.DataFrame(
+            rng.choice([-1, 0, 1], size=(len(self.parties), len(self.items))),
+            index=self.parties,
+            columns=self.items,
+        )
+
+    def test_party_scores_per_component(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=3)
+        scores = model.results["PC"]
+        self.assertEqual(self.parties, list(scores.index))
+        self.assertEqual(["PC1", "PC2", "PC3"], list(scores.columns))
+
+    def test_loadings_per_item(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=3)
+        loadings = model.results["loadings"]
+        self.assertEqual(["PC1", "PC2", "PC3"], list(loadings.index))
+        self.assertEqual(self.items, list(loadings.columns))
+
+    def test_variance_ratio_is_valid_and_descending(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=3)
+        variance = list(model.results["variance_ratio"])
+        self.assertEqual(3, len(variance))
+        self.assertTrue(all(0 <= v <= 1 for v in variance))
+        self.assertLessEqual(sum(variance), 1 + 1e-9)
+        self.assertEqual(sorted(variance, reverse=True), variance)
+
+    def test_n_components_is_respected(self) -> None:
+        model = generate_pca_object(self.df, self.parties, n_components=2)
+        self.assertEqual(["PC1", "PC2"], list(model.results["PC"].columns))
+
+
+class TestRunFullAnalysis(TestCase):
+    def setUp(self) -> None:
+        self.parties = generate_parties()
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(10),
+            parties=self.parties,
+            calculate_participation_rate=False,
+        )
+
+    def test_calculates_participation_rates(self) -> None:
+        self.assertFalse(
+            Party.objects.filter(participation_rate__isnull=False).exists()
+        )
+        run_full_analysis(n_components=3, stdout=StringIO())
+        for party in Party.objects.all():
+            self.assertEqual(100.0, party.participation_rate)
+
+    def test_creates_analysis_with_requested_components(self) -> None:
+        run_full_analysis(n_components=2, stdout=StringIO())
+        analysis = PCAAnalysis.objects.get()
+        self.assertEqual(2, analysis.components.count())
+
+    def test_creates_agreement_matrix(self) -> None:
+        run_full_analysis(n_components=3, stdout=StringIO())
+        matrix = AgreementMatrix.objects.get()
+        n_parties = self.parties.count()
+        self.assertEqual(n_parties * (n_parties - 1), matrix.agreements.count())
+
+    def test_reports_progress_to_stdout(self) -> None:
+        stdout = StringIO()
+        run_full_analysis(n_components=3, stdout=stdout)
+        output = stdout.getvalue()
+        self.assertIn("Calculating party participation rates", output)
+        self.assertIn("Running PCA analysis", output)
+        self.assertIn("PCA analysis completed", output)
+        self.assertIn("Agreement matrix completed", output)

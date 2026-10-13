@@ -1,7 +1,6 @@
 from django.test import TestCase
 from scraper.utils import extract_motion_bullet_points
 
-
 MOTION_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <wetgeving>
   <al>De Kamer,</al>

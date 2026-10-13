@@ -1,9 +1,19 @@
 import copy
+from datetime import date
 from typing import Any
 import requests
 from django.test import TestCase
-from scraper.utils import ParliamentApi
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from scraper.dto import BesluitDTO, StemmingDTO
+from scraper.tests.factories import PartyFactory
+from scraper.utils import ParliamentApi, aggregate_party_votes
+from scraper.models import (
+    Party,
+    PartySuccession,
+    PartyVote,
+    ParliamentaryItem,
+    ParliamentaryItemStatusTypes,
+    VoteType,
+)
 from unittest import mock
 from scraper.tests.fixtures.utils_fixtures import (
     PARTY_API_RESPONSE,
@@ -164,7 +174,7 @@ class TestParliamentApi(TestCase):
             call.args[0]: call.args[1:] for call in progress.call_args_list
         }
         self.assertEqual((4, 4), final["Fetching motions"])
-        self.assertEqual((4, 4), final["Saving votes"])
+        self.assertEqual((4, 4), final["Syncing votes"])
         self.assertEqual((4, 4), final["Fetching motion texts"])
 
 
@@ -173,3 +183,339 @@ def mocked_xml_url(zaak: dict[str, Any]) -> str:
         "ExterneIdentifier"
     ]
     return f"https://{MOTION_XML_HOST}/{externe_id}.xml"
+
+
+def stemming(fractie_id: str, vote: VoteType) -> StemmingDTO:
+    return StemmingDTO(Soort=vote, Fractie_Id=fractie_id)
+
+
+class TestAggregatePartyVotes(TestCase):
+    def test_show_of_hands_one_record_per_party(self) -> None:
+        votes = aggregate_party_votes(
+            [
+                stemming("a", VoteType.FOR),
+                stemming("b", VoteType.AGAINST),
+                stemming("c", VoteType.ABSTAIN),
+            ]
+        )
+        self.assertEqual(
+            {"a": VoteType.FOR, "b": VoteType.AGAINST, "c": VoteType.ABSTAIN},
+            votes,
+        )
+
+    def test_roll_call_absent_member_does_not_override_party(self) -> None:
+        # Order matters for a naive "last record wins" implementation.
+        votes = aggregate_party_votes(
+            [
+                stemming("a", VoteType.AGAINST),
+                stemming("a", VoteType.AGAINST),
+                stemming("a", VoteType.ABSTAIN),
+            ]
+        )
+        self.assertEqual({"a": VoteType.AGAINST}, votes)
+
+    def test_roll_call_majority_wins_split_party(self) -> None:
+        votes = aggregate_party_votes(
+            [stemming("a", VoteType.FOR)] * 5
+            + [stemming("a", VoteType.AGAINST)] * 4
+        )
+        self.assertEqual({"a": VoteType.FOR}, votes)
+
+    def test_roll_call_even_split_is_abstain(self) -> None:
+        votes = aggregate_party_votes(
+            [stemming("a", VoteType.FOR), stemming("a", VoteType.AGAINST)]
+        )
+        self.assertEqual({"a": VoteType.ABSTAIN}, votes)
+
+    def test_roll_call_all_absent_is_abstain(self) -> None:
+        votes = aggregate_party_votes(
+            [stemming("a", VoteType.ABSTAIN), stemming("a", VoteType.ABSTAIN)]
+        )
+        self.assertEqual({"a": VoteType.ABSTAIN}, votes)
+
+
+class TestImportRollCallVote(TestCase):
+    @mock.patch("scraper.utils.requests.Session.get")
+    def test_roll_call_stores_one_majority_vote_per_party(
+        self, mocked_get: mock.Mock
+    ) -> None:
+        zaak = copy.deepcopy(ZAAK_API_RESPONSE[0])
+        party_id = PARTY_API_RESPONSE[0]["Id"]
+        member = {"Fractie_Id": party_id}
+        zaak["Besluit"][0]["Stemming"] = [
+            {**member, "Soort": "Tegen"},
+            {**member, "Soort": "Tegen"},
+            {**member, "Soort": "Niet deelgenomen"},
+        ]
+        mocked_get.side_effect = route_responses([zaak])
+        api = ParliamentApi()
+        api.import_parties()
+        api.import_votes()
+
+        votes = PartyVote.objects.filter(party__api_id=party_id)
+        self.assertEqual(1, votes.count())
+        self.assertEqual(VoteType.AGAINST, votes.get().vote)
+
+
+class TestVoteSync(TestCase):
+    """Votes are synced with the API on every run, not only on creation."""
+
+    def setUp(self) -> None:
+        self.api = ParliamentApi()
+        patcher = mock.patch("scraper.utils.requests.Session.get")
+        self.mocked_get = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.zaken = copy.deepcopy(ZAAK_API_RESPONSE)
+        self.run_import(self.zaken)
+        self.zaak = self.zaken[0]
+        self.item = ParliamentaryItem.objects.get(api_id=self.zaak["Id"])
+
+    def run_import(self, zaken: list[dict[str, Any]]) -> Any:
+        self.mocked_get.side_effect = route_responses(zaken)
+        self.api.import_parties()
+        return self.api.import_votes()
+
+    def stemmingen(self) -> list[dict[str, Any]]:
+        stemmingen: list[dict[str, Any]] = self.zaak["Besluit"][0]["Stemming"]
+        return stemmingen
+
+    def known_stemming(self) -> dict[str, Any]:
+        """A vote of a party that exists; votes of unknown parties are
+        skipped by the import."""
+        known = {party["Id"] for party in PARTY_API_RESPONSE}
+        return next(s for s in self.stemmingen() if s["Fractie_Id"] in known)
+
+    def test_unchanged_run_writes_nothing(self) -> None:
+        result = self.run_import(self.zaken)
+        self.assertEqual(0, result.created)
+        self.assertEqual(
+            (0, 0, 0, 0),
+            (
+                result.votes_created,
+                result.votes_updated,
+                result.votes_deleted,
+                result.stale,
+            ),
+        )
+        self.assertFalse(result.has_vote_changes)
+
+    def test_changed_vote_is_updated(self) -> None:
+        stemming = self.known_stemming()
+        stemming["Soort"] = "Voor" if stemming["Soort"] == "Tegen" else "Tegen"
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(1, result.votes_updated)
+        self.assertTrue(result.has_vote_changes)
+        vote = PartyVote.objects.get(
+            parliamentary_item=self.item,
+            party__api_id=stemming["Fractie_Id"],
+        )
+        self.assertEqual(
+            StemmingDTO.get_party_vote_type(stemming["Soort"]), vote.vote
+        )
+
+    def test_removed_vote_is_deleted(self) -> None:
+        removed = self.known_stemming()
+        self.stemmingen().remove(removed)
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(1, result.votes_deleted)
+        self.assertFalse(
+            PartyVote.objects.filter(
+                parliamentary_item=self.item,
+                party__api_id=removed["Fractie_Id"],
+            ).exists()
+        )
+
+    def test_missing_vote_is_added(self) -> None:
+        missing = self.known_stemming()
+        PartyVote.objects.filter(
+            parliamentary_item=self.item, party__api_id=missing["Fractie_Id"]
+        ).delete()
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(1, result.votes_created)
+        self.assertTrue(
+            PartyVote.objects.filter(
+                parliamentary_item=self.item,
+                party__api_id=missing["Fractie_Id"],
+            ).exists()
+        )
+
+    def test_item_without_vote_anymore_is_reset(self) -> None:
+        votes_before = PartyVote.objects.count()
+        item_votes = self.item.partyvote_set.count()
+        result = self.run_import(self.zaken[1:])
+
+        self.assertEqual(1, result.stale)
+        self.assertEqual(item_votes, result.votes_deleted)
+        self.item.refresh_from_db()
+        self.assertEqual(ParliamentaryItemStatusTypes.PENDING, self.item.status)
+        self.assertEqual(0, self.item.partyvote_set.count())
+        self.assertEqual(votes_before - item_votes, PartyVote.objects.count())
+        # Already reset items are not reported again.
+        self.assertEqual(0, self.run_import(self.zaken[1:]).stale)
+
+    def test_empty_download_does_not_wipe_votes(self) -> None:
+        votes_before = PartyVote.objects.count()
+        result = self.run_import([])
+        self.assertEqual(0, result.stale)
+        self.assertEqual(votes_before, PartyVote.objects.count())
+
+    def test_invalid_record_leaves_item_untouched(self) -> None:
+        item_votes = self.item.partyvote_set.count()
+        self.zaak["Besluit"][0]["BesluitSoort"] = "Onbekend"
+        result = self.run_import(self.zaken)
+
+        self.assertEqual(0, result.stale)
+        self.assertEqual(item_votes, self.item.partyvote_set.count())
+
+    def test_mistake_votes_are_requested(self) -> None:
+        self.run_import(self.zaken)
+        zaak_calls = [
+            call
+            for call in self.mocked_get.call_args_list
+            if call.args[0].endswith("Zaak")
+        ]
+        expand = zaak_calls[-1].kwargs["params"]["$expand"]
+        self.assertIn("Stemming(", expand)
+        self.assertNotIn("Vergissing", expand)
+
+
+class TestVoteDate(TestCase):
+    def test_vote_date_from_session_uses_local_date(self) -> None:
+        agendapunt = {"Activiteit": {"Datum": "2026-04-21T00:30:00+02:00"}}
+        # 00:30 local is still 22:30 UTC the day before.
+        self.assertEqual(
+            date(2026, 4, 21), BesluitDTO.get_vote_date(agendapunt)
+        )
+
+    def test_missing_session_gives_none(self) -> None:
+        self.assertIsNone(BesluitDTO.get_vote_date(None))
+        self.assertIsNone(BesluitDTO.get_vote_date({"Activiteit": None}))
+        self.assertIsNone(
+            BesluitDTO.get_vote_date({"Activiteit": {"Datum": None}})
+        )
+
+    @mock.patch("scraper.utils.requests.Session.get")
+    def test_import_stores_vote_date(self, mocked_get: mock.Mock) -> None:
+        zaak = copy.deepcopy(ZAAK_API_RESPONSE[0])
+        zaak["Besluit"][0]["Agendapunt"] = {
+            "Id": "agendapunt",
+            "Activiteit": {"Datum": "2026-04-21T15:00:00+02:00"},
+        }
+        mocked_get.side_effect = route_responses([zaak])
+        api = ParliamentApi()
+        api.import_parties()
+        api.import_votes()
+
+        item = ParliamentaryItem.objects.get(api_id=zaak["Id"])
+        self.assertEqual(date(2026, 4, 21), item.vote_date)
+
+
+def fractie(
+    fractie_id: str, abbreviation: str, start: str, end: str | None = None
+) -> dict[str, Any]:
+    return {
+        "Id": fractie_id,
+        "Afkorting": abbreviation,
+        "DatumActief": f"{start}T00:00:00+02:00",
+        "DatumInactief": f"{end}T00:00:00+02:00" if end else None,
+    }
+
+
+def seat(members: list[str], start: str, end: str | None) -> dict[str, Any]:
+    return {
+        "FractieZetelPersoon": [
+            {
+                "Persoon_Id": member,
+                "Van": f"{start}T00:00:00+02:00",
+                "TotEnMet": f"{end}T00:00:00+02:00" if end else None,
+            }
+            for member in members
+        ]
+    }
+
+
+class TestImportSuccessions(TestCase):
+    def setUp(self) -> None:
+        patcher = mock.patch("scraper.utils.requests.Session.get")
+        self.mocked_get = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.fracties: list[dict[str, Any]] = []
+        self.seats: dict[str, list[dict[str, Any]]] = {}
+        self.mocked_get.side_effect = self.respond
+        self.api = ParliamentApi()
+
+    def respond(self, url: str, *args: Any, **kwargs: Any) -> MockedResponse:
+        if url.endswith("FractieZetel"):
+            fractie_id = kwargs["params"]["$filter"].split("Fractie_Id eq ")[1]
+            return MockedResponse(
+                {"value": self.seats.get(fractie_id, [])}, 200
+            )
+        return MockedResponse({"value": self.fracties}, 200)
+
+    def add(
+        self,
+        fractie_id: str,
+        start: str,
+        end: str | None,
+        members: list[str],
+    ) -> None:
+        PartyFactory(api_id=fractie_id)
+        self.fracties.append(fractie(fractie_id, fractie_id, start, end))
+        self.seats[fractie_id] = [seat(members, start, end)]
+
+    def detect(self) -> list[tuple[str, str]]:
+        self.api.import_successions()
+        return list(
+            PartySuccession.objects.values_list(
+                "predecessor__api_id", "successor__api_id"
+            )
+        )
+
+    def members(self, n: int, prefix: str = "m") -> list[str]:
+        return [f"{prefix}{i}" for i in range(n)]
+
+    def test_rename_is_detected(self) -> None:
+        # GroenLinks-PvdA -> PRO: 19 of 20 members continue.
+        self.add("gl", "2023-10-27", "2026-06-10", self.members(20))
+        self.add("pro", "2026-06-09", None, self.members(19) + ["newcomer"])
+        self.assertEqual([("gl", "pro")], self.detect())
+        succession = PartySuccession.objects.get()
+        self.assertEqual(date(2026, 6, 9), succession.date)
+        self.assertAlmostEqual(0.95, succession.member_overlap)
+
+    def test_split_is_not_a_succession(self) -> None:
+        # PVV -> Groep Markuszower: the original party continues.
+        self.add("pvv", "2006-11-30", None, self.members(26))
+        self.add("mk", "2026-01-20", None, self.members(7))
+        self.assertEqual([], self.detect())
+
+    def test_split_off_from_ended_party_is_not_a_succession(self) -> None:
+        # Only part of the members continue in the new party.
+        self.add("old", "2023-10-27", "2026-06-10", self.members(20))
+        self.add("new", "2026-06-09", None, self.members(10))
+        self.assertEqual([], self.detect())
+
+    def test_merger_is_not_a_succession(self) -> None:
+        self.add("a", "2023-10-27", "2026-06-10", self.members(10, "a"))
+        self.add("b", "2023-10-27", "2026-06-10", self.members(10, "b"))
+        self.add(
+            "ab",
+            "2026-06-09",
+            None,
+            self.members(10, "a") + self.members(10, "b"),
+        )
+        self.assertEqual([], self.detect())
+
+    def test_large_gap_is_not_a_succession(self) -> None:
+        self.add("old", "2023-10-27", "2026-03-01", self.members(20))
+        self.add("new", "2026-06-09", None, self.members(20))
+        self.assertEqual([], self.detect())
+
+    def test_unknown_parties_are_ignored(self) -> None:
+        self.add("gl", "2023-10-27", "2026-06-10", self.members(20))
+        self.fracties.append(fractie("pro", "pro", "2026-06-09"))
+        self.seats["pro"] = [seat(self.members(20), "2026-06-09", None)]
+        self.assertEqual([], self.detect())

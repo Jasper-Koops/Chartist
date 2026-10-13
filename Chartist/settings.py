@@ -1,7 +1,7 @@
+from importlib.util import find_spec
 from pathlib import Path
 from types import ModuleType
 from celery.schedules import crontab
-
 
 local_secrets: ModuleType | None
 try:
@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "debug_toolbar",
     "rest_framework",
     "django_filters",
     "django_celery_beat",
@@ -51,7 +50,6 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -149,19 +147,21 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CELERY_ENABLE_UTC = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULE = {
-    "import_votes": {
-        "task": "scraper.tasks.import_votes",
+    "import_and_analyze": {
+        "task": "scraper.tasks.import_and_analyze",
         "schedule": crontab(minute=15, hour=0),
-    },
-    "run_scheduled_pca_analysis": {
-        "task": "scraper.tasks.run_scheduled_pca_analysis",
-        "schedule": crontab(minute=45, hour=0),
     },
 }
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
 
 
 # Debug Toolbar Settings
+# Only loaded when installed (requirements/dev.txt) and running in DEBUG mode.
+DEBUG_TOOLBAR = DEBUG and find_spec("debug_toolbar") is not None
+if DEBUG_TOOLBAR:
+    INSTALLED_APPS.append("debug_toolbar")
+    MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
+
 INTERNAL_IPS = [
     "127.0.0.1",
 ]

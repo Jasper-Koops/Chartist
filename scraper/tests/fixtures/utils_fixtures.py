@@ -1,6 +1,5 @@
 from typing import Any
 
-
 PARTIES: dict[str, str] = {
     "ChristenUnie": "ChristenUnie",
     "FVD": "Forum voor Democratie",

@@ -1,15 +1,20 @@
 from django.test import TestCase
 import io
 
-from analyzer.utils import generate_dataframe, AnalysisLogger, log_to_stdout
-from scraper.models import PartyVote, VoteType
+from analyzer.utils import (
+    PARTICIPATION_THRESHOLD,
+    AnalysisLogger,
+    generate_dataframe,
+    log_to_stdout,
+)
+from scraper.models import Party, PartyVote, VoteType
+from scraper.tests.factories import PartyFactory
 from scraper.tests.utils.testing_utils import (
     generate_parties,
     generate_parliamentary_items,
     generate_party_votes,
 )
 import logging
-
 
 logger = logging.getLogger(__name__)
 
@@ -101,3 +106,33 @@ class TestGenerateDataFrame(TestCase):
                 self.assertEqual(
                     df.iloc[index][party.abbreviation], expected_vote
                 )
+
+
+class TestParticipationThreshold(TestCase):
+    def setUp(self) -> None:
+        self.log = AnalysisLogger(logger, {})
+
+    def party(self, rate: float) -> Party:
+        party: Party = PartyFactory(participation_rate=rate)
+        return party
+
+    def included(self) -> list[str]:
+        return list(generate_dataframe(log=self.log).columns[1:])
+
+    def test_party_missing_a_single_vote_is_included(self) -> None:
+        # Under the old IQR rule, all parties at 100% made the cutoff 100%.
+        full = [self.party(100.0) for _ in range(5)]
+        almost = self.party(99.9)
+        included = self.included()
+        self.assertIn(almost.abbreviation, included)
+        for party in full:
+            self.assertIn(party.abbreviation, included)
+
+    def test_threshold_is_inclusive(self) -> None:
+        party = self.party(PARTICIPATION_THRESHOLD)
+        self.assertIn(party.abbreviation, self.included())
+
+    def test_party_below_threshold_is_excluded(self) -> None:
+        self.party(100.0)
+        inactive = self.party(PARTICIPATION_THRESHOLD - 0.1)
+        self.assertNotIn(inactive.abbreviation, self.included())

@@ -56,12 +56,16 @@ class Command(BaseCommand):
         )
         self.stdout.write(self.style.SUCCESS("Importing party data"))
         api.import_parties()
+        api.import_successions()
         self.stdout.write(self.style.SUCCESS("Importing vote data"))
         result = api.import_votes(refetch_texts=options["refetch_texts"])
         self.stdout.write(
             self.style.SUCCESS(
                 f"Completed import: {result.motions} motions, "
-                f"{result.created} new, {result.texts_fetched} texts fetched, "
+                f"{result.created} new; votes {result.votes_created} added, "
+                f"{result.votes_updated} changed, {result.votes_deleted} "
+                f"removed; {result.stale} motions without a vote anymore; "
+                f"{result.texts_fetched} texts fetched, "
                 f"{result.texts_failed} texts failed"
             )
         )

@@ -36,7 +36,22 @@ class ParliamentaryItemSerializer(
 ):
     class Meta:
         model = ParliamentaryItem
-        fields = ["id", "api_id", "title", "date", "item_type", "status"]
+        fields = [
+            "id",
+            "api_id",
+            "title",
+            "date",
+            "vote_date",
+            "item_type",
+            "status",
+        ]
+
+
+class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
+    """Adds the motion text, which is left out of list responses."""
+
+    class Meta(ParliamentaryItemSerializer.Meta):
+        fields = ParliamentaryItemSerializer.Meta.fields + ["text"]
 
 
 class KeyParliamentaryItemSerializer(
@@ -52,8 +67,10 @@ class KeyParliamentaryItemSerializer(
             "api_id",
             "title",
             "date",
+            "vote_date",
             "item_type",
             "status",
+            "text",
             "votes",
             "loadings",
         ]

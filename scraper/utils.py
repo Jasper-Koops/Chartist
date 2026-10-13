@@ -1,12 +1,21 @@
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Any
+from datetime import date, datetime, timedelta
+from typing import Any, cast
 import xml.etree.ElementTree as ET
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from scraper.models import (
+    Party,
+    PartySuccession,
+    PartyVote,
+    ParliamentaryItem,
+    ParliamentaryItemStatusTypes,
+    VoteType,
+)
 from scraper.dto import (
     FractieDTO,
     ZaakBesluitDTO,
@@ -15,17 +24,25 @@ from scraper.dto import (
 from scraper.mapper import (
     party_from_dto,
     parliamentary_item_from_dto,
-    party_vote_from_dto,
 )
 from django.db import transaction
 import logging
-
 
 logger = logging.getLogger(__name__)
 
 
 API_URL: str = "https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/"
 MOTION_XML_URL: str = "https://zoek.officielebekendmakingen.nl/{}.xml"
+
+# Start of the analysed period: installation of the current parliament.
+PERIOD_START: str = "2025-11-12T00:00:00+01:00"
+
+# A successor must start within this many days of its predecessor ending,
+# and share at least this share of members in both directions. Strict on
+# purpose: only a continuation under a new identity (e.g. GroenLinks-PvdA
+# -> PRO) qualifies, not a split or a merger.
+SUCCESSION_MAX_GAP_DAYS: int = 7
+SUCCESSION_MIN_MEMBER_OVERLAP: float = 0.9
 
 # (connect, read) timeouts in seconds. Motion XML documents occasionally stall
 # server-side; a short read timeout plus a retry recovers faster than waiting.
@@ -144,6 +161,39 @@ def extract_motion_bullet_points(
     ]
 
 
+def aggregate_party_votes(stemmingen: list[StemmingDTO]) -> dict[str, VoteType]:
+    """
+    Reduce vote records to a single vote per party.
+
+    A vote by show of hands ('Met handopsteken') has one record per party. A
+    roll-call vote ('Hoofdelijk') has one record per member, so a party can
+    have many records, including members who did not take part.
+
+    The party vote is the majority of FOR and AGAINST votes among its members;
+    members who did not take part are ignored. If no member took part, or the
+    party is split evenly, the party vote is ABSTAIN.
+
+    Args:
+        stemmingen (list[StemmingDTO]): The vote records of a decision.
+
+    Returns:
+        dict[str, VoteType]: The vote per party, keyed by Fractie_Id.
+    """
+    counts: defaultdict[str, Counter[VoteType]] = defaultdict(Counter)
+    for stemming in stemmingen:
+        counts[stemming.Fractie_Id][VoteType(stemming.Soort)] += 1
+
+    votes: dict[str, VoteType] = {}
+    for fractie_id, count in counts.items():
+        if count[VoteType.FOR] > count[VoteType.AGAINST]:
+            votes[fractie_id] = VoteType.FOR
+        elif count[VoteType.AGAINST] > count[VoteType.FOR]:
+            votes[fractie_id] = VoteType.AGAINST
+        else:
+            votes[fractie_id] = VoteType.ABSTAIN
+    return votes
+
+
 @dataclass
 class VoteImportResult:
     """
@@ -152,6 +202,11 @@ class VoteImportResult:
     Attributes:
         motions (int): Number of motions with a decision that were processed.
         created (int): Number of newly created parliamentary items.
+        votes_created (int): Number of party votes added.
+        votes_updated (int): Number of party votes that changed.
+        votes_deleted (int): Number of party votes removed.
+        stale (int): Number of stored items that no longer have a vote in the
+            API; their votes were removed and their status reset to pending.
         texts_fetched (int): Number of motion texts downloaded and stored.
         texts_failed (int): Number of motion texts that could not be
             downloaded or parsed.
@@ -159,8 +214,22 @@ class VoteImportResult:
 
     motions: int = 0
     created: int = 0
+    votes_created: int = 0
+    votes_updated: int = 0
+    votes_deleted: int = 0
+    stale: int = 0
     texts_fetched: int = 0
     texts_failed: int = 0
+
+    @property
+    def has_vote_changes(self) -> bool:
+        """Whether this run changed any votes, i.e. the analysis input."""
+        return bool(
+            self.votes_created
+            or self.votes_updated
+            or self.votes_deleted
+            or self.stale
+        )
 
 
 class ParliamentApi:
@@ -258,14 +327,21 @@ class ParliamentApi:
 
     def import_parties(self) -> None:
         """
-        Import active parties from the API into the local database.
+        Import parties from the API into the local database.
+
+        Imports every party that was active at some point since PERIOD_START,
+        so the votes of parties that ended during the period (e.g. a party
+        continued under a new name) can still be linked.
 
         Fetches party data from the API, converts it into DTOs, and updates or
         creates corresponding `Party` model instances in the database.
 
         Ensures database integrity by using an atomic transaction.
         """
-        filters: list[str] = ["Verwijderd eq false", "DatumInactief eq null"]
+        filters: list[str] = [
+            "Verwijderd eq false",
+            f"(DatumInactief eq null or DatumInactief ge {PERIOD_START})",
+        ]
         party_data: list[dict[str, str | int | None | bool]] = self.fetch(
             object_name="Fractie", filters=filters, order_by=None
         )
@@ -296,13 +372,127 @@ class ParliamentApi:
         except Party.DoesNotExist:
             pass
 
+    def _members(self, fractie_id: str, on: date) -> set[str]:
+        """
+        Get the members (Persoon ids) of a party on a given date.
+
+        Args:
+            fractie_id (str): The party's API id.
+            on (date): The date to get the members for.
+
+        Returns:
+            set[str]: The Persoon ids of the members on that date.
+        """
+        # Expanded rows contain nested lists, unlike fetch's flat row type.
+        seats = cast(
+            list[dict[str, Any]],
+            self.fetch(
+                object_name="FractieZetel",
+                filters=["Verwijderd eq false", f"Fractie_Id eq {fractie_id}"],
+                expand=[
+                    "FractieZetelPersoon($filter=Verwijderd eq false;"
+                    "$select=Persoon_Id,Van,TotEnMet)"
+                ],
+            ),
+        )
+        day = on.isoformat()
+        members: set[str] = set()
+        for seat in seats:
+            for member in seat.get("FractieZetelPersoon") or []:
+                start = str(member["Van"])[:10]
+                end = member["TotEnMet"]
+                if start <= day and (end is None or str(end)[:10] >= day):
+                    members.add(str(member["Persoon_Id"]))
+        return members
+
+    def import_successions(self) -> int:
+        """
+        Detect parties that continue another party under a new identity.
+
+        A party B succeeds a party A when A ended at most
+        SUCCESSION_MAX_GAP_DAYS from B's start, and at least
+        SUCCESSION_MIN_MEMBER_OVERLAP of A's last members are B's first
+        members and vice versa. A split (the original party continues) or a
+        merger (members come from several parties) does not qualify.
+
+        Only parties that exist locally are considered. Detected successions
+        are created or updated, never deleted, so corrections made in the
+        admin are kept unless the data contradicts them.
+
+        Returns:
+            int: The number of successions detected.
+        """
+        fracties = self.fetch(
+            object_name="Fractie",
+            filters=[
+                "Verwijderd eq false",
+                f"(DatumActief ge {PERIOD_START} "
+                f"or DatumInactief ge {PERIOD_START})",
+            ],
+        )
+        parties = {p.api_id: p for p in Party.objects.all()}
+
+        def day(value: Any) -> date:
+            return datetime.fromisoformat(str(value)).date()
+
+        ended = [
+            f for f in fracties if f.get("DatumInactief") and f["Id"] in parties
+        ]
+        started = [
+            f
+            for f in fracties
+            if f.get("DatumActief")
+            and day(f["DatumActief"]) >= day(PERIOD_START)
+            and f["Id"] in parties
+        ]
+
+        detected = 0
+        for old in ended:
+            end = day(old["DatumInactief"])
+            for new in started:
+                start = day(new["DatumActief"])
+                if new["Id"] == old["Id"] or (
+                    abs((start - end).days) > SUCCESSION_MAX_GAP_DAYS
+                ):
+                    continue
+                before = self._members(str(old["Id"]), end - timedelta(days=1))
+                after = self._members(str(new["Id"]), start + timedelta(days=1))
+                if not before or not after:
+                    continue
+                shared = len(before & after)
+                overlap = min(shared / len(before), shared / len(after))
+                if overlap < SUCCESSION_MIN_MEMBER_OVERLAP:
+                    continue
+                PartySuccession.objects.update_or_create(
+                    predecessor=parties[str(old["Id"])],
+                    defaults={
+                        "successor": parties[str(new["Id"])],
+                        "date": start,
+                        "member_overlap": overlap,
+                    },
+                )
+                detected += 1
+                logger.info(
+                    f"Detected succession {old['Afkorting']} -> "
+                    f"{new['Afkorting']} ({overlap:.0%} shared members)",
+                    extra={"predecessor": old["Id"], "successor": new["Id"]},
+                )
+        return detected
+
     def import_votes(self, refetch_texts: bool = False) -> VoteImportResult:
         """
         Fetch parliamentary motions and associated votes from the API.
 
         Retrieves Zaak records of type Motie with their nested Besluit and
-        Stemming data, links votes to parties, and updates or creates
-        corresponding `ParliamentaryItem` and `PartyVote` model instances.
+        Stemming data, and updates or creates the corresponding
+        `ParliamentaryItem` instances.
+
+        The votes of every motion are synced with the API on every run: all
+        stored votes are loaded in one query, compared with the downloaded
+        votes, and only the differences are written. Stored items that are no
+        longer returned with a vote (e.g. a vote that was annulled and the
+        motion postponed) lose their votes and are reset to pending. Items
+        whose API record fails validation are left untouched.
 
         Afterwards, downloads the motion text for new items and items
         without text (or all items when `refetch_texts` is set), using a
@@ -310,10 +500,14 @@ class ParliamentApi:
         keeps its current text, so an item without text is selected again on
         the next run.
 
-        Each item and its votes are saved in one atomic transaction; the text
-        is saved separately afterwards.
+        Items are saved one by one; vote changes are written together at the
+        end in one atomic transaction; texts are saved afterwards. An
+        interrupted run is repaired by the next one.
         Skips votes for unknown parties.
 
+        Each party gets one vote; for roll-call votes this is the majority of
+        its members (see `aggregate_party_votes`). Votes a party later marked
+        as a mistake ('Vergissing') are included: the cast vote stands.
         Votes recorded as 'Niet deelgenomen' are stored as abstentions.
         Parties missing from the vote data get no `PartyVote`.
 
@@ -322,16 +516,18 @@ class ParliamentApi:
                 has a document, also those that already have text.
 
         Returns:
-            VoteImportResult: Counts of processed items and fetched texts.
+            VoteImportResult: Counts of processed items, vote changes and
+                fetched texts.
         """
         filters: list[str] = [
             "Verwijderd eq false",
             "Soort eq 'Motie'",
-            "GestartOp gt 2025-11-12T00:00:00+01:00",
+            f"GestartOp gt {PERIOD_START}",
         ]
         expand: list[str] = [
             "Besluit($filter=Verwijderd eq false and StemmingsSoort ne null;"
-            "$expand=Stemming($filter=Verwijderd eq false and Vergissing eq false;$select=Soort,Fractie_Id);"
+            "$expand=Stemming($filter=Verwijderd eq false;$select=Soort,Fractie_Id),"
+            "Agendapunt($select=Id;$expand=Activiteit($select=Datum));"
             "$select=Id,Agendapunt_Id,BesluitSoort,GewijzigdOp)",
             "Document($expand=HuidigeDocumentVersie($select=ExterneIdentifier);$select=Id)",
         ]
@@ -344,45 +540,76 @@ class ParliamentApi:
         party_lookup = {p.api_id: p for p in Party.objects.all()}
         result = VoteImportResult()
 
+        stored_votes: defaultdict[int, dict[int, PartyVote]] = defaultdict(dict)
+        for party_vote in PartyVote.objects.only(
+            "id", "party_id", "parliamentary_item_id", "vote"
+        ):
+            stored_votes[party_vote.parliamentary_item_id][
+                party_vote.party_id
+            ] = party_vote
+        votes_to_create: list[PartyVote] = []
+        votes_to_update: list[PartyVote] = []
+        vote_ids_to_delete: list[int] = []
+        unknown_parties: Counter[str] = Counter()
+        # Api ids of items that are present in the download, with or without
+        # a valid vote; everything else stored is stale.
+        seen_api_ids: set[str] = set()
+
         to_process = [data for data in vote_data if data.get("Besluit")]
         text_todo: list[tuple[ParliamentaryItem, str]] = []
         for i, data in enumerate(to_process, start=1):
-            self._report("Saving votes", i, len(to_process))
+            self._report("Syncing votes", i, len(to_process))
             try:
                 dto: ZaakBesluitDTO = ZaakBesluitDTO.from_api(data)
             except ValueError as e:
+                seen_api_ids.add(str(data.get("Id")))
                 logger.warning(
                     f"Skipping invalid Zaak record {data.get('Id')}: {e}",
                     extra={"zaak_id": data.get("Id"), "error": str(e)},
                 )
                 continue
 
+            seen_api_ids.add(dto.Id)
             result.motions += 1
-            with transaction.atomic():
-                (
-                    parliamentary_item,
-                    created,
-                ) = ParliamentaryItem.objects.update_or_create(
-                    api_id=dto.Id,
-                    defaults=parliamentary_item_from_dto(dto),
-                )
-                if created:
-                    result.created += 1
-                    stemming_dto: StemmingDTO
-                    for stemming_dto in dto.Besluit[0].Stemming:
-                        party = party_lookup.get(stemming_dto.Fractie_Id)
-                        if party is None:
-                            logger.info(
-                                f"Skipping unknown party with id {stemming_dto.Fractie_Id} during vote import",
-                                extra={"party_id": stemming_dto.Fractie_Id},
-                            )
-                            continue
+            (
+                parliamentary_item,
+                created,
+            ) = ParliamentaryItem.objects.update_or_create(
+                api_id=dto.Id,
+                defaults=parliamentary_item_from_dto(dto),
+            )
+            if created:
+                result.created += 1
 
-                        PartyVote.objects.update_or_create(
-                            party=party_lookup[stemming_dto.Fractie_Id],
+            desired: dict[int, VoteType] = {}
+            for fractie_id, vote in aggregate_party_votes(
+                dto.Besluit[0].Stemming
+            ).items():
+                party = party_lookup.get(fractie_id)
+                if party is None:
+                    unknown_parties[fractie_id] += 1
+                    continue
+                desired[party.id] = vote
+
+            current = stored_votes.get(parliamentary_item.id, {})
+            for party_id, vote in desired.items():
+                stored = current.get(party_id)
+                if stored is None:
+                    votes_to_create.append(
+                        PartyVote(
+                            party_id=party_id,
                             parliamentary_item=parliamentary_item,
-                            defaults=party_vote_from_dto(stemming_dto),
+                            vote=vote,
                         )
+                    )
+                elif stored.vote != vote:
+                    stored.vote = vote
+                    votes_to_update.append(stored)
+            vote_ids_to_delete.extend(
+                stored.id
+                for party_id, stored in current.items()
+                if party_id not in desired
+            )
 
             if (
                 refetch_texts or created or not parliamentary_item.text
@@ -394,6 +621,39 @@ class ParliamentApi:
                 )
                 if externe_id:
                     text_todo.append((parliamentary_item, externe_id))
+
+        for fractie_id, count in unknown_parties.items():
+            logger.info(
+                f"Skipped {count} votes of unknown party {fractie_id}",
+                extra={"party_id": fractie_id, "count": count},
+            )
+
+        # Guard against wiping every vote if the API returned nothing.
+        stale_items = (
+            ParliamentaryItem.objects.exclude(api_id__in=seen_api_ids)
+            if seen_api_ids
+            else ParliamentaryItem.objects.none()
+        )
+        with transaction.atomic():
+            PartyVote.objects.bulk_create(votes_to_create)
+            PartyVote.objects.bulk_update(votes_to_update, ["vote"])
+            PartyVote.objects.filter(id__in=vote_ids_to_delete).delete()
+            stale_votes = PartyVote.objects.filter(
+                parliamentary_item__in=stale_items
+            )
+            stale_ids = list(
+                stale_votes.values_list(
+                    "parliamentary_item_id", flat=True
+                ).distinct()
+            )
+            result.votes_deleted += stale_votes.delete()[0]
+            result.stale = ParliamentaryItem.objects.filter(
+                id__in=stale_ids
+            ).update(status=ParliamentaryItemStatusTypes.PENDING)
+
+        result.votes_created += len(votes_to_create)
+        result.votes_updated += len(votes_to_update)
+        result.votes_deleted += len(vote_ids_to_delete)
 
         self._import_texts(text_todo, result)
         return result

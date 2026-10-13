@@ -16,12 +16,73 @@
     h2 {
       margin: 0 0 10px 0;
     }
+    #agreement-section {
+      margin-top: 30px;
+    }
+    #agreement-scroll {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+    #agreement-table {
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    #agreement-table th,
+    #agreement-table td {
+      padding: 4px 6px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #agreement-table td {
+      /* 2px surface gap between colored cells */
+      border: 2px solid #ffffff;
+      color: #1f1d1a;
+      min-width: 2.6em;
+    }
+    #agreement-table th.col {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      text-align: left;
+    }
+    #agreement-table td.self {
+      background: #f2f2f2;
+    }
+    #agreement-meta {
+      color: #666;
+      margin: 0 0 10px 0;
+    }
+    #agreement-legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px 0;
+      font-size: 12px;
+      color: #52514e;
+    }
+    #agreement-legend .bar {
+      width: 220px;
+      height: 12px;
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
   <h2>Dutch Political Parties - Principal Components Analysis</h2>
   <div id="container">
     <canvas id="myChart"></canvas>
+  </div>
+
+  <div id="agreement-section">
+    <h2>Voting agreement between parties</h2>
+    <p id="agreement-meta">Share of shared motions on which two parties voted the same.</p>
+    <div id="agreement-legend" hidden>
+      <span id="agreement-legend-min"></span>
+      <span class="bar"></span>
+      <span id="agreement-legend-max"></span>
+    </div>
+    <div id="agreement-scroll">
+      <table id="agreement-table"></table>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -77,6 +138,119 @@
         });
       }
     };
+
+    // Sequential ramp, light -> dark, generated in OKLCH with evenly spaced
+    // lightness (L 0.975 -> 0.645). Every step keeps the dark cell text at
+    // >= 4.7:1 contrast, so labels never switch color.
+    const AGREEMENT_RAMP = [
+      "#fff5e8", "#fee4c7", "#fed2a7", "#fec089", "#ffab6a",
+      "#fe954c", "#fb7f31", "#f16d28", "#e45d28",
+    ];
+
+    function hexToRgb(hex) {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+
+    // Position t in [0, 1] on the ramp, interpolating between neighbouring
+    // steps (they are close enough that sRGB interpolation stays even).
+    function rampColor(t) {
+      const clamped = Math.min(Math.max(t, 0), 1);
+      const pos = clamped * (AGREEMENT_RAMP.length - 1);
+      const i = Math.min(Math.floor(pos), AGREEMENT_RAMP.length - 2);
+      const f = pos - i;
+      const a = hexToRgb(AGREEMENT_RAMP[i]);
+      const b = hexToRgb(AGREEMENT_RAMP[i + 1]);
+      const mix = a.map((c, k) => Math.round(c + (b[k] - c) * f));
+      return `rgb(${mix.join(", ")})`;
+    }
+
+    // Fit the ramp to the observed values (rounded out to 5%), so the
+    // differences that exist are visible instead of all cells looking alike.
+    function agreementDomain(agreements) {
+      const values = agreements
+        .map((a) => a.agreement)
+        .filter((v) => v !== null);
+      if (!values.length) return [0, 1];
+      const lo = Math.floor(Math.min(...values) * 20) / 20;
+      const hi = Math.ceil(Math.max(...values) * 20) / 20;
+      return lo < hi ? [lo, hi] : [Math.max(lo - 0.05, 0), hi];
+    }
+
+    async function renderAgreementMatrix() {
+      const payload = await fetchGraphData("/api/v1/agreement/?limit=1");
+      const matrices = normalizeParties(payload);
+      const table = document.getElementById("agreement-table");
+      const meta = document.getElementById("agreement-meta");
+      if (!matrices.length) {
+        meta.textContent = "No agreement matrix yet. Run the analysis first.";
+        return;
+      }
+      const matrix = matrices[0];
+      meta.textContent +=
+        ` Calculated ${new Date(matrix.created_at).toLocaleString()}.`;
+
+      const lookup = new Map(
+        matrix.agreements.map((a) => [`${a.party}-${a.other_party}`, a])
+      );
+      const parties = matrix.parties;
+      const [lo, hi] = agreementDomain(matrix.agreements);
+      const scale = (value) => rampColor((value - lo) / (hi - lo));
+
+      const legend = document.getElementById("agreement-legend");
+      legend.querySelector(".bar").style.background =
+        `linear-gradient(to right, ${AGREEMENT_RAMP.join(", ")})`;
+      document.getElementById("agreement-legend-min").textContent =
+        `${Math.round(lo * 100)}%`;
+      document.getElementById("agreement-legend-max").textContent =
+        `${Math.round(hi * 100)}%`;
+      legend.hidden = false;
+
+      const header = document.createElement("tr");
+      header.appendChild(document.createElement("th"));
+      for (const party of parties) {
+        const th = document.createElement("th");
+        th.className = "col";
+        th.textContent = party.abbreviation;
+        header.appendChild(th);
+      }
+      table.appendChild(header);
+
+      for (const party of parties) {
+        const row = document.createElement("tr");
+        const th = document.createElement("th");
+        th.textContent = party.abbreviation;
+        row.appendChild(th);
+        for (const other of parties) {
+          const td = document.createElement("td");
+          if (party.id === other.id) {
+            td.className = "self";
+          } else {
+            const pair = lookup.get(`${party.id}-${other.id}`);
+            if (pair && pair.agreement !== null) {
+              td.textContent = `${Math.round(pair.agreement * 100)}%`;
+              td.style.background = scale(pair.agreement);
+              td.title =
+                `${party.abbreviation} - ${other.abbreviation}: ` +
+                `${(pair.agreement * 100).toFixed(1)}% of ` +
+                `${pair.shared_motions} shared motions`;
+            } else {
+              td.textContent = "-";
+              td.title =
+                "Not compared: no shared motions, or the same party " +
+                "under a new name";
+            }
+          }
+          row.appendChild(td);
+        }
+        table.appendChild(row);
+      }
+    }
+
+    renderAgreementMatrix().catch((error) => {
+      document.getElementById("agreement-meta").textContent =
+        `Could not load agreement matrix: ${error.message}`;
+    });
 
     (async () => {
       const payload = await fetchGraphData("/api/v1/parties/");

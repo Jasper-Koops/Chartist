@@ -34,6 +34,22 @@ class PCAComponentPartyScoreSerializer(
         fields: list[str] = ["id", "component", "party", "score"]
 
 
+class PartyPCAScoreSerializer(
+    serializers.ModelSerializer[PCAComponentPartyScore]
+):
+    """
+    Score nested under a party, keyed by the component's PC number.
+    """
+
+    component = serializers.IntegerField(
+        source="component.number", read_only=True
+    )
+
+    class Meta:
+        model = PCAComponentPartyScore
+        fields: list[str] = ["component", "score"]
+
+
 class PCAItemLoadingSerializer(serializers.ModelSerializer[PCAItemLoading]):
     class Meta:
         model = PCAItemLoading

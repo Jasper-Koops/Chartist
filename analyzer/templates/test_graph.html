@@ -87,6 +87,12 @@
       console.log("Valid points:", points.length);
       console.log("Points:", points);
 
+      if (points.length === 0) {
+        document.getElementById("container").textContent =
+          "No PCA scores available. Run the analysis first.";
+        return;
+      }
+
       // Calculate dynamic axis ranges with 10% padding
       const xValues = points.map(p => p.x);
       const yValues = points.map(p => p.y);

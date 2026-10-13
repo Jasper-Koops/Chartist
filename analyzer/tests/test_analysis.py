@@ -19,6 +19,7 @@ from scraper.tests.factories import (
     PartyVoteFactory,
 )
 from analyzer.models import (
+    AgreementMatrix,
     PCAAnalysis,
     PCAComponent,
     PCAComponentPartyScore,
@@ -293,6 +294,12 @@ class TestRunFullAnalysis(TestCase):
         analysis = PCAAnalysis.objects.get()
         self.assertEqual(2, analysis.components.count())
 
+    def test_creates_agreement_matrix(self) -> None:
+        run_full_analysis(n_components=3, stdout=StringIO())
+        matrix = AgreementMatrix.objects.get()
+        n_parties = self.parties.count()
+        self.assertEqual(n_parties * (n_parties - 1), matrix.agreements.count())
+
     def test_reports_progress_to_stdout(self) -> None:
         stdout = StringIO()
         run_full_analysis(n_components=3, stdout=stdout)
@@ -300,3 +307,4 @@ class TestRunFullAnalysis(TestCase):
         self.assertIn("Calculating party participation rates", output)
         self.assertIn("Running PCA analysis", output)
         self.assertIn("PCA analysis completed", output)
+        self.assertIn("Agreement matrix completed", output)

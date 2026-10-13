@@ -2,6 +2,7 @@ from bisect import bisect_left
 
 import pandas as pd
 from pca import pca
+from analyzer.agreement import run_agreement_analysis
 from django.db.models import Count, Min, QuerySet
 from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
 from scraper.models import Party, ParliamentaryItem
@@ -206,10 +207,16 @@ def run_full_analysis(
     """
     Run the full analysis pipeline.
 
-    This function calculates party participation rates and performs PCA analysis.
+    This function calculates party participation rates, performs PCA analysis
+    and calculates the party agreement matrix.
     """
     log_to_stdout(msg="Calculating party participation rates...", stdout=stdout)
     calculate_party_participation_rate()
     log_to_stdout(msg="Done.\nRunning PCA analysis...", stdout=stdout)
     run_pca_analysis(n_components=n_components)
-    log_to_stdout(msg="PCA analysis completed.", stdout=stdout)
+    log_to_stdout(
+        msg="PCA analysis completed.\nCalculating agreement matrix...",
+        stdout=stdout,
+    )
+    run_agreement_analysis()
+    log_to_stdout(msg="Agreement matrix completed.", stdout=stdout)

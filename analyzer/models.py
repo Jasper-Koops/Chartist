@@ -80,3 +80,56 @@ class PCAItemLoading(models.Model):
 
     def __str__(self) -> str:
         return f"Item ID: {self.parliamentary_item_id} PC{self.component.number} - loading: {self.loading}"
+
+
+class AgreementMatrix(models.Model):
+    """
+    Pairwise voting agreement between parties, stored per analysis run.
+    """
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Agreement Matrix"
+        verbose_name_plural = "Agreement Matrices"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Agreement Matrix at {self.created_at}"
+
+
+class PartyAgreement(models.Model):
+    """
+    Agreement of one party with another party within a matrix.
+
+    Stored for both orderings of a pair, so all agreements of a single party
+    can be selected with one filter.
+    """
+
+    matrix = models.ForeignKey(
+        AgreementMatrix, on_delete=models.CASCADE, related_name="agreements"
+    )
+    party = models.ForeignKey(
+        Party, on_delete=models.CASCADE, related_name="agreements"
+    )
+    other_party = models.ForeignKey(
+        Party, on_delete=models.CASCADE, related_name="+"
+    )
+    agreement = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Share (0-1) of shared motions on which both parties voted "
+        "the same. Empty when the parties share no motions.",
+    )
+    shared_motions = models.IntegerField(
+        help_text="Number of motions on which both parties voted for or "
+        "against."
+    )
+
+    class Meta:
+        verbose_name = "Party Agreement"
+        verbose_name_plural = "Party Agreements"
+        unique_together = ("matrix", "party", "other_party")
+
+    def __str__(self) -> str:
+        return f"{self.party} - {self.other_party}: {self.agreement}"

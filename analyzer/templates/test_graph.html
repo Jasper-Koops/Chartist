@@ -16,12 +16,50 @@
     h2 {
       margin: 0 0 10px 0;
     }
+    #agreement-section {
+      margin-top: 30px;
+    }
+    #agreement-scroll {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+    #agreement-table {
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    #agreement-table th,
+    #agreement-table td {
+      border: 1px solid #ddd;
+      padding: 4px 6px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #agreement-table th.col {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      text-align: left;
+    }
+    #agreement-table td.self {
+      background: #f2f2f2;
+    }
+    #agreement-meta {
+      color: #666;
+      margin: 0 0 10px 0;
+    }
   </style>
 </head>
 <body>
   <h2>Dutch Political Parties - Principal Components Analysis</h2>
   <div id="container">
     <canvas id="myChart"></canvas>
+  </div>
+
+  <div id="agreement-section">
+    <h2>Voting agreement between parties</h2>
+    <p id="agreement-meta">Share of shared motions on which two parties voted the same.</p>
+    <div id="agreement-scroll">
+      <table id="agreement-table"></table>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -77,6 +115,76 @@
         });
       }
     };
+
+    // White (0%) to blue (100%); text turns white on dark cells.
+    function agreementColor(value) {
+      const light = Math.round(255 - value * (255 - 54));
+      const mid = Math.round(255 - value * (255 - 112));
+      return `rgb(${light}, ${mid}, 235)`;
+    }
+
+    async function renderAgreementMatrix() {
+      const payload = await fetchGraphData("/api/v1/agreement/?limit=1");
+      const matrices = normalizeParties(payload);
+      const table = document.getElementById("agreement-table");
+      const meta = document.getElementById("agreement-meta");
+      if (!matrices.length) {
+        meta.textContent = "No agreement matrix yet. Run the analysis first.";
+        return;
+      }
+      const matrix = matrices[0];
+      meta.textContent +=
+        ` Calculated ${new Date(matrix.created_at).toLocaleString()}.`;
+
+      const lookup = new Map(
+        matrix.agreements.map((a) => [`${a.party}-${a.other_party}`, a])
+      );
+      const parties = matrix.parties;
+
+      const header = document.createElement("tr");
+      header.appendChild(document.createElement("th"));
+      for (const party of parties) {
+        const th = document.createElement("th");
+        th.className = "col";
+        th.textContent = party.abbreviation;
+        header.appendChild(th);
+      }
+      table.appendChild(header);
+
+      for (const party of parties) {
+        const row = document.createElement("tr");
+        const th = document.createElement("th");
+        th.textContent = party.abbreviation;
+        row.appendChild(th);
+        for (const other of parties) {
+          const td = document.createElement("td");
+          if (party.id === other.id) {
+            td.className = "self";
+          } else {
+            const pair = lookup.get(`${party.id}-${other.id}`);
+            if (pair && pair.agreement !== null) {
+              td.textContent = `${Math.round(pair.agreement * 100)}%`;
+              td.style.background = agreementColor(pair.agreement);
+              if (pair.agreement > 0.6) td.style.color = "white";
+              td.title =
+                `${party.abbreviation} - ${other.abbreviation}: ` +
+                `${(pair.agreement * 100).toFixed(1)}% of ` +
+                `${pair.shared_motions} shared motions`;
+            } else {
+              td.textContent = "-";
+              td.title = "No shared motions";
+            }
+          }
+          row.appendChild(td);
+        }
+        table.appendChild(row);
+      }
+    }
+
+    renderAgreementMatrix().catch((error) => {
+      document.getElementById("agreement-meta").textContent =
+        `Could not load agreement matrix: ${error.message}`;
+    });
 
     (async () => {
       const payload = await fetchGraphData("/api/v1/parties/");

@@ -1,5 +1,7 @@
 from django.contrib import admin
 from analyzer.models import (
+    AgreementMatrix,
+    PartyAgreement,
     PCAAnalysis,
     PCAComponent,
     PCAComponentPartyScore,
@@ -40,3 +42,22 @@ class PCAItemLoadingAdmin(admin.ModelAdmin):
     ]
     raw_id_fields = ["component", "parliamentary_item"]
     readonly_fields = ["loading"]
+
+
+@admin.register(AgreementMatrix)
+class AgreementMatrixAdmin(admin.ModelAdmin):
+    list_display = ["id", "created_at"]
+    readonly_fields = ["created_at"]
+
+
+@admin.register(PartyAgreement)
+class PartyAgreementAdmin(admin.ModelAdmin):
+    list_display = [
+        "matrix",
+        "party",
+        "other_party",
+        "agreement",
+        "shared_motions",
+    ]
+    list_filter = ["party"]
+    raw_id_fields = ["matrix", "party", "other_party"]

@@ -8,6 +8,7 @@ from api.views import (
     PCAComponentViewSet,
     PCAComponentPartyScoreViewSet,
     PCAItemLoadingViewSet,
+    AgreementMatrixViewSet,
 )
 from django.urls import path, include
 
@@ -22,6 +23,7 @@ router.register("analysis", PCAAnalysisViewSet)
 router.register("pca-components", PCAComponentViewSet)
 router.register("pca-scores", PCAComponentPartyScoreViewSet)
 router.register("pca-loadings", PCAItemLoadingViewSet)
+router.register("agreement", AgreementMatrixViewSet)
 
 
 urlpatterns = [

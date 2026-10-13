@@ -11,12 +11,14 @@ from api.errors import NoAnalysisFoundException
 from django.db.models import Sum, QuerySet
 from rest_framework.serializers import BaseSerializer
 from analyzer.serializers import (
+    AgreementMatrixSerializer,
     PCAAnalysisSerializer,
     PCAComponentSerializer,
     PCAComponentPartyScoreSerializer,
     PCAItemLoadingSerializer,
 )
 from analyzer.models import (
+    AgreementMatrix,
     PCAAnalysis,
     PCAComponent,
     PCAComponentPartyScore,
@@ -121,3 +123,15 @@ class PCAItemLoadingViewSet(ReadOnlyModelViewSet[PCAItemLoading]):
     queryset = PCAItemLoading.objects.all()
     serializer_class = PCAItemLoadingSerializer
     filterset_class = PCAItemLoadingFilter
+
+
+class AgreementMatrixViewSet(ReadOnlyModelViewSet[AgreementMatrix]):
+    """Stored agreement matrices, newest first."""
+
+    queryset = AgreementMatrix.objects.prefetch_related(
+        "agreements__party"
+    ).order_by("-created_at")
+    serializer_class = AgreementMatrixSerializer
+    filterset_fields = {
+        "created_at": ["exact", "gte", "lte"],
+    }

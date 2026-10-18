@@ -252,8 +252,40 @@
         `Could not load agreement matrix: ${error.message}`;
     });
 
+    // Explained variance per component number of the newest analysis, the
+    // same analysis the party scores come from. Empty if unavailable, so the
+    // chart still renders without it.
+    async function fetchExplainedVariance() {
+      try {
+        const payload = await fetchGraphData(
+          "/api/v1/analysis/?ordering=-created_at&limit=1"
+        );
+        const analysis = normalizeParties(payload)[0];
+        return Object.fromEntries(
+          (analysis?.components || []).map((c) => [
+            Number(c.number),
+            Number(c.explained_variance),
+          ])
+        );
+      } catch (error) {
+        console.warn("Could not load explained variance:", error);
+        return {};
+      }
+    }
+
+    function axisTitle(number, variance) {
+      const base = `Component ${number} (PC${number})`;
+      const share = variance[number];
+      return Number.isFinite(share)
+        ? `${base} - ${(share * 100).toFixed(1)}% of variance`
+        : base;
+    }
+
     (async () => {
-      const payload = await fetchGraphData("/api/v1/parties/");
+      const [payload, variance] = await Promise.all([
+        fetchGraphData("/api/v1/parties/"),
+        fetchExplainedVariance(),
+      ]);
       const parties = normalizeParties(payload);
       const points = toScatterPoints(parties);
 
@@ -321,7 +353,7 @@
               max: xMax + xPadding,  // Dynamic maximum based on data
               title: {
                 display: true,
-                text: "Component 1 (PC1)",
+                text: axisTitle(1, variance),
                 font: { size: 14, weight: 'bold' }
               },
               grid: {
@@ -338,7 +370,7 @@
               max: yMax + yPadding,  // Dynamic maximum based on data
               title: {
                 display: true,
-                text: "Component 2 (PC2)",
+                text: axisTitle(2, variance),
                 font: { size: 14, weight: 'bold' }
               },
               grid: {

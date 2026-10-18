@@ -430,11 +430,15 @@
       }
     }
 
+    // One request for all parties, shared by the PCA charts and the list.
+    const partiesRequest = fetchGraphData("/api/v1/parties/?limit=500");
+
     async function renderPartyList() {
       const list = document.getElementById("party-list");
       try {
-        const payload = await fetchGraphData("/api/v1/parties/?ordering=name&limit=500");
-        for (const party of normalizeParties(payload)) {
+        const parties = normalizeParties(await partiesRequest);
+        parties.sort((a, b) => a.name.localeCompare(b.name));
+        for (const party of parties) {
           const item = document.createElement("li");
           const link = document.createElement("a");
           link.href = `/party/${party.id}/`;
@@ -655,7 +659,7 @@
 
     (async () => {
       const [payload, variance] = await Promise.all([
-        fetchGraphData("/api/v1/parties/"),
+        partiesRequest,
         fetchExplainedVariance(),
       ]);
       const parties = normalizeParties(payload);

@@ -1,6 +1,8 @@
 from datetime import date
 from typing import Any
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from django.utils.dateparse import parse_datetime
@@ -817,3 +819,46 @@ class TestStatusSync(APITestCase):
     def test_never_synced(self) -> None:
         data = self.client.get(reverse("status")).data
         self.assertIsNone(data["last_synced_at"])
+
+
+class TestQueryCounts(APITestCase):
+    """
+    Endpoints must not make a query per row (N+1). The counts are fixed so a
+    regression fails the tests instead of slowing the pages down.
+    """
+
+    def setUp(self) -> None:
+        self.parties = generate_parties()
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(6),
+            parties=self.parties,
+        )
+        run_pca_analysis(n_components=3)
+
+    def test_party_list_does_not_query_per_party(self) -> None:
+        url = reverse("party-list")
+        # 15 parties: count, parties, newest analysis, prefetched scores.
+        with self.assertNumQueries(4):
+            response = self.client.get(url, {"limit": 500})
+        self.assertEqual(15, len(response.data["results"]))
+        for party in response.data["results"]:
+            self.assertEqual(3, len(party["party_scores"]))
+
+    def test_status(self) -> None:
+        with self.assertNumQueries(5):
+            self.client.get(reverse("status"))
+
+    def test_compare_only_loads_the_pair_votes(self) -> None:
+        a, b = list(self.parties[:2])
+        url = reverse("party-compare", args=[a.id, b.id])
+        with CaptureQueriesContext(connection) as queries:
+            self.client.get(url)
+        vote_queries = [
+            q["sql"]
+            for q in queries.captured_queries
+            if 'FROM "scraper_partyvote"' in q["sql"]
+        ]
+        self.assertTrue(vote_queries)
+        # Every vote query is limited to specific parties, never all votes.
+        for sql in vote_queries:
+            self.assertIn('"scraper_partyvote"."party_id" IN', sql)

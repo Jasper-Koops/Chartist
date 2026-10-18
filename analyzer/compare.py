@@ -58,7 +58,7 @@ def pair_votes(
         ).values_list("parliamentary_item_id", "party_id", "vote"):
             own[voter_id][item_id] = vote
         return own[party_id], own[other_id], True
-    votes = party_votes()
+    votes = party_votes([party_id, other_id])
     return votes.get(party_id, {}), votes.get(other_id, {}), False
 
 

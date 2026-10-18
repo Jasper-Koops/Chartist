@@ -10,7 +10,16 @@ from scraper.serializers import (
 )
 from analyzer.compare import RELATIONS, pair_votes, related_items, summarize
 from api.errors import NoAnalysisFoundException
-from django.db.models import F, Max, Prefetch, Sum, QuerySet
+from django.db.models import (
+    Count,
+    Exists,
+    F,
+    Max,
+    OuterRef,
+    Prefetch,
+    QuerySet,
+    Sum,
+)
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
@@ -50,6 +59,17 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
     queryset = Party.objects.all()
     serializer_class = PartySerializer
     filterset_fields = ["id", "abbreviation", "name"]
+
+    def get_queryset(self) -> QuerySet[Party]:
+        # Prefetch the newest analysis' scores for all parties in one query,
+        # instead of two queries per party in the serializer.
+        latest = PCAAnalysis.objects.order_by("-created_at").first()
+        scores = PCAComponentPartyScore.objects.filter(
+            component__analysis=latest
+        ).select_related("component")
+        return Party.objects.prefetch_related(
+            Prefetch("pca_scores", queryset=scores, to_attr="latest_scores")
+        )
 
     def _other_party(self, other_pk: str) -> Party:
         try:
@@ -392,9 +412,11 @@ class StatusView(APIView):
     """
 
     def get(self, request: Request) -> Response:
+        # One query: an existence check per motion instead of a join with
+        # every vote.
         voted = ParliamentaryItem.objects.filter(
-            partyvote__isnull=False
-        ).distinct()
+            Exists(PartyVote.objects.filter(parliamentary_item=OuterRef("pk")))
+        ).aggregate(count=Count("id"), latest=Max("vote_date"))
         latest_analysis = PCAAnalysis.objects.order_by("-created_at").first()
         latest_matrix = AgreementMatrix.objects.order_by("-created_at").first()
         last_success = ImportRun.objects.filter(
@@ -413,10 +435,8 @@ class StatusView(APIView):
                     and latest_run.status == ImportRunStatus.FAILED
                     else None
                 ),
-                "latest_vote_date": voted.aggregate(latest=Max("vote_date"))[
-                    "latest"
-                ],
-                "motions_with_votes": voted.count(),
+                "latest_vote_date": voted["latest"],
+                "motions_with_votes": voted["count"],
                 "latest_analysis_at": (
                     latest_analysis.created_at if latest_analysis else None
                 ),

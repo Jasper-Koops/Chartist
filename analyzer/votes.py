@@ -7,7 +7,9 @@ from django.utils import timezone
 from scraper.models import ParliamentaryItem, PartySuccession, PartyVote
 
 
-def party_votes() -> dict[int, dict[int, str]]:
+def party_votes(
+    party_ids: Iterable[int] | None = None,
+) -> dict[int, dict[int, str]]:
     """
     Load the votes per party for the analysis, including inherited votes.
 
@@ -16,18 +18,41 @@ def party_votes() -> dict[int, dict[int, str]]:
     followed in date order, so in A -> B -> C, C also inherits A's votes.
     The predecessor keeps its own votes.
 
+    Args:
+        party_ids (Iterable[int] | None): Only load these parties (and,
+            for inheritance, their predecessors); all parties if None. The
+            result may contain the predecessors too.
+
     Returns:
         dict[int, dict[int, str]]: Votes keyed by party id, then item id.
     """
+    successions = list(
+        PartySuccession.objects.order_by("date").values_list(
+            "predecessor_id", "successor_id"
+        )
+    )
+    votes_query = PartyVote.objects.all()
+    if party_ids is not None:
+        # Add every predecessor in the chains of the requested parties.
+        wanted = set(party_ids)
+        predecessor_of = {
+            successor: predecessor for predecessor, successor in successions
+        }
+        for party_id in list(wanted):
+            while party_id in predecessor_of:
+                party_id = predecessor_of[party_id]
+                wanted.add(party_id)
+        votes_query = votes_query.filter(party_id__in=wanted)
+
     votes: defaultdict[int, dict[int, str]] = defaultdict(dict)
-    for item_id, party_id, vote in PartyVote.objects.values_list(
+    for item_id, party_id, vote in votes_query.values_list(
         "parliamentary_item_id", "party_id", "vote"
     ):
         votes[party_id][item_id] = vote
 
-    for predecessor_id, successor_id in PartySuccession.objects.order_by(
-        "date"
-    ).values_list("predecessor_id", "successor_id"):
+    for predecessor_id, successor_id in successions:
+        if predecessor_id not in votes:
+            continue
         successor_votes = votes[successor_id]
         for item_id, vote in votes[predecessor_id].items():
             successor_votes.setdefault(item_id, vote)

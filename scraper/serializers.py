@@ -15,13 +15,16 @@ class PartySerializer(serializers.ModelSerializer[Party]):
         # Avoid circular import.
         from analyzer.serializers import PartyPCAScoreSerializer
 
-        # Get last PCA analysis scores for this party
-        last_analysis = PCAAnalysis.objects.order_by("-created_at").first()
-        if last_analysis is None:
-            return []
-        scores = obj.pca_scores.filter(
-            component__analysis=last_analysis
-        ).select_related("component")
+        # Scores of the newest analysis. PartyViewSet prefetches them for all
+        # parties at once; otherwise they are queried here.
+        scores = getattr(obj, "latest_scores", None)
+        if scores is None:
+            last_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+            if last_analysis is None:
+                return []
+            scores = obj.pca_scores.filter(
+                component__analysis=last_analysis
+            ).select_related("component")
         return PartyPCAScoreSerializer(scores, many=True).data
 
 

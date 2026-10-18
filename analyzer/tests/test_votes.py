@@ -141,3 +141,25 @@ class TestSuccessionInAnalysis(SuccessionTestCase):
                 party=self.new, other_party=self.other, month__isnull=False
             ).exists()
         )
+
+
+class TestPartyVotesSubset(SuccessionTestCase):
+    def test_only_requested_parties_are_loaded(self) -> None:
+        votes = party_votes([self.other.id])
+        self.assertEqual({self.other.id}, set(votes))
+        self.assertEqual(6, len(votes[self.other.id]))
+
+    def test_predecessors_are_loaded_for_inheritance(self) -> None:
+        votes = party_votes([self.new.id])
+        # The successor still inherits the predecessor's votes.
+        self.assertEqual(party_votes()[self.new.id], votes[self.new.id])
+
+    def test_chain_is_followed_for_a_subset(self) -> None:
+        newest = self.party()
+        PartySuccession.objects.create(
+            predecessor=self.new,
+            successor=newest,
+            date=date(2026, 2, 1),
+            member_overlap=1.0,
+        )
+        self.assertEqual(6, len(party_votes([newest.id])[newest.id]))

@@ -125,11 +125,29 @@ class PartyAgreement(models.Model):
         help_text="Number of motions on which both parties voted for or "
         "against."
     )
+    month = models.DateField(
+        null=True,
+        blank=True,
+        help_text="First day of the calendar month (by voting date) for a "
+        "monthly agreement. Empty for the agreement over the whole period.",
+    )
 
     class Meta:
         verbose_name = "Party Agreement"
         verbose_name_plural = "Party Agreements"
-        unique_together = ("matrix", "party", "other_party")
+        constraints = [
+            # One overall row and at most one row per month for each pair.
+            models.UniqueConstraint(
+                fields=["matrix", "party", "other_party"],
+                condition=models.Q(month__isnull=True),
+                name="unique_overall_party_agreement",
+            ),
+            models.UniqueConstraint(
+                fields=["matrix", "party", "other_party", "month"],
+                condition=models.Q(month__isnull=False),
+                name="unique_monthly_party_agreement",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.party} - {self.other_party}: {self.agreement}"

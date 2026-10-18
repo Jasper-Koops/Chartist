@@ -112,16 +112,32 @@ class TestSuccessionInAnalysis(SuccessionTestCase):
 
     def test_matrix_keeps_both_parties_and_skips_their_pair(self) -> None:
         matrix = run_agreement_analysis()
-        pair = matrix.agreements.get(party=self.old, other_party=self.new)
+        pair = matrix.agreements.filter(month__isnull=True).get(
+            party=self.old, other_party=self.new
+        )
         self.assertIsNone(pair.agreement)
         self.assertEqual(0, pair.shared_motions)
 
         # The successor is compared over the inherited history too.
-        new_other = matrix.agreements.get(
+        new_other = matrix.agreements.filter(month__isnull=True).get(
             party=self.new, other_party=self.other
         )
-        old_other = matrix.agreements.get(
+        old_other = matrix.agreements.filter(month__isnull=True).get(
             party=self.old, other_party=self.other
         )
         self.assertEqual(6, new_other.shared_motions)
         self.assertEqual(3, old_other.shared_motions)
+
+    def test_lineage_pair_has_no_monthly_rows(self) -> None:
+        matrix = run_agreement_analysis()
+        self.assertFalse(
+            matrix.agreements.filter(
+                party=self.old, other_party=self.new, month__isnull=False
+            ).exists()
+        )
+        # The successor does get monthly rows with other parties.
+        self.assertTrue(
+            matrix.agreements.filter(
+                party=self.new, other_party=self.other, month__isnull=False
+            ).exists()
+        )

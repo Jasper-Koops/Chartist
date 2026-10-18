@@ -82,21 +82,35 @@ class AgreementPartySerializer(serializers.Serializer[Any]):
 
 class AgreementMatrixSerializer(serializers.ModelSerializer[AgreementMatrix]):
     """
-    A matrix with its parties and all ordered pairs. Parties are listed so a
-    client can build the grid without fetching /parties/.
+    A matrix with its parties and all ordered pairs over the whole period.
+    Parties are listed so a client can build the grid without fetching
+    /parties/. Monthly rows are served by the party timeline endpoint.
     """
 
     parties = serializers.SerializerMethodField()
-    agreements = PartyAgreementSerializer(many=True, read_only=True)
+    agreements = serializers.SerializerMethodField()
 
     class Meta:
         model = AgreementMatrix
         fields: list[str] = ["id", "created_at", "parties", "agreements"]
 
+    @staticmethod
+    def overall(obj: AgreementMatrix) -> list[PartyAgreement]:
+        # Prefetched by AgreementMatrixViewSet; queried otherwise.
+        prefetched = getattr(obj, "overall_agreements", None)
+        if prefetched is not None:
+            return list(prefetched)
+        return list(
+            obj.agreements.filter(month__isnull=True).select_related("party")
+        )
+
+    def get_agreements(self, obj: AgreementMatrix) -> Any:
+        return PartyAgreementSerializer(self.overall(obj), many=True).data
+
     def get_parties(self, obj: AgreementMatrix) -> Any:
         parties = {
             agreement.party_id: agreement.party.abbreviation
-            for agreement in obj.agreements.all()
+            for agreement in self.overall(obj)
         }
         return AgreementPartySerializer(
             [

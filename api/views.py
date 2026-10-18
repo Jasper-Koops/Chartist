@@ -1,3 +1,4 @@
+from typing import Any
 from django.db.models.functions import Abs
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from scraper.serializers import (
@@ -8,7 +9,11 @@ from scraper.serializers import (
     KeyParliamentaryItemSerializer,
 )
 from api.errors import NoAnalysisFoundException
-from django.db.models import Sum, QuerySet
+from django.db.models import Max, Prefetch, Sum, QuerySet
+from rest_framework.decorators import action
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.serializers import BaseSerializer
 from analyzer.serializers import (
     AgreementMatrixSerializer,
@@ -19,6 +24,7 @@ from analyzer.serializers import (
 )
 from analyzer.models import (
     AgreementMatrix,
+    PartyAgreement,
     PCAAnalysis,
     PCAComponent,
     PCAComponentPartyScore,
@@ -32,6 +38,56 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
     queryset = Party.objects.all()
     serializer_class = PartySerializer
     filterset_fields = ["id", "abbreviation", "name"]
+
+    @action(detail=True, url_path="agreement-timeline")
+    def agreement_timeline(
+        self, request: Request, pk: str | None = None
+    ) -> Response:
+        """
+        Monthly agreement of this party with every other party, from the
+        newest agreement matrix. Months are calendar months by voting date;
+        a month is only listed for a pair that shared motions in it.
+        """
+        party = self.get_object()
+        matrix = AgreementMatrix.objects.order_by("-created_at").first()
+        if matrix is None:
+            raise NoAnalysisFoundException(
+                "No agreement matrix has been calculated yet."
+            )
+        rows = (
+            PartyAgreement.objects.filter(
+                matrix=matrix, party=party, month__isnull=False
+            )
+            .select_related("other_party")
+            .order_by("other_party__abbreviation", "month")
+        )
+        series: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            entry = series.setdefault(
+                row.other_party_id,
+                {
+                    "party": row.other_party_id,
+                    "abbreviation": row.other_party.abbreviation,
+                    "points": [],
+                },
+            )
+            entry["points"].append(
+                {
+                    "month": row.month,
+                    "agreement": row.agreement,
+                    "shared_motions": row.shared_motions,
+                }
+            )
+        months = sorted({row.month for row in rows if row.month is not None})
+        return Response(
+            {
+                "matrix": matrix.id,
+                "created_at": matrix.created_at,
+                "party": party.id,
+                "months": months,
+                "series": list(series.values()),
+            }
+        )
 
 
 class PartyVoteViewSet(ReadOnlyModelViewSet[PartyVote]):
@@ -129,9 +185,43 @@ class AgreementMatrixViewSet(ReadOnlyModelViewSet[AgreementMatrix]):
     """Stored agreement matrices, newest first."""
 
     queryset = AgreementMatrix.objects.prefetch_related(
-        "agreements__party"
+        Prefetch(
+            "agreements",
+            queryset=PartyAgreement.objects.filter(
+                month__isnull=True
+            ).select_related("party"),
+            to_attr="overall_agreements",
+        )
     ).order_by("-created_at")
     serializer_class = AgreementMatrixSerializer
     filterset_fields = {
         "created_at": ["exact", "gte", "lte"],
     }
+
+
+class StatusView(APIView):
+    """
+    How fresh the data is: the newest voting date, the number of motions
+    with votes, and when the newest analysis and agreement matrix were made.
+    """
+
+    def get(self, request: Request) -> Response:
+        voted = ParliamentaryItem.objects.filter(
+            partyvote__isnull=False
+        ).distinct()
+        latest_analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        latest_matrix = AgreementMatrix.objects.order_by("-created_at").first()
+        return Response(
+            {
+                "latest_vote_date": voted.aggregate(latest=Max("vote_date"))[
+                    "latest"
+                ],
+                "motions_with_votes": voted.count(),
+                "latest_analysis_at": (
+                    latest_analysis.created_at if latest_analysis else None
+                ),
+                "latest_agreement_matrix_at": (
+                    latest_matrix.created_at if latest_matrix else None
+                ),
+            }
+        )

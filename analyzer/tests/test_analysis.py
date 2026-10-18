@@ -298,7 +298,10 @@ class TestRunFullAnalysis(TestCase):
         run_full_analysis(n_components=3, stdout=StringIO())
         matrix = AgreementMatrix.objects.get()
         n_parties = self.parties.count()
-        self.assertEqual(n_parties * (n_parties - 1), matrix.agreements.count())
+        self.assertEqual(
+            n_parties * (n_parties - 1),
+            matrix.agreements.filter(month__isnull=True).count(),
+        )
 
     def test_reports_progress_to_stdout(self) -> None:
         stdout = StringIO()

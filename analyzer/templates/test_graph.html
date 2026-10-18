@@ -19,6 +19,7 @@
     .chart-meta {
       color: #666;
       margin: 0 0 10px 0;
+      max-width: 1000px;
     }
     #pca-3d-section {
       margin-top: 30px;
@@ -29,42 +30,38 @@
       border: 1px solid #ddd;
       padding: 10px;
     }
-    #agreement-section {
+    .agreement-section {
       margin-top: 30px;
     }
-    #agreement-scroll {
+    .agreement-scroll {
       overflow-x: auto;
       max-width: 100%;
     }
-    #agreement-table {
+    .agreement-table {
       border-collapse: collapse;
       font-size: 12px;
     }
-    #agreement-table th,
-    #agreement-table td {
+    .agreement-table th,
+    .agreement-table td {
       padding: 4px 6px;
       text-align: center;
       white-space: nowrap;
     }
-    #agreement-table td {
+    .agreement-table td {
       /* 2px surface gap between colored cells */
       border: 2px solid #ffffff;
       color: #1f1d1a;
       min-width: 2.6em;
     }
-    #agreement-table th.col {
+    .agreement-table th.col {
       writing-mode: vertical-rl;
       transform: rotate(180deg);
       text-align: left;
     }
-    #agreement-table td.self {
+    .agreement-table td.self {
       background: #f2f2f2;
     }
-    #agreement-meta {
-      color: #666;
-      margin: 0 0 10px 0;
-    }
-    #agreement-legend {
+    .agreement-legend {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -72,14 +69,33 @@
       font-size: 12px;
       color: #52514e;
     }
-    #agreement-legend .bar {
+    .agreement-legend .bar {
       width: 220px;
       height: 12px;
       border-radius: 2px;
     }
+    #freshness {
+      color: #52514e;
+      background: #f6f5f2;
+      border-radius: 4px;
+      padding: 6px 10px;
+      margin: 0 0 16px 0;
+      font-size: 13px;
+      display: inline-block;
+    }
+    #party-section {
+      margin: 30px 0 40px 0;
+    }
+    #party-list {
+      columns: 3;
+      max-width: 1000px;
+      padding-left: 20px;
+      line-height: 1.8;
+    }
   </style>
 </head>
 <body>
+  <p id="freshness">Loading data status...</p>
   <h2>Dutch Political Parties - Principal Components Analysis</h2>
   <p class="chart-meta">
     Both axes use the same scale, so distances between parties are
@@ -98,17 +114,40 @@
     <div id="pca3d"></div>
   </div>
 
-  <div id="agreement-section">
+  <div class="agreement-section" id="agreement-alphabetical">
     <h2>Voting agreement between parties</h2>
-    <p id="agreement-meta">Share of shared motions on which two parties voted the same.</p>
-    <div id="agreement-legend" hidden>
-      <span id="agreement-legend-min"></span>
+    <p class="chart-meta">Share of shared motions on which two parties voted the same. Parties in alphabetical order.</p>
+    <div class="agreement-legend" hidden>
+      <span class="legend-min"></span>
       <span class="bar"></span>
-      <span id="agreement-legend-max"></span>
+      <span class="legend-max"></span>
     </div>
-    <div id="agreement-scroll">
-      <table id="agreement-table"></table>
+    <div class="agreement-scroll">
+      <table class="agreement-table"></table>
     </div>
+  </div>
+
+  <div class="agreement-section" id="agreement-clustered">
+    <h2>Voting agreement between parties, ordered by similarity</h2>
+    <p class="chart-meta">
+      The same matrix, with parties that vote alike placed next to each other
+      (hierarchical clustering, average linkage on 1 - agreement). Voting
+      blocs show as darker blocks along the diagonal.
+    </p>
+    <div class="agreement-legend" hidden>
+      <span class="legend-min"></span>
+      <span class="bar"></span>
+      <span class="legend-max"></span>
+    </div>
+    <div class="agreement-scroll">
+      <table class="agreement-table"></table>
+    </div>
+  </div>
+
+  <div id="party-section">
+    <h2>Parties</h2>
+    <p class="chart-meta">All parties in the database. Click one for its detail page.</p>
+    <ul id="party-list"></ul>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -213,33 +252,72 @@
       return lo < hi ? [lo, hi] : [Math.max(lo - 0.05, 0), hi];
     }
 
-    async function renderAgreementMatrix() {
-      const payload = await fetchGraphData("/api/v1/agreement/?limit=1");
-      const matrices = normalizeParties(payload);
-      const table = document.getElementById("agreement-table");
-      const meta = document.getElementById("agreement-meta");
-      if (!matrices.length) {
-        meta.textContent = "No agreement matrix yet. Run the analysis first.";
-        return;
-      }
-      const matrix = matrices[0];
-      meta.textContent +=
-        ` Calculated ${new Date(matrix.created_at).toLocaleString()}.`;
+    // Order parties so similar ones are adjacent: agglomerative clustering
+    // with average linkage on distance 1 - agreement. Pairs without an
+    // agreement (no shared motions, or the same party lineage) are left out
+    // of the averages. When two clusters merge, the orientation whose
+    // touching ends are closest is kept, so neighbours are similar.
+    function clusterOrder(parties, lookup) {
+      const distance = (a, b) => {
+        const pair = lookup.get(`${a.id}-${b.id}`);
+        return pair && pair.agreement !== null ? 1 - pair.agreement : null;
+      };
+      const linkage = (left, right) => {
+        let sum = 0;
+        let count = 0;
+        for (const a of left) {
+          for (const b of right) {
+            const d = distance(a, b);
+            if (d !== null) {
+              sum += d;
+              count += 1;
+            }
+          }
+        }
+        return count ? sum / count : Infinity;
+      };
+      const endGap = (a, b) => distance(a, b) ?? 1;
 
-      const lookup = new Map(
-        matrix.agreements.map((a) => [`${a.party}-${a.other_party}`, a])
-      );
-      const parties = matrix.parties;
+      let clusters = parties.map((party) => [party]);
+      while (clusters.length > 1) {
+        let best = null;
+        for (let i = 0; i < clusters.length; i++) {
+          for (let j = i + 1; j < clusters.length; j++) {
+            const d = linkage(clusters[i], clusters[j]);
+            if (!best || d < best.d) best = { i, j, d };
+          }
+        }
+        const left = clusters[best.i];
+        const right = clusters[best.j];
+        const orientations = [
+          [left, right],
+          [[...left].reverse(), right],
+          [left, [...right].reverse()],
+          [[...left].reverse(), [...right].reverse()],
+        ];
+        const [a, b] = orientations.reduce((keep, option) =>
+          endGap(option[0].at(-1), option[1][0]) <
+          endGap(keep[0].at(-1), keep[1][0])
+            ? option
+            : keep
+        );
+        clusters = clusters.filter((_, k) => k !== best.i && k !== best.j);
+        clusters.push([...a, ...b]);
+      }
+      return clusters[0] || [];
+    }
+
+    // Render a matrix into a section, with parties in the given order.
+    function renderMatrixTable(section, matrix, parties, lookup) {
+      const table = section.querySelector(".agreement-table");
       const [lo, hi] = agreementDomain(matrix.agreements);
       const scale = (value) => rampColor((value - lo) / (hi - lo));
 
-      const legend = document.getElementById("agreement-legend");
+      const legend = section.querySelector(".agreement-legend");
       legend.querySelector(".bar").style.background =
         `linear-gradient(to right, ${AGREEMENT_RAMP.join(", ")})`;
-      document.getElementById("agreement-legend-min").textContent =
-        `${Math.round(lo * 100)}%`;
-      document.getElementById("agreement-legend-max").textContent =
-        `${Math.round(hi * 100)}%`;
+      legend.querySelector(".legend-min").textContent = `${Math.round(lo * 100)}%`;
+      legend.querySelector(".legend-max").textContent = `${Math.round(hi * 100)}%`;
       legend.hidden = false;
 
       const header = document.createElement("tr");
@@ -283,10 +361,90 @@
       }
     }
 
-    renderAgreementMatrix().catch((error) => {
-      document.getElementById("agreement-meta").textContent =
-        `Could not load agreement matrix: ${error.message}`;
+    async function renderAgreementMatrices() {
+      const sections = [
+        document.getElementById("agreement-alphabetical"),
+        document.getElementById("agreement-clustered"),
+      ];
+      const payload = await fetchGraphData("/api/v1/agreement/?limit=1");
+      const matrix = normalizeParties(payload)[0];
+      if (!matrix) {
+        for (const section of sections) {
+          section.querySelector(".chart-meta").textContent =
+            "No agreement matrix yet. Run the analysis first.";
+        }
+        return;
+      }
+      const lookup = new Map(
+        matrix.agreements.map((a) => [`${a.party}-${a.other_party}`, a])
+      );
+      renderMatrixTable(sections[0], matrix, matrix.parties, lookup);
+      renderMatrixTable(
+        sections[1], matrix, clusterOrder(matrix.parties, lookup), lookup
+      );
+    }
+
+    renderAgreementMatrices().catch((error) => {
+      for (const id of ["agreement-alphabetical", "agreement-clustered"]) {
+        document.querySelector(`#${id} .chart-meta`).textContent =
+          `Could not load agreement matrix: ${error.message}`;
+      }
     });
+
+    const formatDate = (value) =>
+      new Date(value).toLocaleDateString(undefined, {
+        day: "numeric", month: "short", year: "numeric",
+      });
+    const formatDateTime = (value) =>
+      new Date(value).toLocaleString(undefined, {
+        day: "numeric", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+
+    async function renderFreshness() {
+      const target = document.getElementById("freshness");
+      try {
+        const status = await fetchGraphData("/api/v1/status/");
+        const parts = [];
+        if (status.latest_vote_date) {
+          parts.push(`Votes through ${formatDate(status.latest_vote_date)}`);
+        }
+        parts.push(
+          `${status.motions_with_votes.toLocaleString()} motions with votes`
+        );
+        parts.push(
+          status.latest_analysis_at
+            ? `Analysis from ${formatDateTime(status.latest_analysis_at)}`
+            : "No analysis yet"
+        );
+        target.textContent = parts.join(" · ");
+      } catch (error) {
+        target.textContent = `Could not load data status: ${error.message}`;
+      }
+    }
+
+    async function renderPartyList() {
+      const list = document.getElementById("party-list");
+      try {
+        const payload = await fetchGraphData("/api/v1/parties/?ordering=name&limit=500");
+        for (const party of normalizeParties(payload)) {
+          const item = document.createElement("li");
+          const link = document.createElement("a");
+          link.href = `/party/${party.id}/`;
+          link.textContent = party.name;
+          item.appendChild(link);
+          if (party.abbreviation && party.abbreviation !== party.name) {
+            item.appendChild(document.createTextNode(` (${party.abbreviation})`));
+          }
+          list.appendChild(item);
+        }
+      } catch (error) {
+        list.textContent = `Could not load parties: ${error.message}`;
+      }
+    }
+
+    renderFreshness();
+    renderPartyList();
 
     // Explained variance per component number of the newest analysis, the
     // same analysis the party scores come from. Empty if unavailable, so the

@@ -1,0 +1,418 @@
+<!doctype html>
+<html>
+<head>
+  <title>{{ party.name }} - Chartist</title>
+  <style>
+    body {
+      margin: 20px;
+      font-family: Arial, sans-serif;
+      color: #1f1d1a;
+    }
+    h1 {
+      margin: 0 0 4px 0;
+    }
+    h2 {
+      margin: 30px 0 6px 0;
+    }
+    .chart-meta {
+      color: #666;
+      margin: 0 0 10px 0;
+      max-width: 1000px;
+    }
+    .back {
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+    .chart-box {
+      width: 1000px;
+      border: 1px solid #ddd;
+      padding: 10px;
+      position: relative;
+    }
+    #timeline-box {
+      height: 480px;
+    }
+    #highlights {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 10px 0;
+      min-height: 26px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #ddd;
+      border-radius: 13px;
+      padding: 3px 10px;
+      font-size: 13px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .chip .swatch {
+      width: 12px;
+      height: 3px;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="/test-graph/">&larr; All charts</a>
+  <h1>{{ party.name }}</h1>
+  <p class="chart-meta">{{ party.abbreviation }}</p>
+
+  <h2>Agreement with other parties</h2>
+  <p class="chart-meta" id="bars-meta">
+    Share of shared motions on which {{ party.abbreviation }} voted the same
+    as each party, over the whole period. Click a bar to highlight that party
+    in the timeline below.
+  </p>
+  <div class="chart-box" id="bars-box">
+    <canvas id="bars"></canvas>
+  </div>
+
+  <h2>Agreement over time</h2>
+  <p class="chart-meta" id="timeline-meta">
+    Agreement per calendar month (by voting date). Months in which a pair
+    shared fewer than 50 motions are left empty. Highlighted parties are in
+    color, the others in gray.
+  </p>
+  <div id="highlights"></div>
+  <div class="chart-box" id="timeline-box">
+    <canvas id="timeline"></canvas>
+  </div>
+
+  {{ party.id|json_script:"party-id" }}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const PARTY_ID = JSON.parse(document.getElementById("party-id").textContent);
+
+    // Fewer shared motions than this in a month gives a noisy share; leave
+    // the month empty instead (e.g. recess months).
+    const MIN_SHARED_MOTIONS = 50;
+
+    // At most three highlights: the first three categorical slots stay
+    // distinguishable for all color-vision types. Context lines are gray.
+    const HIGHLIGHT_COLORS = ["#2a78d6", "#eb6834", "#1baf7a"];
+    const CONTEXT_COLOR = "#cfcdc6";
+    const CONTEXT_BAR_COLOR = "#b4b2aa";
+    const INK = "#1f1d1a";
+    const GRID = "rgba(0, 0, 0, 0.08)";
+
+    async function fetchJson(url) {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    }
+
+    // Highlighted party id -> color. A party keeps its color while it stays
+    // highlighted, so toggling another party never repaints it.
+    const highlights = new Map();
+    let barsChart = null;
+    let timelineChart = null;
+
+    function toggleHighlight(partyId) {
+      if (highlights.has(partyId)) {
+        highlights.delete(partyId);
+      } else {
+        const used = new Set(highlights.values());
+        const free = HIGHLIGHT_COLORS.find((color) => !used.has(color));
+        if (!free) return;  // all three in use; remove one first
+        highlights.set(partyId, free);
+      }
+      refresh();
+    }
+
+    function refresh() {
+      if (barsChart) {
+        const dataset = barsChart.data.datasets[0];
+        dataset.backgroundColor = dataset.partyIds.map(
+          (id) => highlights.get(id) || CONTEXT_BAR_COLOR
+        );
+        barsChart.update("none");
+      }
+      if (timelineChart) {
+        for (const dataset of timelineChart.data.datasets) {
+          const color = highlights.get(dataset.partyId);
+          dataset.borderColor = color || CONTEXT_COLOR;
+          dataset.borderWidth = color ? 2 : 1;
+          dataset.pointHoverBackgroundColor = color || CONTEXT_COLOR;
+          // Highlighted lines draw on top.
+          dataset.order = color ? 0 : 1;
+        }
+        timelineChart.update("none");
+      }
+      renderChips();
+    }
+
+    function renderChips() {
+      const box = document.getElementById("highlights");
+      box.replaceChildren();
+      if (!timelineChart) return;
+      for (const dataset of timelineChart.data.datasets) {
+        const color = highlights.get(dataset.partyId);
+        if (!color) continue;
+        const chip = document.createElement("button");
+        chip.className = "chip";
+        chip.type = "button";
+        chip.title = "Click to remove the highlight";
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = color;
+        chip.appendChild(swatch);
+        chip.appendChild(document.createTextNode(`${dataset.label} ×`));
+        chip.addEventListener("click", () => toggleHighlight(dataset.partyId));
+        box.appendChild(chip);
+      }
+    }
+
+    // Vertical hairline at the hovered month.
+    const crosshairPlugin = {
+      id: "crosshair",
+      afterDatasetsDraw(chart) {
+        const active = chart.tooltip?.getActiveElements?.() || [];
+        if (!active.length) return;
+        const { ctx, chartArea } = chart;
+        const x = active[0].element.x;
+        ctx.save();
+        ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.restore();
+      },
+    };
+
+    // Name at the last point of each highlighted line, in ink color.
+    const endLabelPlugin = {
+      id: "endLabels",
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        chart.data.datasets.forEach((dataset, i) => {
+          if (!highlights.has(dataset.partyId)) return;
+          const points = chart.getDatasetMeta(i).data;
+          for (let k = dataset.data.length - 1; k >= 0; k--) {
+            if (dataset.data[k] === null) continue;
+            const point = points[k];
+            ctx.save();
+            ctx.font = "bold 11px Arial";
+            ctx.fillStyle = INK;
+            ctx.textBaseline = "middle";
+            ctx.fillText(dataset.label, point.x + 6, point.y);
+            ctx.restore();
+            break;
+          }
+        });
+      },
+    };
+
+    // Every calendar month from the first to the last, so a month without
+    // any votes (e.g. the summer recess) shows as a gap, not a skipped label.
+    function allMonths(months) {
+      if (!months.length) return [];
+      const [startYear, startMonth] = months[0].split("-").map(Number);
+      const [endYear, endMonth] = months.at(-1).split("-").map(Number);
+      const result = [];
+      for (let y = startYear, m = startMonth; y < endYear || (y === endYear && m <= endMonth); ) {
+        result.push(`${y}-${String(m).padStart(2, "0")}-01`);
+        m += 1;
+        if (m > 12) {
+          m = 1;
+          y += 1;
+        }
+      }
+      return result;
+    }
+
+    const monthLabel = (iso) =>
+      new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+        month: "short", year: "numeric",
+      });
+
+    async function renderBars() {
+      const payload = await fetchJson("/api/v1/agreement/?limit=1");
+      const matrix = (payload.results || [])[0];
+      if (!matrix) {
+        document.getElementById("bars-meta").textContent =
+          "No agreement matrix yet. Run the analysis first.";
+        return [];
+      }
+      const names = new Map(matrix.parties.map((p) => [p.id, p.abbreviation]));
+      const rows = matrix.agreements
+        .filter((a) => a.party === PARTY_ID && a.agreement !== null)
+        .sort((a, b) => b.agreement - a.agreement);
+      if (!rows.length) {
+        document.getElementById("bars-meta").textContent =
+          "This party has no votes in the agreement matrix.";
+        return [];
+      }
+
+      // ~28px per bar, so bars stay thin regardless of the party count.
+      document.getElementById("bars-box").style.height = `${rows.length * 28 + 60}px`;
+      barsChart = new Chart(document.getElementById("bars"), {
+        type: "bar",
+        data: {
+          labels: rows.map((r) => names.get(r.other_party)),
+          datasets: [{
+            data: rows.map((r) => r.agreement * 100),
+            partyIds: rows.map((r) => r.other_party),
+            shared: rows.map((r) => r.shared_motions),
+            backgroundColor: CONTEXT_BAR_COLOR,
+            barThickness: 16,
+            borderRadius: 4,
+            borderSkipped: "start",
+          }],
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          onClick: (_, elements, chart) => {
+            if (!elements.length) return;
+            const dataset = chart.data.datasets[0];
+            toggleHighlight(dataset.partyIds[elements[0].index]);
+          },
+          onHover: (event, elements) => {
+            event.native.target.style.cursor = elements.length ? "pointer" : "default";
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) =>
+                  `${context.parsed.x.toFixed(1)}% of ` +
+                  `${context.dataset.shared[context.dataIndex]} shared motions`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              min: 0,
+              max: 100,
+              grid: { color: GRID },
+              ticks: { callback: (value) => `${value}%` },
+              title: { display: true, text: "Agreement" },
+            },
+            y: { grid: { display: false }, ticks: { color: INK } },
+          },
+        },
+      });
+      return rows;
+    }
+
+    async function renderTimeline(barRows) {
+      let payload;
+      try {
+        payload = await fetchJson(`/api/v1/parties/${PARTY_ID}/agreement-timeline/`);
+      } catch (error) {
+        document.getElementById("timeline-meta").textContent =
+          `Could not load the timeline: ${error.message}`;
+        return;
+      }
+      if (!payload.series.length) {
+        document.getElementById("timeline-meta").textContent =
+          "No monthly agreement for this party yet.";
+        return;
+      }
+      const months = allMonths(payload.months);
+      const datasets = payload.series.map((series) => {
+        const byMonth = new Map(series.points.map((p) => [p.month, p]));
+        return {
+          label: series.abbreviation,
+          partyId: series.party,
+          data: months.map((month) => {
+            const point = byMonth.get(month);
+            return point &&
+              point.agreement !== null &&
+              point.shared_motions >= MIN_SHARED_MOTIONS
+              ? point.agreement * 100
+              : null;
+          }),
+          shared: months.map((month) => byMonth.get(month)?.shared_motions ?? 0),
+          borderColor: CONTEXT_COLOR,
+          borderWidth: 1,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHitRadius: 12,
+          tension: 0,
+          spanGaps: false,
+          borderJoinStyle: "round",
+          borderCapStyle: "round",
+        };
+      });
+
+      // Fit the y-axis to the data (rounded out to 10%); a line chart needs
+      // no zero baseline, and agreement rarely goes below ~30%.
+      const values = datasets.flatMap((d) => d.data).filter((v) => v !== null);
+      const yMin = Math.max(0, Math.floor(Math.min(...values) / 10) * 10);
+      const yMax = Math.min(100, Math.ceil(Math.max(...values) / 10) * 10);
+
+      timelineChart = new Chart(document.getElementById("timeline"), {
+        type: "line",
+        data: { labels: months.map(monthLabel), datasets },
+        plugins: [crosshairPlugin, endLabelPlugin],
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { mode: "index", intersect: false },
+          // Room right of the plot for the end labels.
+          layout: { padding: { right: 70 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              itemSort: (a, b) => (b.parsed.y ?? -1) - (a.parsed.y ?? -1),
+              filter: (item) => item.parsed.y !== null,
+              callbacks: {
+                label: (context) =>
+                  `${context.dataset.label}: ${context.parsed.y.toFixed(1)}% ` +
+                  `(${context.dataset.shared[context.dataIndex]} motions)`,
+                labelColor: (context) => {
+                  const color = highlights.get(context.dataset.partyId) || CONTEXT_COLOR;
+                  return { borderColor: color, backgroundColor: color };
+                },
+              },
+            },
+          },
+          scales: {
+            x: { grid: { color: GRID }, ticks: { color: INK } },
+            y: {
+              min: yMin,
+              max: yMax,
+              grid: { color: GRID },
+              ticks: { callback: (value) => `${value}%`, color: INK },
+              title: { display: true, text: "Agreement" },
+            },
+          },
+        },
+      });
+
+      // Default highlights: the closest and the furthest party overall.
+      if (barRows.length) {
+        toggleHighlight(barRows[0].other_party);
+        if (barRows.length > 1) toggleHighlight(barRows.at(-1).other_party);
+      } else {
+        refresh();
+      }
+    }
+
+    (async () => {
+      let rows = [];
+      try {
+        rows = await renderBars();
+      } catch (error) {
+        document.getElementById("bars-meta").textContent =
+          `Could not load agreement: ${error.message}`;
+      }
+      await renderTimeline(rows);
+    })();
+  </script>
+</body>
+</html>

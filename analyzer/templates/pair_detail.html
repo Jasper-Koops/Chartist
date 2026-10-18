@@ -269,6 +269,19 @@
     let request = 0;
     let names = { a: "", b: "" };
 
+    // e.g. "PRO for (as GroenLinks-PvdA)" for a vote cast by a predecessor.
+    // The predecessor links to its own party page.
+    function voteNodes(name, vote, inheritedFrom) {
+      const nodes = [`${name} ${VOTE_LABEL[vote] || "no vote"}`];
+      if (inheritedFrom) {
+        const link = document.createElement("a");
+        link.href = `/party/${inheritedFrom.id}/`;
+        link.textContent = inheritedFrom.abbreviation;
+        nodes.push(" (as ", link, ")");
+      }
+      return nodes;
+    }
+
     async function loadMotions(reset) {
       if (reset) {
         offset = 0;
@@ -291,10 +304,12 @@
           link.textContent = motion.title;
           const meta = document.createElement("div");
           meta.className = "meta";
-          meta.textContent =
-            `${formatDate(motion.vote_date)} · ${motion.status} · ` +
-            `${names.a} ${VOTE_LABEL[motion.party_vote] || "no vote"}, ` +
-            `${names.b} ${VOTE_LABEL[motion.other_party_vote] || "no vote"}`;
+          meta.append(
+            `${formatDate(motion.vote_date)} · ${motion.status} · `,
+            ...voteNodes(names.a, motion.party_vote, motion.party_vote_inherited_from),
+            ", ",
+            ...voteNodes(names.b, motion.other_party_vote, motion.other_party_vote_inherited_from),
+          );
           item.append(link, meta);
           list.appendChild(item);
         }

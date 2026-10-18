@@ -13,6 +13,17 @@ def party_votes(
     """
     Load the votes per party for the analysis, including inherited votes.
 
+    See `party_votes_with_sources`; this leaves out the sources.
+    """
+    return party_votes_with_sources(party_ids)[0]
+
+
+def party_votes_with_sources(
+    party_ids: Iterable[int] | None = None,
+) -> tuple[dict[int, dict[int, str]], dict[int, dict[int, int]]]:
+    """
+    Load the votes per party, including inherited votes, and who cast them.
+
     A successor (see `PartySuccession`) inherits its predecessor's votes on
     items it did not vote on itself; its own votes always win. Chains are
     followed in date order, so in A -> B -> C, C also inherits A's votes.
@@ -24,7 +35,10 @@ def party_votes(
             result may contain the predecessors too.
 
     Returns:
-        dict[int, dict[int, str]]: Votes keyed by party id, then item id.
+        tuple: Votes keyed by party id, then item id; and the sources of
+            the inherited votes: the id of the party that cast each one,
+            keyed by party id, then item id. In A -> B -> C, the source of
+            a vote C inherits from A is A.
     """
     successions = list(
         PartySuccession.objects.order_by("date").values_list(
@@ -50,14 +64,19 @@ def party_votes(
     ):
         votes[party_id][item_id] = vote
 
+    sources: defaultdict[int, dict[int, int]] = defaultdict(dict)
     for predecessor_id, successor_id in successions:
         if predecessor_id not in votes:
             continue
         successor_votes = votes[successor_id]
         for item_id, vote in votes[predecessor_id].items():
-            successor_votes.setdefault(item_id, vote)
+            if item_id not in successor_votes:
+                successor_votes[item_id] = vote
+                sources[successor_id][item_id] = sources[predecessor_id].get(
+                    item_id, predecessor_id
+                )
 
-    return dict(votes)
+    return dict(votes), dict(sources)
 
 
 def lineage_pairs() -> set[tuple[int, int]]:

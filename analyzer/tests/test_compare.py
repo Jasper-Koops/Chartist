@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from analyzer.analysis import run_pca_analysis
 from analyzer.compare import pair_votes, related_items, summarize
 from analyzer.models import PCAAnalysis
+from analyzer.votes import party_votes_with_sources
 from scraper.models import ParliamentaryItem, Party, PartySuccession, VoteType
 from scraper.tests.factories import (
     ParliamentaryItemFactory,
@@ -50,7 +51,7 @@ class TestCompare(PairData, TestCase):
         self.make_pair()
 
     def test_summary(self) -> None:
-        summary = summarize(*pair_votes(self.a.id, self.b.id))
+        summary = summarize(pair_votes(self.a.id, self.b.id))
         self.assertEqual(4, summary.shared_motions)
         self.assertEqual(2, summary.agreed)
         self.assertAlmostEqual(0.5, summary.agreement or 0)
@@ -62,7 +63,7 @@ class TestCompare(PairData, TestCase):
         return sorted(self.items[i].id for i in indexes)
 
     def test_related_items(self) -> None:
-        votes, other, _ = pair_votes(self.a.id, self.b.id)
+        votes, other, *_ = pair_votes(self.a.id, self.b.id)
         self.assertEqual(
             self.ids([2, 3]), sorted(related_items(votes, other, "differed"))
         )
@@ -82,10 +83,10 @@ class TestCompare(PairData, TestCase):
             date=date(2026, 1, 1),
             member_overlap=1.0,
         )
-        votes, other, same_lineage = pair_votes(self.b.id, self.a.id)
-        self.assertTrue(same_lineage)
+        pair = pair_votes(self.b.id, self.a.id)
+        self.assertTrue(pair.same_lineage)
         # b's own votes, not a's inherited ones: they still differ on 2.
-        summary = summarize(votes, other, same_lineage)
+        summary = summarize(pair)
         self.assertEqual(
             2, summary.party_for_other_against + summary.party_against_other_for
         )
@@ -191,3 +192,92 @@ class TestComponentBreakdown(APITestCase):
             200,
             self.client.get(reverse("component-detail", args=[1])).status_code,
         )
+
+
+class TestInheritedVoteLabels(APITestCase):
+    """Votes a successor inherits are labelled with the predecessor."""
+
+    def setUp(self) -> None:
+        self.old, self.new, self.other = (
+            make_party(),
+            make_party(),
+            make_party(),
+        )
+        PartySuccession.objects.create(
+            predecessor=self.old,
+            successor=self.new,
+            date=date(2026, 1, 10),
+            member_overlap=1.0,
+        )
+        # Before the rename, only the predecessor voted; after it, only the
+        # successor. On the last item both voted: the successor's own wins.
+        self.items: list[ParliamentaryItem] = []
+        for day, voter in [(1, self.old), (20, self.new), (21, None)]:
+            item: ParliamentaryItem = ParliamentaryItemFactory(
+                vote_date=date(2026, 1, day)
+            )
+            self.items.append(item)
+            for party in [voter] if voter else [self.old, self.new]:
+                PartyVoteFactory(party=party, parliamentary_item=item, vote=F)
+            PartyVoteFactory(party=self.other, parliamentary_item=item, vote=A)
+
+    def motions(self, party: Party, other: Party) -> dict[int, Any]:
+        url = reverse("party-compare-motions", args=[party.id, other.id])
+        results = self.client.get(url, {"relation": "all"}).data["results"]
+        return {m["id"]: m for m in results}
+
+    def predecessor(self, party: Party) -> dict[str, Any]:
+        return {"id": party.id, "abbreviation": party.abbreviation}
+
+    def test_inherited_vote_names_predecessor(self) -> None:
+        motions = self.motions(self.new, self.other)
+        first, second, third = (motions[item.id] for item in self.items)
+        self.assertEqual(
+            ("For", self.predecessor(self.old)),
+            (first["party_vote"], first["party_vote_inherited_from"]),
+        )
+        self.assertIsNone(second["party_vote_inherited_from"])
+        self.assertIsNone(third["party_vote_inherited_from"])
+        self.assertIsNone(first["other_party_vote_inherited_from"])
+
+    def test_other_side_is_labelled_too(self) -> None:
+        first = self.motions(self.other, self.new)[self.items[0].id]
+        self.assertEqual(
+            self.predecessor(self.old),
+            first["other_party_vote_inherited_from"],
+        )
+
+    def test_nothing_inherited_within_lineage(self) -> None:
+        for motion in self.motions(self.new, self.old).values():
+            self.assertIsNone(motion["party_vote_inherited_from"])
+            self.assertIsNone(motion["other_party_vote_inherited_from"])
+
+    def test_chain_names_the_party_that_voted(self) -> None:
+        newest = make_party()
+        PartySuccession.objects.create(
+            predecessor=self.new,
+            successor=newest,
+            date=date(2026, 2, 1),
+            member_overlap=1.0,
+        )
+        _, sources = party_votes_with_sources([newest.id])
+        self.assertEqual(
+            {
+                self.items[0].id: self.old.id,
+                self.items[1].id: self.new.id,
+                self.items[2].id: self.new.id,
+            },
+            sources[newest.id],
+        )
+
+    def test_party_page_links_both_ways(self) -> None:
+        new_page = self.client.get(reverse("party-detail", args=[self.new.id]))
+        self.assertContains(new_page, "Continues")
+        self.assertContains(new_page, f'href="/party/{self.old.id}/"')
+        old_page = self.client.get(reverse("party-detail", args=[self.old.id]))
+        self.assertContains(old_page, "Continued as")
+        self.assertContains(old_page, f'href="/party/{self.new.id}/"')
+        other_page = self.client.get(
+            reverse("party-detail", args=[self.other.id])
+        )
+        self.assertNotContains(other_page, "Continue")

@@ -1,5 +1,6 @@
 from typing import Any
 
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
 
@@ -37,4 +38,32 @@ class MotionDetailView(TemplateView):
         context["motion"] = get_object_or_404(
             ParliamentaryItem, pk=kwargs["pk"]
         )
+        return context
+
+
+class PairDetailView(TemplateView):
+    """Test page comparing two parties; data loads from the API."""
+
+    template_name = "pair_detail.html"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        if kwargs["pk"] == kwargs["other_pk"]:
+            raise Http404("Choose two different parties.")
+        context = super().get_context_data(**kwargs)
+        context["party"] = get_object_or_404(Party, pk=kwargs["pk"])
+        context["other_party"] = get_object_or_404(Party, pk=kwargs["other_pk"])
+        return context
+
+
+class ComponentDetailView(TemplateView):
+    """
+    Test page for one principal component of the newest analysis: which
+    motions and parties drive it. Data loads from the API.
+    """
+
+    template_name = "component_detail.html"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["number"] = kwargs["number"]
         return context

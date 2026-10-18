@@ -58,6 +58,14 @@
       transform: rotate(180deg);
       text-align: left;
     }
+    .agreement-table td a {
+      color: inherit;
+      text-decoration: none;
+      display: block;
+    }
+    .agreement-table td a:hover {
+      text-decoration: underline;
+    }
     .agreement-table td.self {
       background: #f2f2f2;
     }
@@ -100,24 +108,30 @@
   <h2>Dutch Political Parties - Principal Components Analysis</h2>
   <p class="chart-meta">
     Both axes use the same scale, so distances between parties are
-    comparable. Hover a point for its scores.
+    comparable. Hover a point for its scores, click it for the party.
   </p>
   <div id="container">
     <canvas id="myChart"></canvas>
   </div>
+  <p class="chart-meta" id="component-links">
+    What drives each axis:
+    <a href="/component/1/">PC1</a> ·
+    <a href="/component/2/">PC2</a> ·
+    <a href="/component/3/">PC3</a>
+  </p>
 
   <div id="pca-3d-section">
     <h2>Principal components in 3D</h2>
     <p class="chart-meta">
       PC1, PC2 and PC3 on one shared scale. Drag to rotate, scroll to zoom,
-      hover a point for its scores.
+      hover a point for its scores, click it for the party.
     </p>
     <div id="pca3d"></div>
   </div>
 
   <div class="agreement-section" id="agreement-alphabetical">
     <h2>Voting agreement between parties</h2>
-    <p class="chart-meta">Share of shared motions on which two parties voted the same. Parties in alphabetical order.</p>
+    <p class="chart-meta">Share of shared motions on which two parties voted the same. Parties in alphabetical order. Click a cell to compare the two parties.</p>
     <div class="agreement-legend" hidden>
       <span class="legend-min"></span>
       <span class="bar"></span>
@@ -189,6 +203,7 @@
             y: pc2,
             z: Number.isFinite(pc3) ? pc3 : null,
             label: party.abbreviation || party.name,
+            partyId: party.id,
           };
         })
         .filter(Boolean);
@@ -343,7 +358,10 @@
           } else {
             const pair = lookup.get(`${party.id}-${other.id}`);
             if (pair && pair.agreement !== null) {
-              td.textContent = `${Math.round(pair.agreement * 100)}%`;
+              const link = document.createElement("a");
+              link.href = `/pair/${party.id}/${other.id}/`;
+              link.textContent = `${Math.round(pair.agreement * 100)}%`;
+              td.appendChild(link);
               td.style.background = scale(pair.agreement);
               td.title =
                 `${party.abbreviation} - ${other.abbreviation}: ` +
@@ -569,6 +587,14 @@
           },
           onResize: (resized) =>
             requestAnimationFrame(() => applyEqualScale(resized, points)),
+          onClick: (_, elements) => {
+            if (!elements.length) return;
+            const point = points[elements[0].index];
+            window.location.href = `/party/${point.partyId}/`;
+          },
+          onHover: (event, elements) => {
+            event.native.target.style.cursor = elements.length ? "pointer" : "default";
+          },
           plugins: {
             tooltip: {
               callbacks: {
@@ -614,6 +640,7 @@
           y: usable.map((p) => p.y),
           z: usable.map((p) => p.z),
           text: usable.map((p) => p.label),
+          customdata: usable.map((p) => p.partyId),
           textposition: "middle right",
           textfont: { family: "Arial", size: 11, color: "#1f1d1a" },
           marker: {
@@ -640,6 +667,10 @@
         },
         { responsive: true, displaylogo: false }
       );
+      target.on("plotly_click", (event) => {
+        const partyId = event.points?.[0]?.customdata;
+        if (partyId) window.location.href = `/party/${partyId}/`;
+      });
     }
 
     (async () => {

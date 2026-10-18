@@ -50,6 +50,10 @@
       background: #fff;
       cursor: pointer;
     }
+    #compare-links a {
+      margin-right: 10px;
+      white-space: nowrap;
+    }
     .chip .swatch {
       width: 12px;
       height: 3px;
@@ -71,6 +75,7 @@
   <div class="chart-box" id="bars-box">
     <canvas id="bars"></canvas>
   </div>
+  <p class="chart-meta" id="compare-links"></p>
 
   <h2>Agreement over time</h2>
   <p class="chart-meta" id="timeline-meta">
@@ -251,6 +256,15 @@
         document.getElementById("bars-meta").textContent =
           "This party has no votes in the agreement matrix.";
         return [];
+      }
+
+      const compare = document.getElementById("compare-links");
+      compare.textContent = "Compare in detail with: ";
+      for (const row of rows) {
+        const link = document.createElement("a");
+        link.href = `/pair/${PARTY_ID}/${row.other_party}/`;
+        link.textContent = names.get(row.other_party);
+        compare.appendChild(link);
       }
 
       // ~28px per bar, so bars stay thin regardless of the party count.

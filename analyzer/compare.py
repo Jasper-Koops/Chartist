@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from typing import NamedTuple
 
-from analyzer.votes import lineage_pairs, party_votes
+from analyzer.votes import lineage_pairs, party_votes_with_sources
 from scraper.models import PartyVote, VoteType
 
 VOTED = (VoteType.FOR, VoteType.AGAINST)
@@ -37,9 +38,27 @@ class PairSummary:
         )
 
 
-def pair_votes(
-    party_id: int, other_id: int
-) -> tuple[dict[int, str], dict[int, str], bool]:
+class PairVotes(NamedTuple):
+    """
+    The votes of two parties per item (see `pair_votes`).
+
+    Attributes:
+        votes (dict[int, str]): Votes of the first party per item.
+        other_votes (dict[int, str]): Votes of the other party per item.
+        same_lineage (bool): The two are in the same succession chain.
+        sources (dict[int, int]): For the first party's inherited votes,
+            the id of the predecessor that cast it, per item.
+        other_sources (dict[int, int]): The same for the other party.
+    """
+
+    votes: dict[int, str]
+    other_votes: dict[int, str]
+    same_lineage: bool
+    sources: dict[int, int]
+    other_sources: dict[int, int]
+
+
+def pair_votes(party_id: int, other_id: int) -> PairVotes:
     """
     The votes of two parties per item, as used by the agreement matrix.
 
@@ -48,8 +67,7 @@ def pair_votes(
     are compared on their own recorded votes.
 
     Returns:
-        tuple: Votes of the party and of the other party, keyed by item id,
-            and whether the two are in the same succession chain.
+        PairVotes: The votes of both, and who cast the inherited ones.
     """
     if (party_id, other_id) in lineage_pairs():
         own: dict[int, dict[int, str]] = {party_id: {}, other_id: {}}
@@ -57,18 +75,22 @@ def pair_votes(
             party_id__in=[party_id, other_id]
         ).values_list("parliamentary_item_id", "party_id", "vote"):
             own[voter_id][item_id] = vote
-        return own[party_id], own[other_id], True
-    votes = party_votes([party_id, other_id])
-    return votes.get(party_id, {}), votes.get(other_id, {}), False
+        return PairVotes(own[party_id], own[other_id], True, {}, {})
+    votes, sources = party_votes_with_sources([party_id, other_id])
+    return PairVotes(
+        votes.get(party_id, {}),
+        votes.get(other_id, {}),
+        False,
+        sources.get(party_id, {}),
+        sources.get(other_id, {}),
+    )
 
 
-def summarize(
-    votes: dict[int, str], other_votes: dict[int, str], same_lineage: bool
-) -> PairSummary:
+def summarize(pair: PairVotes) -> PairSummary:
     """Count shared, agreeing and opposite votes of two parties."""
     shared = agreed = for_against = against_for = 0
-    for item_id, vote in votes.items():
-        other = other_votes.get(item_id)
+    for item_id, vote in pair.votes.items():
+        other = pair.other_votes.get(item_id)
         if vote not in VOTED or other not in VOTED:
             continue
         shared += 1
@@ -78,7 +100,9 @@ def summarize(
             for_against += 1
         else:
             against_for += 1
-    return PairSummary(shared, agreed, for_against, against_for, same_lineage)
+    return PairSummary(
+        shared, agreed, for_against, against_for, pair.same_lineage
+    )
 
 
 def related_items(

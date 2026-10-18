@@ -9,7 +9,6 @@ from scraper.serializers import (
     KeyParliamentaryItemSerializer,
 )
 from analyzer.compare import RELATIONS, pair_votes, related_items, summarize
-from analyzer.votes import inherited_from
 from api.errors import NoAnalysisFoundException
 from django.db.models import (
     Count,
@@ -89,8 +88,7 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
         """
         party = self.get_object()
         other = self._other_party(other_pk)
-        votes, other_votes, same_lineage = pair_votes(party.id, other.id)
-        summary = summarize(votes, other_votes, same_lineage)
+        summary = summarize(pair_votes(party.id, other.id))
 
         matrix = AgreementMatrix.objects.order_by("-created_at").first()
         timeline = (
@@ -152,33 +150,45 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
             raise ValidationError(
                 {"relation": f"Use one of: {', '.join(RELATIONS)}."}
             )
-        votes, other_votes, same_lineage = pair_votes(party.id, other.id)
+        pair = pair_votes(party.id, other.id)
         queryset = ParliamentaryItemFilter(
             data=request.query_params,
             queryset=ParliamentaryItem.objects.filter(
-                id__in=related_items(votes, other_votes, relation)
+                id__in=related_items(pair.votes, pair.other_votes, relation)
             ).order_by(F("vote_date").desc(nulls_last=True), "-id"),
         ).qs
         page = self.paginate_queryset(queryset)
         items = page if page is not None else list(queryset)
-        # Which votes came from a predecessor (e.g. PRO's votes cast as
-        # GroenLinks-PvdA). Not inherited within one lineage, see pair_votes.
-        item_ids = [item.id for item in items]
-        party_inherited, other_inherited = (
-            ({}, {})
-            if same_lineage
-            else (
-                inherited_from(party.id, item_ids),
-                inherited_from(other.id, item_ids),
-            )
-        )
+        # The predecessors that cast inherited votes on this page, e.g.
+        # GroenLinks-PvdA for PRO.
+        source_ids = {
+            sources[item.id]
+            for item in items
+            for sources in (pair.sources, pair.other_sources)
+            if item.id in sources
+        }
+        predecessors = {
+            party_id: {"id": party_id, "abbreviation": abbreviation}
+            for party_id, abbreviation in Party.objects.filter(
+                id__in=source_ids
+            ).values_list("id", "abbreviation")
+        }
+
+        def inherited_from(sources: dict[int, int], item_id: int) -> Any:
+            source = sources.get(item_id)
+            return predecessors[source] if source is not None else None
+
         data = [
             {
                 **ParliamentaryItemSerializer(item).data,
-                "party_vote": votes.get(item.id),
-                "party_vote_inherited_from": party_inherited.get(item.id),
-                "other_party_vote": other_votes.get(item.id),
-                "other_party_vote_inherited_from": other_inherited.get(item.id),
+                "party_vote": pair.votes.get(item.id),
+                "party_vote_inherited_from": inherited_from(
+                    pair.sources, item.id
+                ),
+                "other_party_vote": pair.other_votes.get(item.id),
+                "other_party_vote_inherited_from": inherited_from(
+                    pair.other_sources, item.id
+                ),
             }
             for item in items
         ]

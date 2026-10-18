@@ -1,7 +1,6 @@
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date
-from typing import Any
 
 from django.utils import timezone
 
@@ -14,6 +13,17 @@ def party_votes(
     """
     Load the votes per party for the analysis, including inherited votes.
 
+    See `party_votes_with_sources`; this leaves out the sources.
+    """
+    return party_votes_with_sources(party_ids)[0]
+
+
+def party_votes_with_sources(
+    party_ids: Iterable[int] | None = None,
+) -> tuple[dict[int, dict[int, str]], dict[int, dict[int, int]]]:
+    """
+    Load the votes per party, including inherited votes, and who cast them.
+
     A successor (see `PartySuccession`) inherits its predecessor's votes on
     items it did not vote on itself; its own votes always win. Chains are
     followed in date order, so in A -> B -> C, C also inherits A's votes.
@@ -25,7 +35,10 @@ def party_votes(
             result may contain the predecessors too.
 
     Returns:
-        dict[int, dict[int, str]]: Votes keyed by party id, then item id.
+        tuple: Votes keyed by party id, then item id; and the sources of
+            the inherited votes: the id of the party that cast each one,
+            keyed by party id, then item id. In A -> B -> C, the source of
+            a vote C inherits from A is A.
     """
     successions = list(
         PartySuccession.objects.order_by("date").values_list(
@@ -51,14 +64,19 @@ def party_votes(
     ):
         votes[party_id][item_id] = vote
 
+    sources: defaultdict[int, dict[int, int]] = defaultdict(dict)
     for predecessor_id, successor_id in successions:
         if predecessor_id not in votes:
             continue
         successor_votes = votes[successor_id]
         for item_id, vote in votes[predecessor_id].items():
-            successor_votes.setdefault(item_id, vote)
+            if item_id not in successor_votes:
+                successor_votes[item_id] = vote
+                sources[successor_id][item_id] = sources[predecessor_id].get(
+                    item_id, predecessor_id
+                )
 
-    return dict(votes)
+    return dict(votes), dict(sources)
 
 
 def lineage_pairs() -> set[tuple[int, int]]:
@@ -103,52 +121,3 @@ def item_vote_dates(item_ids: Iterable[int] | None = None) -> dict[int, date]:
             "id", "vote_date", "date"
         )
     }
-
-
-def inherited_from(
-    party_id: int, item_ids: Iterable[int]
-) -> dict[int, dict[str, Any]]:
-    """
-    Which predecessor's vote a party inherits on each item.
-
-    Matches `party_votes`: on an item the party did not vote on itself, it
-    gets the vote of its nearest predecessor that did vote.
-
-    Args:
-        party_id (int): The party.
-        item_ids (Iterable[int]): Items to check.
-
-    Returns:
-        dict[int, dict[str, Any]]: The predecessor whose vote is inherited
-            (its `id` and `abbreviation`), keyed by item id. Items with the party's own vote,
-            or without any vote, are left out.
-    """
-    predecessor_of = dict(
-        PartySuccession.objects.values_list("successor_id", "predecessor_id")
-    )
-    chain: list[int] = []  # Nearest predecessor first.
-    current = party_id
-    while current in predecessor_of:
-        current = predecessor_of[current]
-        chain.append(current)
-    if not chain:
-        return {}
-
-    voters: defaultdict[int, dict[int, str]] = defaultdict(dict)
-    for item_id, voter_id, abbreviation in PartyVote.objects.filter(
-        party_id__in=[party_id, *chain], parliamentary_item_id__in=item_ids
-    ).values_list("parliamentary_item_id", "party_id", "party__abbreviation"):
-        voters[item_id][voter_id] = abbreviation
-
-    inherited: dict[int, dict[str, Any]] = {}
-    for item_id, by_party in voters.items():
-        if party_id in by_party:
-            continue
-        for predecessor_id in chain:
-            if predecessor_id in by_party:
-                inherited[item_id] = {
-                    "id": predecessor_id,
-                    "abbreviation": by_party[predecessor_id],
-                }
-                break
-    return inherited

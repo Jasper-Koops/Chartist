@@ -58,6 +58,15 @@ class ParliamentaryItem(models.Model):
         default=ParliamentaryItemStatusTypes.PENDING,
     )
     text = models.JSONField(blank=True, null=True)
+    document_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text=_(
+            "Identifier of the motion document on officielebekendmakingen.nl, "
+            "e.g. 'kst-36848-53'."
+        ),
+    )
 
     def __str__(self) -> str:
         return f"{self.item_type} - {self.title} - {self.status}"
@@ -121,3 +130,42 @@ class PartySuccession(models.Model):
 
     def __str__(self) -> str:
         return f"{self.predecessor} -> {self.successor} ({self.date})"
+
+
+class ImportRunStatus(models.TextChoices):
+    RUNNING = "Running", "Running"
+    SUCCEEDED = "Succeeded", "Succeeded"
+    FAILED = "Failed", "Failed"
+
+
+class ImportRun(models.Model):
+    """
+    One sync with the Parliament API: when it ran, how it ended and what it
+    changed. Written by `scraper.utils.run_import`, which both the
+    import_data command and the scheduled Celery task use.
+    """
+
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(
+        max_length=10,
+        choices=ImportRunStatus.choices,
+        default=ImportRunStatus.RUNNING,
+    )
+    error = models.TextField(blank=True, default="")
+    motions = models.IntegerField(default=0)
+    created = models.IntegerField(default=0)
+    votes_created = models.IntegerField(default=0)
+    votes_updated = models.IntegerField(default=0)
+    votes_deleted = models.IntegerField(default=0)
+    stale = models.IntegerField(default=0)
+    texts_fetched = models.IntegerField(default=0)
+    texts_failed = models.IntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Import Run"
+        verbose_name_plural = "Import Runs"
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return f"Import {self.started_at:%Y-%m-%d %H:%M} ({self.status})"

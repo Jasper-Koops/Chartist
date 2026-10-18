@@ -48,10 +48,45 @@ class ParliamentaryItemSerializer(
 
 
 class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
-    """Adds the motion text, which is left out of list responses."""
+    """
+    Adds the motion text, document links and the vote of every party,
+    which are left out of list responses.
+    """
+
+    documents = serializers.SerializerMethodField()
+    votes = serializers.SerializerMethodField()
 
     class Meta(ParliamentaryItemSerializer.Meta):
-        fields = ParliamentaryItemSerializer.Meta.fields + ["text"]
+        fields = ParliamentaryItemSerializer.Meta.fields + [
+            "text",
+            "document_id",
+            "documents",
+            "votes",
+        ]
+
+    def get_documents(self, obj: ParliamentaryItem) -> Any:
+        # Official publication of the motion, as web page and PDF.
+        if not obj.document_id:
+            return []
+        base = f"https://zoek.officielebekendmakingen.nl/{obj.document_id}"
+        return [
+            {"label": "Official publication", "url": f"{base}.html"},
+            {"label": "PDF", "url": f"{base}.pdf"},
+        ]
+
+    def get_votes(self, obj: ParliamentaryItem) -> Any:
+        # The votes as recorded, without votes inherited from a predecessor.
+        return [
+            {
+                "party": vote.party_id,
+                "abbreviation": vote.party.abbreviation,
+                "name": vote.party.name,
+                "vote": vote.vote,
+            }
+            for vote in obj.partyvote_set.select_related("party").order_by(
+                "party__abbreviation"
+            )
+        ]
 
 
 class KeyParliamentaryItemSerializer(

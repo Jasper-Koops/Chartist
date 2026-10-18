@@ -96,6 +96,7 @@
 </head>
 <body>
   <p id="freshness">Loading data status...</p>
+  <p><a href="/motions/">Search motions &rarr;</a></p>
   <h2>Dutch Political Parties - Principal Components Analysis</h2>
   <p class="chart-meta">
     Both axes use the same scale, so distances between parties are
@@ -406,6 +407,14 @@
       try {
         const status = await fetchGraphData("/api/v1/status/");
         const parts = [];
+        if (status.last_sync_failed_at) {
+          parts.push(`Last sync failed ${formatDateTime(status.last_sync_failed_at)}`);
+        }
+        parts.push(
+          status.last_synced_at
+            ? `Synced ${formatDateTime(status.last_synced_at)}`
+            : "Never synced"
+        );
         if (status.latest_vote_date) {
           parts.push(`Votes through ${formatDate(status.latest_vote_date)}`);
         }

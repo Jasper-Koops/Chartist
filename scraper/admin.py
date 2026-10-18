@@ -1,5 +1,11 @@
 from django.contrib import admin
-from scraper.models import Party, ParliamentaryItem, PartySuccession, PartyVote
+from scraper.models import (
+    ImportRun,
+    Party,
+    ParliamentaryItem,
+    PartySuccession,
+    PartyVote,
+)
 
 
 @admin.register(Party)
@@ -32,3 +38,18 @@ class PartyVoteAdmin(admin.ModelAdmin):
 @admin.register(PartySuccession)
 class PartySuccessionAdmin(admin.ModelAdmin):
     list_display = ["predecessor", "successor", "date", "member_overlap"]
+
+
+@admin.register(ImportRun)
+class ImportRunAdmin(admin.ModelAdmin):
+    list_display = [
+        "started_at",
+        "finished_at",
+        "status",
+        "created",
+        "votes_created",
+        "votes_updated",
+        "votes_deleted",
+    ]
+    list_filter = ["status"]
+    readonly_fields = [field.name for field in ImportRun._meta.fields]

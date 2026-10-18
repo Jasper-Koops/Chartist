@@ -9,7 +9,7 @@ from scraper.serializers import (
     KeyParliamentaryItemSerializer,
 )
 from api.errors import NoAnalysisFoundException
-from django.db.models import Max, Prefetch, Sum, QuerySet
+from django.db.models import F, Max, Prefetch, Sum, QuerySet
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -30,8 +30,18 @@ from analyzer.models import (
     PCAComponentPartyScore,
     PCAItemLoading,
 )
-from api.filters import PCAComponentPartyScoreFilter, PCAItemLoadingFilter
-from scraper.models import Party, PartyVote, ParliamentaryItem
+from api.filters import (
+    ParliamentaryItemFilter,
+    PCAComponentPartyScoreFilter,
+    PCAItemLoadingFilter,
+)
+from scraper.models import (
+    ImportRun,
+    ImportRunStatus,
+    Party,
+    PartyVote,
+    ParliamentaryItem,
+)
 
 
 class PartyViewSet(ReadOnlyModelViewSet[Party]):
@@ -103,15 +113,12 @@ class PartyVoteViewSet(ReadOnlyModelViewSet[PartyVote]):
 
 
 class ParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
-    queryset = ParliamentaryItem.objects.all()
+    # Newest vote first by default; ?ordering= overrides it.
+    queryset = ParliamentaryItem.objects.order_by(
+        F("vote_date").desc(nulls_last=True), "-id"
+    )
     serializer_class = ParliamentaryItemSerializer
-    filterset_fields = {
-        "id": ["exact"],
-        "title": ["exact", "icontains"],
-        "date": ["exact", "gte", "lte"],
-        "item_type": ["exact"],
-        "status": ["exact"],
-    }
+    filterset_class = ParliamentaryItemFilter
 
     def get_serializer_class(self) -> type[BaseSerializer[ParliamentaryItem]]:
         # The motion text is only included on the detail route.
@@ -201,8 +208,10 @@ class AgreementMatrixViewSet(ReadOnlyModelViewSet[AgreementMatrix]):
 
 class StatusView(APIView):
     """
-    How fresh the data is: the newest voting date, the number of motions
-    with votes, and when the newest analysis and agreement matrix were made.
+    How fresh the data is: when the last successful sync with the API
+    finished (and when the last one failed, if it did), the newest voting
+    date, the number of motions with votes, and when the newest analysis and
+    agreement matrix were made.
     """
 
     def get(self, request: Request) -> Response:
@@ -211,8 +220,22 @@ class StatusView(APIView):
         ).distinct()
         latest_analysis = PCAAnalysis.objects.order_by("-created_at").first()
         latest_matrix = AgreementMatrix.objects.order_by("-created_at").first()
+        last_success = ImportRun.objects.filter(
+            status=ImportRunStatus.SUCCEEDED
+        ).first()
+        latest_run = ImportRun.objects.first()
         return Response(
             {
+                "last_synced_at": (
+                    last_success.finished_at if last_success else None
+                ),
+                # Only set when the most recent sync failed.
+                "last_sync_failed_at": (
+                    latest_run.finished_at
+                    if latest_run
+                    and latest_run.status == ImportRunStatus.FAILED
+                    else None
+                ),
                 "latest_vote_date": voted.aggregate(latest=Max("vote_date"))[
                     "latest"
                 ],

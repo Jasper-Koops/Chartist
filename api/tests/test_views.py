@@ -1,4 +1,7 @@
+from datetime import date
 from typing import Any
+
+from django.utils import timezone
 
 from django.utils.dateparse import parse_datetime
 from rest_framework.test import APITestCase
@@ -15,7 +18,14 @@ from analyzer.models import (
     PCAComponentPartyScore,
     PCAItemLoading,
 )
-from scraper.models import Party, ParliamentaryItem, PartyVote, VoteType
+from scraper.models import (
+    ImportRun,
+    ImportRunStatus,
+    Party,
+    ParliamentaryItem,
+    PartyVote,
+    VoteType,
+)
 from scraper.tests.factories import ParliamentaryItemFactory
 
 
@@ -703,3 +713,107 @@ class TestPCAItemLoadingViewSet(APITestCase):
         self.assertEqual(response.status_code, 200)
         for row in data:
             self.assertEqual(row["loading"], pcal.loading)
+
+
+class TestMotionExplorerApi(APITestCase):
+    def setUp(self) -> None:
+        self.old = ParliamentaryItemFactory(
+            title="Motie over stikstof",
+            text=["verzoekt de regering de coördinatie te verbeteren"],
+            vote_date=date(2026, 1, 5),
+            document_id="kst-36848-53",
+        )
+        self.new = ParliamentaryItemFactory(
+            title="Motie over woningbouw",
+            text=["constaterende dat er te weinig woningen zijn"],
+            vote_date=date(2026, 3, 9),
+        )
+        self.party = Party.objects.create(
+            api_id="p1", name="Partij Een", abbreviation="P1"
+        )
+        PartyVote.objects.create(
+            party=self.party, parliamentary_item=self.old, vote=VoteType.FOR
+        )
+
+    def ids(self, params: dict[str, str]) -> list[int]:
+        response = self.client.get(reverse("parliamentaryitem-list"), params)
+        return [item["id"] for item in response.data["results"]]
+
+    def test_newest_vote_first_by_default(self) -> None:
+        self.assertEqual([self.new.id, self.old.id], self.ids({}))
+
+    def test_search_title(self) -> None:
+        self.assertEqual([self.old.id], self.ids({"search": "STIKSTOF"}))
+
+    def test_search_text(self) -> None:
+        self.assertEqual([self.new.id], self.ids({"search": "woningen zijn"}))
+
+    def test_search_text_with_accents(self) -> None:
+        # Stored as JSON, which escapes non-ASCII characters.
+        self.assertEqual([self.old.id], self.ids({"search": "coördinatie"}))
+
+    def test_search_combines_with_filters(self) -> None:
+        self.assertEqual(
+            [],
+            self.ids({"search": "stikstof", "vote_date__gte": "2026-02-01"}),
+        )
+
+    def test_detail_has_documents_and_votes(self) -> None:
+        response = self.client.get(
+            reverse("parliamentaryitem-detail", args=[self.old.id])
+        )
+        data = response.data
+        self.assertEqual(
+            [
+                "https://zoek.officielebekendmakingen.nl/kst-36848-53.html",
+                "https://zoek.officielebekendmakingen.nl/kst-36848-53.pdf",
+            ],
+            [doc["url"] for doc in data["documents"]],
+        )
+        self.assertEqual(
+            [
+                {
+                    "party": self.party.id,
+                    "abbreviation": "P1",
+                    "name": "Partij Een",
+                    "vote": "For",
+                }
+            ],
+            data["votes"],
+        )
+
+    def test_detail_without_document(self) -> None:
+        response = self.client.get(
+            reverse("parliamentaryitem-detail", args=[self.new.id])
+        )
+        self.assertEqual([], response.data["documents"])
+
+    def test_list_leaves_out_detail_fields(self) -> None:
+        response = self.client.get(reverse("parliamentaryitem-list"))
+        for field in ("text", "votes", "documents"):
+            self.assertNotIn(field, response.data["results"][0])
+
+
+class TestStatusSync(APITestCase):
+    def test_last_successful_sync(self) -> None:
+        ImportRun.objects.create(
+            status=ImportRunStatus.SUCCEEDED, finished_at=timezone.now()
+        )
+        data = self.client.get(reverse("status")).data
+        self.assertIsNotNone(data["last_synced_at"])
+        self.assertIsNone(data["last_sync_failed_at"])
+
+    def test_failed_latest_sync_is_reported(self) -> None:
+        success = ImportRun.objects.create(
+            status=ImportRunStatus.SUCCEEDED, finished_at=timezone.now()
+        )
+        failed = ImportRun.objects.create(
+            status=ImportRunStatus.FAILED, finished_at=timezone.now()
+        )
+        data = self.client.get(reverse("status")).data
+        self.assertEqual(success.finished_at, data["last_synced_at"])
+        self.assertEqual(failed.finished_at, data["last_sync_failed_at"])
+
+    def test_never_synced(self) -> None:
+        data = self.client.get(reverse("status")).data
+        self.assertIsNone(data["last_synced_at"])

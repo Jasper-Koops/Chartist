@@ -28,7 +28,17 @@ def parliamentary_item_from_dto(
         "vote_date": dto.Besluit[0].VoteDate,
         "item_type": ParliamentaryItemType.MOTION,
         "status": dto.Besluit[0].BesluitSoort,
+        "document_id": document_id_from_dto(dto),
     }
+
+
+def document_id_from_dto(dto: ZaakBesluitDTO) -> str | None:
+    """The motion document's identifier (e.g. 'kst-36848-53'), if known."""
+    if not dto.Document:
+        return None
+    version = dto.Document[0].get("HuidigeDocumentVersie") or {}
+    externe_id = version.get("ExterneIdentifier")
+    return str(externe_id) if externe_id else None
 
 
 def party_vote_from_dto(dto: StemmingDTO) -> dict[str, str]:

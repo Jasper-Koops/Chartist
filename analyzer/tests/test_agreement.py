@@ -306,3 +306,20 @@ class TestPartyDetailPage(TestCase):
     def test_unknown_party_is_404(self) -> None:
         response = self.client.get(reverse("party-detail", args=[999999]))
         self.assertEqual(404, response.status_code)
+
+
+class TestMotionPages(TestCase):
+    def test_motion_list_page(self) -> None:
+        self.assertEqual(
+            200, self.client.get(reverse("motion-list")).status_code
+        )
+
+    def test_motion_detail_page(self) -> None:
+        item = make_item()
+        response = self.client.get(reverse("motion-detail", args=[item.id]))
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, item.title)
+
+    def test_unknown_motion_is_404(self) -> None:
+        response = self.client.get(reverse("motion-detail", args=[999999]))
+        self.assertEqual(404, response.status_code)

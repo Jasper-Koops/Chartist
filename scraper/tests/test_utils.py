@@ -1,12 +1,16 @@
 import copy
+import io
 from datetime import date
 from typing import Any
 import requests
 from django.test import TestCase
 from scraper.dto import BesluitDTO, StemmingDTO
 from scraper.tests.factories import PartyFactory
-from scraper.utils import ParliamentApi, aggregate_party_votes
+from django.core.management import call_command
+from scraper.utils import ParliamentApi, aggregate_party_votes, run_import
 from scraper.models import (
+    ImportRun,
+    ImportRunStatus,
     Party,
     PartySuccession,
     PartyVote,
@@ -519,3 +523,48 @@ class TestImportSuccessions(TestCase):
         self.fracties.append(fractie("pro", "pro", "2026-06-09"))
         self.seats["pro"] = [seat(self.members(20), "2026-06-09", None)]
         self.assertEqual([], self.detect())
+
+
+class TestRunImport(TestCase):
+    def setUp(self) -> None:
+        patcher = mock.patch("scraper.utils.requests.Session.get")
+        self.mocked_get = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.mocked_get.side_effect = route_responses(ZAAK_API_RESPONSE)
+
+    def test_successful_run_is_recorded_with_counts(self) -> None:
+        messages: list[str] = []
+        result = run_import(ParliamentApi(), announce=messages.append)
+
+        run = ImportRun.objects.get()
+        self.assertEqual(ImportRunStatus.SUCCEEDED, run.status)
+        self.assertIsNotNone(run.finished_at)
+        self.assertEqual(result.created, run.created)
+        self.assertEqual(result.votes_created, run.votes_created)
+        self.assertEqual(4, run.created)
+        self.assertEqual(
+            ["Importing party data", "Importing vote data"], messages
+        )
+
+    def test_failed_run_is_recorded_and_raised(self) -> None:
+        self.mocked_get.side_effect = requests.exceptions.ConnectionError(
+            "down"
+        )
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            run_import(ParliamentApi())
+
+        run = ImportRun.objects.get()
+        self.assertEqual(ImportRunStatus.FAILED, run.status)
+        self.assertIn("ConnectionError", run.error)
+        self.assertIsNotNone(run.finished_at)
+
+    def test_import_command_records_a_run(self) -> None:
+        call_command("import_data", stdout=io.StringIO())
+        self.assertEqual(
+            ImportRunStatus.SUCCEEDED, ImportRun.objects.get().status
+        )
+
+    def test_document_id_is_stored(self) -> None:
+        run_import(ParliamentApi())
+        item = ParliamentaryItem.objects.get(api_id=ZAAK_API_RESPONSE[0]["Id"])
+        self.assertEqual("kst-99999-0", item.document_id)

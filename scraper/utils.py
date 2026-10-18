@@ -1,7 +1,7 @@
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, cast
 import xml.etree.ElementTree as ET
@@ -9,6 +9,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from scraper.models import (
+    ImportRun,
+    ImportRunStatus,
     Party,
     PartySuccession,
     PartyVote,
@@ -22,10 +24,12 @@ from scraper.dto import (
     StemmingDTO,
 )
 from scraper.mapper import (
+    document_id_from_dto,
     party_from_dto,
     parliamentary_item_from_dto,
 )
 from django.db import transaction
+from django.utils import timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -611,14 +615,8 @@ class ParliamentApi:
                 if party_id not in desired
             )
 
-            if (
-                refetch_texts or created or not parliamentary_item.text
-            ) and dto.Document:
-                externe_id = (
-                    dto.Document[0]
-                    .get("HuidigeDocumentVersie", {})
-                    .get("ExterneIdentifier")
-                )
+            if refetch_texts or created or not parliamentary_item.text:
+                externe_id = document_id_from_dto(dto)
                 if externe_id:
                     text_todo.append((parliamentary_item, externe_id))
 
@@ -722,3 +720,51 @@ class ParliamentApi:
                     item.save(update_fields=["text"])
                     result.texts_fetched += 1
                 self._report("Fetching motion texts", i, len(text_todo))
+
+
+def run_import(
+    api: ParliamentApi,
+    refetch_texts: bool = False,
+    announce: Callable[[str], None] | None = None,
+) -> VoteImportResult:
+    """
+    Run a full sync with the Parliament API and record it as an ImportRun.
+
+    Imports parties, detects successions and imports votes. The run is
+    stored as running, then marked succeeded with the import's counts, or
+    failed with the error (which is re-raised).
+
+    Args:
+        api (ParliamentApi): The client to import with.
+        refetch_texts (bool): Passed on to `ParliamentApi.import_votes`.
+        announce (Callable[[str], None] | None): Optional callback for stage
+            messages, e.g. to print them.
+
+    Returns:
+        VoteImportResult: The counts of the vote import.
+    """
+    run = ImportRun.objects.create()
+
+    def say(message: str) -> None:
+        if announce:
+            announce(message)
+
+    try:
+        say("Importing party data")
+        api.import_parties()
+        api.import_successions()
+        say("Importing vote data")
+        result = api.import_votes(refetch_texts=refetch_texts)
+    except Exception as e:
+        run.status = ImportRunStatus.FAILED
+        run.error = f"{type(e).__name__}: {e}"
+        run.finished_at = timezone.now()
+        run.save()
+        raise
+
+    run.status = ImportRunStatus.SUCCEEDED
+    run.finished_at = timezone.now()
+    for field, value in asdict(result).items():
+        setattr(run, field, value)
+    run.save()
+    return result

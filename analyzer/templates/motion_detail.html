@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <title>{{ motion.title|truncatechars:80 }} - Chartist</title>
+  <style>
+    body {
+      margin: 20px;
+      font-family: Arial, sans-serif;
+      color: #1f1d1a;
+    }
+    main {
+      max-width: 1000px;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 12px 0 6px 0;
+    }
+    h2 {
+      margin: 28px 0 8px 0;
+    }
+    .chart-meta {
+      color: #666;
+      margin: 0 0 10px 0;
+    }
+    #text p {
+      margin: 0 0 8px 0;
+      line-height: 1.5;
+    }
+    #documents a {
+      margin-right: 14px;
+    }
+    .votes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .votes h3 {
+      font-size: 15px;
+      margin: 0 0 6px 0;
+      border-bottom: 1px solid #ecebe7;
+      padding-bottom: 4px;
+    }
+    .votes ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      line-height: 1.8;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a href="/motions/">&larr; All motions</a>
+    <h1>{{ motion.title }}</h1>
+    <p class="chart-meta">
+      Voted {{ motion.vote_date|default:"(date unknown)" }} · {{ motion.status }}
+    </p>
+
+    <h2>Text</h2>
+    <div id="text"><p class="chart-meta">Loading...</p></div>
+
+    <h2>Documents</h2>
+    <div id="documents"></div>
+
+    <h2>Votes</h2>
+    <p class="chart-meta" id="votes-meta"></p>
+    <div class="votes">
+      <section><h3 id="for-title">For</h3><ul id="for"></ul></section>
+      <section><h3 id="against-title">Against</h3><ul id="against"></ul></section>
+      <section><h3 id="abstain-title">Did not take part</h3><ul id="abstain"></ul></section>
+    </div>
+  </main>
+
+  {{ motion.id|json_script:"motion-id" }}
+  <script>
+    const MOTION_ID = JSON.parse(document.getElementById("motion-id").textContent);
+
+    function partyItem(vote) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = `/party/${vote.party}/`;
+      link.textContent = vote.name;
+      item.appendChild(link);
+      if (vote.abbreviation && vote.abbreviation !== vote.name) {
+        item.appendChild(document.createTextNode(` (${vote.abbreviation})`));
+      }
+      return item;
+    }
+
+    (async () => {
+      const response = await fetch(`/api/v1/items/${MOTION_ID}/`, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        document.getElementById("text").textContent =
+          `Could not load the motion: HTTP ${response.status}`;
+        return;
+      }
+      const motion = await response.json();
+
+      const text = document.getElementById("text");
+      text.replaceChildren();
+      for (const line of motion.text || []) {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = line;
+        text.appendChild(paragraph);
+      }
+      if (!(motion.text || []).length) {
+        text.textContent = "No text available for this motion.";
+      }
+
+      const documents = document.getElementById("documents");
+      for (const doc of motion.documents) {
+        const link = document.createElement("a");
+        link.href = doc.url;
+        link.textContent = doc.label;
+        link.target = "_blank";
+        link.rel = "noopener";
+        documents.appendChild(link);
+      }
+      if (!motion.documents.length) documents.textContent = "No documents linked.";
+
+      const groups = { For: "for", Against: "against", Abstain: "abstain" };
+      const counts = { For: 0, Against: 0, Abstain: 0 };
+      for (const vote of motion.votes) {
+        const list = document.getElementById(groups[vote.vote]);
+        if (!list) continue;
+        list.appendChild(partyItem(vote));
+        counts[vote.vote] += 1;
+      }
+      document.getElementById("for-title").textContent = `For (${counts.For})`;
+      document.getElementById("against-title").textContent = `Against (${counts.Against})`;
+      document.getElementById("abstain-title").textContent =
+        `Did not take part (${counts.Abstain})`;
+      document.getElementById("votes-meta").textContent = motion.votes.length
+        ? "Party votes as recorded. Parties without a recorded vote are not listed."
+        : "No votes recorded yet; they are sometimes published after the result.";
+    })();
+  </script>
+</body>
+</html>

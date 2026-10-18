@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+  <title>Motions - Chartist</title>
+  <style>
+    body {
+      margin: 20px;
+      font-family: Arial, sans-serif;
+      color: #1f1d1a;
+    }
+    .chart-meta {
+      color: #666;
+      margin: 0 0 10px 0;
+      max-width: 1000px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0 0 14px 0;
+      max-width: 1000px;
+    }
+    #search {
+      flex: 1;
+      font-size: 15px;
+      padding: 8px 10px;
+      border: 1px solid #c9c8c3;
+      border-radius: 4px;
+    }
+    #status {
+      font-size: 14px;
+      padding: 7px;
+    }
+    #results {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-width: 1000px;
+    }
+    #results li {
+      padding: 10px 0;
+      border-bottom: 1px solid #ecebe7;
+    }
+    #results .meta {
+      color: #666;
+      font-size: 13px;
+      margin-top: 3px;
+    }
+    #more {
+      margin-top: 14px;
+      padding: 7px 14px;
+    }
+  </style>
+</head>
+<body>
+  <a href="/test-graph/">&larr; All charts</a>
+  <h1>Motions</h1>
+  <p class="chart-meta">
+    Search the title and text of every motion. Click a motion for its text,
+    documents and how each party voted.
+  </p>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Search motions, e.g. stikstof"
+           autocomplete="off" aria-label="Search motions">
+    <select id="status" aria-label="Result">
+      <option value="">All results</option>
+      <option value="Accepted">Accepted</option>
+      <option value="Rejected">Rejected</option>
+      <option value="Pending">Pending</option>
+    </select>
+  </div>
+  <p class="chart-meta" id="count"></p>
+  <ul id="results"></ul>
+  <button id="more" type="button" hidden>Load more</button>
+
+  <script>
+    const PAGE_SIZE = 50;
+    const search = document.getElementById("search");
+    const status = document.getElementById("status");
+    const results = document.getElementById("results");
+    const count = document.getElementById("count");
+    const more = document.getElementById("more");
+    let offset = 0;
+    let request = 0;  // ignore responses of superseded searches
+
+    const formatDate = (iso) =>
+      iso
+        ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+            day: "numeric", month: "short", year: "numeric",
+          })
+        : "unknown date";
+
+    async function load(reset) {
+      if (reset) {
+        offset = 0;
+        results.replaceChildren();
+      }
+      const current = ++request;
+      const params = new URLSearchParams({ limit: PAGE_SIZE, offset });
+      if (search.value.trim()) params.set("search", search.value.trim());
+      if (status.value) params.set("status", status.value);
+      try {
+        const response = await fetch(`/api/v1/items/?${params}`, {
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        if (current !== request) return;
+        count.textContent =
+          `${data.count.toLocaleString()} motion${data.count === 1 ? "" : "s"}`;
+        for (const motion of data.results) {
+          const item = document.createElement("li");
+          const link = document.createElement("a");
+          link.href = `/motion/${motion.id}/`;
+          link.textContent = motion.title;
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent = `${formatDate(motion.vote_date)} · ${motion.status}`;
+          item.append(link, meta);
+          results.appendChild(item);
+        }
+        offset += data.results.length;
+        more.hidden = !data.next;
+      } catch (error) {
+        if (current === request) count.textContent = `Could not load motions: ${error.message}`;
+      }
+    }
+
+    let debounce;
+    search.addEventListener("input", () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => load(true), 300);
+    });
+    status.addEventListener("change", () => load(true));
+    more.addEventListener("click", () => load(false));
+    load(true);
+  </script>
+</body>
+</html>

@@ -102,3 +102,47 @@ def item_vote_dates(item_ids: Iterable[int] | None = None) -> dict[int, date]:
             "id", "vote_date", "date"
         )
     }
+
+
+def inherited_from(party_id: int, item_ids: Iterable[int]) -> dict[int, str]:
+    """
+    Which predecessor's vote a party inherits on each item.
+
+    Matches `party_votes`: on an item the party did not vote on itself, it
+    gets the vote of its nearest predecessor that did vote.
+
+    Args:
+        party_id (int): The party.
+        item_ids (Iterable[int]): Items to check.
+
+    Returns:
+        dict[int, str]: The abbreviation of the predecessor whose vote is
+            inherited, keyed by item id. Items with the party's own vote,
+            or without any vote, are left out.
+    """
+    predecessor_of = dict(
+        PartySuccession.objects.values_list("successor_id", "predecessor_id")
+    )
+    chain: list[int] = []  # Nearest predecessor first.
+    current = party_id
+    while current in predecessor_of:
+        current = predecessor_of[current]
+        chain.append(current)
+    if not chain:
+        return {}
+
+    voters: defaultdict[int, dict[int, str]] = defaultdict(dict)
+    for item_id, voter_id, abbreviation in PartyVote.objects.filter(
+        party_id__in=[party_id, *chain], parliamentary_item_id__in=item_ids
+    ).values_list("parliamentary_item_id", "party_id", "party__abbreviation"):
+        voters[item_id][voter_id] = abbreviation
+
+    inherited: dict[int, str] = {}
+    for item_id, by_party in voters.items():
+        if party_id in by_party:
+            continue
+        for predecessor_id in chain:
+            if predecessor_id in by_party:
+                inherited[item_id] = by_party[predecessor_id]
+                break
+    return inherited

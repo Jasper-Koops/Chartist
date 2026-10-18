@@ -269,6 +269,11 @@
     let request = 0;
     let names = { a: "", b: "" };
 
+    // e.g. "PRO for (as GroenLinks-PvdA)" for a vote cast by a predecessor.
+    const voteText = (name, vote, inheritedFrom) =>
+      `${name} ${VOTE_LABEL[vote] || "no vote"}` +
+      (inheritedFrom ? ` (as ${inheritedFrom})` : "");
+
     async function loadMotions(reset) {
       if (reset) {
         offset = 0;
@@ -293,8 +298,8 @@
           meta.className = "meta";
           meta.textContent =
             `${formatDate(motion.vote_date)} · ${motion.status} · ` +
-            `${names.a} ${VOTE_LABEL[motion.party_vote] || "no vote"}, ` +
-            `${names.b} ${VOTE_LABEL[motion.other_party_vote] || "no vote"}`;
+            `${voteText(names.a, motion.party_vote, motion.party_vote_inherited_from)}, ` +
+            `${voteText(names.b, motion.other_party_vote, motion.other_party_vote_inherited_from)}`;
           item.append(link, meta);
           list.appendChild(item);
         }

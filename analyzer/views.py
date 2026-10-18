@@ -4,7 +4,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
 
-from scraper.models import ParliamentaryItem, Party
+from scraper.models import ParliamentaryItem, Party, PartySuccession
 
 
 class TestGraphView(TemplateView):
@@ -18,7 +18,19 @@ class PartyDetailView(TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context["party"] = get_object_or_404(Party, pk=kwargs["pk"])
+        party = get_object_or_404(Party, pk=kwargs["pk"])
+        context["party"] = party
+        # A rename such as GroenLinks-PvdA -> PRO, in either direction.
+        context["continues"] = (
+            PartySuccession.objects.filter(successor=party)
+            .select_related("predecessor")
+            .first()
+        )
+        context["continued_as"] = (
+            PartySuccession.objects.filter(predecessor=party)
+            .select_related("successor")
+            .first()
+        )
         return context
 
 

@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from analyzer.analysis import run_pca_analysis
 from analyzer.compare import pair_votes, related_items, summarize
 from analyzer.models import PCAAnalysis
+from analyzer.votes import inherited_from
 from scraper.models import ParliamentaryItem, Party, PartySuccession, VoteType
 from scraper.tests.factories import (
     ParliamentaryItemFactory,
@@ -191,3 +192,87 @@ class TestComponentBreakdown(APITestCase):
             200,
             self.client.get(reverse("component-detail", args=[1])).status_code,
         )
+
+
+class TestInheritedVoteLabels(APITestCase):
+    """Votes a successor inherits are labelled with the predecessor."""
+
+    def setUp(self) -> None:
+        self.old, self.new, self.other = (
+            make_party(),
+            make_party(),
+            make_party(),
+        )
+        PartySuccession.objects.create(
+            predecessor=self.old,
+            successor=self.new,
+            date=date(2026, 1, 10),
+            member_overlap=1.0,
+        )
+        # Before the rename, only the predecessor voted; after it, only the
+        # successor. On the last item both voted: the successor's own wins.
+        self.items: list[ParliamentaryItem] = []
+        for day, voter in [(1, self.old), (20, self.new), (21, None)]:
+            item: ParliamentaryItem = ParliamentaryItemFactory(
+                vote_date=date(2026, 1, day)
+            )
+            self.items.append(item)
+            for party in [voter] if voter else [self.old, self.new]:
+                PartyVoteFactory(party=party, parliamentary_item=item, vote=F)
+            PartyVoteFactory(party=self.other, parliamentary_item=item, vote=A)
+
+    def motions(self, party: Party, other: Party) -> dict[int, Any]:
+        url = reverse("party-compare-motions", args=[party.id, other.id])
+        results = self.client.get(url, {"relation": "all"}).data["results"]
+        return {m["id"]: m for m in results}
+
+    def test_inherited_vote_names_predecessor(self) -> None:
+        motions = self.motions(self.new, self.other)
+        first, second, third = (motions[item.id] for item in self.items)
+        self.assertEqual(
+            ("For", self.old.abbreviation),
+            (first["party_vote"], first["party_vote_inherited_from"]),
+        )
+        self.assertIsNone(second["party_vote_inherited_from"])
+        self.assertIsNone(third["party_vote_inherited_from"])
+        self.assertIsNone(first["other_party_vote_inherited_from"])
+
+    def test_other_side_is_labelled_too(self) -> None:
+        first = self.motions(self.other, self.new)[self.items[0].id]
+        self.assertEqual(
+            self.old.abbreviation, first["other_party_vote_inherited_from"]
+        )
+
+    def test_nothing_inherited_within_lineage(self) -> None:
+        for motion in self.motions(self.new, self.old).values():
+            self.assertIsNone(motion["party_vote_inherited_from"])
+            self.assertIsNone(motion["other_party_vote_inherited_from"])
+
+    def test_chain_uses_nearest_predecessor(self) -> None:
+        newest = make_party()
+        PartySuccession.objects.create(
+            predecessor=self.new,
+            successor=newest,
+            date=date(2026, 2, 1),
+            member_overlap=1.0,
+        )
+        self.assertEqual(
+            {
+                self.items[0].id: self.old.abbreviation,
+                self.items[1].id: self.new.abbreviation,
+                self.items[2].id: self.new.abbreviation,
+            },
+            inherited_from(newest.id, [item.id for item in self.items]),
+        )
+
+    def test_party_page_links_both_ways(self) -> None:
+        new_page = self.client.get(reverse("party-detail", args=[self.new.id]))
+        self.assertContains(new_page, "Continues")
+        self.assertContains(new_page, f'href="/party/{self.old.id}/"')
+        old_page = self.client.get(reverse("party-detail", args=[self.old.id]))
+        self.assertContains(old_page, "Continued as")
+        self.assertContains(old_page, f'href="/party/{self.new.id}/"')
+        other_page = self.client.get(
+            reverse("party-detail", args=[self.other.id])
+        )
+        self.assertNotContains(other_page, "Continue")

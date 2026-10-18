@@ -65,6 +65,20 @@
   <a class="back" href="/test-graph/">&larr; All charts</a>
   <h1>{{ party.name }}</h1>
   <p class="chart-meta">{{ party.abbreviation }}</p>
+  {% if continues %}
+  <p class="chart-meta" id="continues">
+    Continues <a href="/party/{{ continues.predecessor.id }}/">{{ continues.predecessor.name }}</a>
+    since {{ continues.date|date:"j F Y" }}. Its votes from before then count
+    as {{ party.abbreviation }}'s in these charts.
+  </p>
+  {% endif %}
+  {% if continued_as %}
+  <p class="chart-meta" id="continued-as">
+    Continued as <a href="/party/{{ continued_as.successor.id }}/">{{ continued_as.successor.name }}</a>
+    since {{ continued_as.date|date:"j F Y" }}. These charts show only the
+    votes of {{ party.abbreviation }} itself, so they end then.
+  </p>
+  {% endif %}
 
   <h2>Agreement with other parties</h2>
   <p class="chart-meta" id="bars-meta">

@@ -9,6 +9,7 @@ from scraper.serializers import (
     KeyParliamentaryItemSerializer,
 )
 from analyzer.compare import RELATIONS, pair_votes, related_items, summarize
+from analyzer.votes import inherited_from
 from api.errors import NoAnalysisFoundException
 from django.db.models import (
     Count,
@@ -140,6 +141,8 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
 
         Query parameters: `relation` ("differed" (default), "agreed" or
         "all"), plus the motion filters, e.g. `search`, and pagination.
+        A vote inherited from a predecessor names that predecessor in
+        `party_vote_inherited_from` / `other_party_vote_inherited_from`.
         """
         party = self.get_object()
         other = self._other_party(other_pk)
@@ -148,7 +151,7 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
             raise ValidationError(
                 {"relation": f"Use one of: {', '.join(RELATIONS)}."}
             )
-        votes, other_votes, _ = pair_votes(party.id, other.id)
+        votes, other_votes, same_lineage = pair_votes(party.id, other.id)
         queryset = ParliamentaryItemFilter(
             data=request.query_params,
             queryset=ParliamentaryItem.objects.filter(
@@ -157,11 +160,24 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
         ).qs
         page = self.paginate_queryset(queryset)
         items = page if page is not None else list(queryset)
+        # Which votes came from a predecessor (e.g. PRO's votes cast as
+        # GroenLinks-PvdA). Not inherited within one lineage, see pair_votes.
+        item_ids = [item.id for item in items]
+        party_inherited, other_inherited = (
+            ({}, {})
+            if same_lineage
+            else (
+                inherited_from(party.id, item_ids),
+                inherited_from(other.id, item_ids),
+            )
+        )
         data = [
             {
                 **ParliamentaryItemSerializer(item).data,
                 "party_vote": votes.get(item.id),
+                "party_vote_inherited_from": party_inherited.get(item.id),
                 "other_party_vote": other_votes.get(item.id),
+                "other_party_vote_inherited_from": other_inherited.get(item.id),
             }
             for item in items
         ]

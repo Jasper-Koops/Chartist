@@ -1,6 +1,7 @@
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date
+from typing import Any
 
 from django.utils import timezone
 
@@ -104,7 +105,9 @@ def item_vote_dates(item_ids: Iterable[int] | None = None) -> dict[int, date]:
     }
 
 
-def inherited_from(party_id: int, item_ids: Iterable[int]) -> dict[int, str]:
+def inherited_from(
+    party_id: int, item_ids: Iterable[int]
+) -> dict[int, dict[str, Any]]:
     """
     Which predecessor's vote a party inherits on each item.
 
@@ -116,8 +119,8 @@ def inherited_from(party_id: int, item_ids: Iterable[int]) -> dict[int, str]:
         item_ids (Iterable[int]): Items to check.
 
     Returns:
-        dict[int, str]: The abbreviation of the predecessor whose vote is
-            inherited, keyed by item id. Items with the party's own vote,
+        dict[int, dict[str, Any]]: The predecessor whose vote is inherited
+            (its `id` and `abbreviation`), keyed by item id. Items with the party's own vote,
             or without any vote, are left out.
     """
     predecessor_of = dict(
@@ -137,12 +140,15 @@ def inherited_from(party_id: int, item_ids: Iterable[int]) -> dict[int, str]:
     ).values_list("parliamentary_item_id", "party_id", "party__abbreviation"):
         voters[item_id][voter_id] = abbreviation
 
-    inherited: dict[int, str] = {}
+    inherited: dict[int, dict[str, Any]] = {}
     for item_id, by_party in voters.items():
         if party_id in by_party:
             continue
         for predecessor_id in chain:
             if predecessor_id in by_party:
-                inherited[item_id] = by_party[predecessor_id]
+                inherited[item_id] = {
+                    "id": predecessor_id,
+                    "abbreviation": by_party[predecessor_id],
+                }
                 break
     return inherited

@@ -141,8 +141,9 @@ class PartyViewSet(ReadOnlyModelViewSet[Party]):
 
         Query parameters: `relation` ("differed" (default), "agreed" or
         "all"), plus the motion filters, e.g. `search`, and pagination.
-        A vote inherited from a predecessor names that predecessor in
-        `party_vote_inherited_from` / `other_party_vote_inherited_from`.
+        A vote inherited from a predecessor names that predecessor (its `id`
+        and `abbreviation`) in `party_vote_inherited_from` /
+        `other_party_vote_inherited_from`.
         """
         party = self.get_object()
         other = self._other_party(other_pk)

@@ -226,11 +226,14 @@ class TestInheritedVoteLabels(APITestCase):
         results = self.client.get(url, {"relation": "all"}).data["results"]
         return {m["id"]: m for m in results}
 
+    def predecessor(self, party: Party) -> dict[str, Any]:
+        return {"id": party.id, "abbreviation": party.abbreviation}
+
     def test_inherited_vote_names_predecessor(self) -> None:
         motions = self.motions(self.new, self.other)
         first, second, third = (motions[item.id] for item in self.items)
         self.assertEqual(
-            ("For", self.old.abbreviation),
+            ("For", self.predecessor(self.old)),
             (first["party_vote"], first["party_vote_inherited_from"]),
         )
         self.assertIsNone(second["party_vote_inherited_from"])
@@ -240,7 +243,8 @@ class TestInheritedVoteLabels(APITestCase):
     def test_other_side_is_labelled_too(self) -> None:
         first = self.motions(self.other, self.new)[self.items[0].id]
         self.assertEqual(
-            self.old.abbreviation, first["other_party_vote_inherited_from"]
+            self.predecessor(self.old),
+            first["other_party_vote_inherited_from"],
         )
 
     def test_nothing_inherited_within_lineage(self) -> None:
@@ -258,9 +262,9 @@ class TestInheritedVoteLabels(APITestCase):
         )
         self.assertEqual(
             {
-                self.items[0].id: self.old.abbreviation,
-                self.items[1].id: self.new.abbreviation,
-                self.items[2].id: self.new.abbreviation,
+                self.items[0].id: self.predecessor(self.old),
+                self.items[1].id: self.predecessor(self.new),
+                self.items[2].id: self.predecessor(self.new),
             },
             inherited_from(newest.id, [item.id for item in self.items]),
         )

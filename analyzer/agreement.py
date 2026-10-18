@@ -3,11 +3,10 @@ from datetime import date
 import numpy as np
 import pandas as pd
 from django.db.transaction import atomic
-from django.utils import timezone
 
 from analyzer.models import AgreementMatrix, PartyAgreement
-from analyzer.votes import lineage_pairs, party_votes
-from scraper.models import ParliamentaryItem, VoteType
+from analyzer.votes import item_vote_dates, lineage_pairs, party_votes
+from scraper.models import VoteType
 
 
 def load_vote_table() -> pd.DataFrame:
@@ -83,10 +82,7 @@ def calculate_agreement() -> tuple[list[int], np.ndarray, np.ndarray]:
 
 def item_months(item_ids: list[int]) -> dict[int, date]:
     """
-    Map items to the first day of their voting month.
-
-    Uses the voting date; falls back to the (local) date of the last
-    modification for items without one.
+    Map items to the first day of their voting month (see `item_vote_dates`).
 
     Args:
         item_ids (list[int]): The items to map.
@@ -94,13 +90,10 @@ def item_months(item_ids: list[int]) -> dict[int, date]:
     Returns:
         dict[int, date]: First day of the month per item id.
     """
-    months: dict[int, date] = {}
-    for item_id, vote_date, modified in ParliamentaryItem.objects.filter(
-        id__in=item_ids
-    ).values_list("id", "vote_date", "date"):
-        day = vote_date or timezone.localtime(modified).date()
-        months[item_id] = day.replace(day=1)
-    return months
+    return {
+        item_id: day.replace(day=1)
+        for item_id, day in item_vote_dates(item_ids).items()
+    }
 
 
 def run_agreement_analysis() -> AgreementMatrix:

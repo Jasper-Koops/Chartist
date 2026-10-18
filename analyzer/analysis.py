@@ -3,16 +3,16 @@ from bisect import bisect_left
 import pandas as pd
 from pca import pca
 from analyzer.agreement import run_agreement_analysis
-from analyzer.votes import party_votes
+from analyzer.votes import item_vote_dates, party_votes
 from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
-from scraper.models import Party, ParliamentaryItem, PartyVote
+from scraper.models import Party, PartyVote
 from analyzer.models import (
     PCAAnalysis,
     PCAComponent,
     PCAComponentPartyScore,
     PCAItemLoading,
 )
-from datetime import datetime
+from datetime import date
 from typing import TextIO
 from django.db.transaction import atomic
 from django.core.management.base import OutputWrapper
@@ -36,11 +36,11 @@ def calculate_party_participation_rate() -> None:
     Inherited votes count (see `party_votes`): a party that continues another
     party is measured from its predecessor's start.
     """
-    item_dates: dict[int, datetime] = dict(
-        ParliamentaryItem.objects.values_list("id", "date")
-    )
-    # Distinct on the item, not the date: many items share a timestamp.
-    voted_item_dates: list[datetime] = sorted(
+    # By voting date: the start is when the party first voted, not when a
+    # record was last modified.
+    item_dates: dict[int, date] = item_vote_dates()
+    # Distinct on the item, not the date: many items share a date.
+    voted_item_dates: list[date] = sorted(
         item_dates[item_id]
         for item_id in PartyVote.objects.values_list(
             "parliamentary_item_id", flat=True

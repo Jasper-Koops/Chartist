@@ -12,6 +12,7 @@ from scraper.models import (
     ImportRun,
     ImportRunStatus,
     Party,
+    PartyAlias,
     PartySuccession,
     PartyVote,
     ParliamentaryItem,
@@ -101,8 +102,10 @@ class TestParliamentApi(TestCase):
         self.assertEqual(4, result.created)
         self.assertEqual(4, result.texts_fetched)
         self.assertEqual(0, result.texts_failed)
-        # Party + Zaak request + 4 XML downloads
-        self.assertEqual(6, mocked_get.call_count)
+        # Party + Zaak request + 12 lookups of party ids the votes reference
+        # but the party fixture lacks (see _resolve_unknown_parties) + 4 XML
+        # downloads.
+        self.assertEqual(18, mocked_get.call_count)
 
     @mock.patch("scraper.utils.requests.Session.get")
     def test_import_votes_skips_bad_item(self, mocked_get: mock.Mock) -> None:
@@ -568,3 +571,127 @@ class TestRunImport(TestCase):
         run_import(ParliamentApi())
         item = ParliamentaryItem.objects.get(api_id=ZAAK_API_RESPONSE[0]["Id"])
         self.assertEqual("kst-99999-0", item.document_id)
+
+
+OLD_ID = "old-50plus"
+NEW_ID = "new-50plus"
+
+
+def fractie_record(
+    fractie_id: str, abbreviation: str = "50PLUS", inactive: bool = False
+) -> dict[str, Any]:
+    return {
+        "Id": fractie_id,
+        "NaamNL": "50PLUS",
+        "Afkorting": abbreviation,
+        "AantalZetels": 0 if inactive else 2,
+        "AantalStemmen": 0,
+        "DatumActief": "2012-09-20T00:00:00+02:00",
+        "DatumInactief": "2021-05-11T00:00:00+02:00" if inactive else None,
+    }
+
+
+class TestPartyAliases(TestCase):
+    """
+    A party registered again under a new id while the API still records its
+    votes under the old, inactive id (as for 50PLUS).
+    """
+
+    def setUp(self) -> None:
+        patcher = mock.patch("scraper.utils.requests.Session.get")
+        self.mocked_get = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.records = {
+            NEW_ID: fractie_record(NEW_ID),
+            OLD_ID: fractie_record(OLD_ID, inactive=True),
+        }
+        zaak = copy.deepcopy(ZAAK_API_RESPONSE[0])
+        zaak["Besluit"][0]["Stemming"] = [
+            {"Fractie_Id": OLD_ID, "Soort": "Voor"}
+        ]
+        self.zaken = [zaak]
+        self.mocked_get.side_effect = self.respond
+        self.api = ParliamentApi()
+
+    def respond(self, url: str, *args: Any, **kwargs: Any) -> MockedResponse:
+        params = kwargs.get("params") or {}
+        if url.endswith("Fractie"):
+            id_filter = params.get("$filter", "")
+            if "Id eq " in id_filter:
+                fractie_id = id_filter.split("Id eq ")[1]
+                record = self.records.get(fractie_id)
+                return MockedResponse(
+                    {"value": [record] if record else []}, 200
+                )
+            return MockedResponse({"value": [self.records[NEW_ID]]}, 200)
+        if MOTION_XML_HOST in url:
+            return MockedResponse({}, 200, content=SIMPLE_XML)
+        return MockedResponse({"value": self.zaken}, 200)
+
+    def run_import(self) -> None:
+        self.api.import_parties()
+        self.api.import_votes()
+
+    def test_existing_party_takes_new_id_and_keeps_old_as_alias(self) -> None:
+        party = PartyFactory(
+            api_id=OLD_ID, abbreviation="50PLUS", name="50PLUS"
+        )
+        self.run_import()
+
+        party.refresh_from_db()
+        self.assertEqual(NEW_ID, party.api_id)
+        self.assertEqual(
+            [OLD_ID], list(party.aliases.values_list("api_id", flat=True))
+        )
+        self.assertEqual(1, Party.objects.filter(abbreviation="50PLUS").count())
+        # Votes under the old id link to the party.
+        self.assertEqual(1, PartyVote.objects.filter(party=party).count())
+
+    def test_fresh_database_finds_alias_from_votes(self) -> None:
+        self.run_import()
+        party = Party.objects.get(abbreviation="50PLUS")
+        self.assertEqual(NEW_ID, party.api_id)
+        self.assertTrue(
+            PartyAlias.objects.filter(api_id=OLD_ID, party=party).exists()
+        )
+        self.assertEqual(1, PartyVote.objects.filter(party=party).count())
+
+    def test_unknown_id_of_another_party_is_not_an_alias(self) -> None:
+        self.records[OLD_ID] = fractie_record(
+            OLD_ID, abbreviation="XYZ", inactive=True
+        )
+        self.run_import()
+        self.assertFalse(PartyAlias.objects.exists())
+        self.assertFalse(PartyVote.objects.exists())
+
+    def test_active_record_with_same_abbreviation_is_not_an_alias(self) -> None:
+        self.records[OLD_ID] = fractie_record(OLD_ID, inactive=False)
+        self.run_import()
+        self.assertFalse(PartyAlias.objects.exists())
+
+    def test_votes_under_both_ids_give_one_party_vote(self) -> None:
+        PartyFactory(api_id=OLD_ID, abbreviation="50PLUS", name="50PLUS")
+        self.zaken[0]["Besluit"][0]["Stemming"] = [
+            {"Fractie_Id": OLD_ID, "Soort": "Voor"},
+            {"Fractie_Id": NEW_ID, "Soort": "Voor"},
+        ]
+        self.run_import()
+        party = Party.objects.get(abbreviation="50PLUS")
+        vote = PartyVote.objects.get(party=party)
+        self.assertEqual(VoteType.FOR, vote.vote)
+
+    def test_failing_party_does_not_roll_back_others(self) -> None:
+        # "second" clashes with "first" on the unique name: a database error
+        # in the middle of the import must not undo the other parties.
+        first = fractie_record("first", abbreviation="AAA")
+        second = fractie_record("second", abbreviation="BBB")
+        third = fractie_record("third", abbreviation="CCC")
+        third["NaamNL"] = "Another party"
+        self.mocked_get.side_effect = lambda url, *a, **k: MockedResponse(
+            {"value": [first, second, third]}, 200
+        )
+        self.api.import_parties()
+        self.assertEqual(
+            {"first", "third"},
+            set(Party.objects.values_list("api_id", flat=True)),
+        )

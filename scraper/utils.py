@@ -12,6 +12,7 @@ from scraper.models import (
     ImportRun,
     ImportRunStatus,
     Party,
+    PartyAlias,
     PartySuccession,
     PartyVote,
     ParliamentaryItem,
@@ -340,7 +341,11 @@ class ParliamentApi:
         Fetches party data from the API, converts it into DTOs, and updates or
         creates corresponding `Party` model instances in the database.
 
-        Ensures database integrity by using an atomic transaction.
+        A party registered again under a new API id keeps its local record
+        (see `_adopt_reregistration`).
+
+        A record that fails is logged and skipped; the others are still
+        saved (`update_or_create` uses its own savepoint).
         """
         filters: list[str] = [
             "Verwijderd eq false",
@@ -349,10 +354,12 @@ class ParliamentApi:
         party_data: list[dict[str, str | int | None | bool]] = self.fetch(
             object_name="Fractie", filters=filters, order_by=None
         )
+        active_ids = {str(data.get("Id")) for data in party_data}
         with transaction.atomic():
             for data in party_data:
                 try:
                     fractie_dto: FractieDTO = FractieDTO.from_api(data)
+                    self._adopt_reregistration(fractie_dto, active_ids)
                     Party.objects.update_or_create(
                         api_id=fractie_dto.Id,
                         defaults=party_from_dto(fractie_dto),
@@ -368,13 +375,77 @@ class ParliamentApi:
                     )
                     continue
 
-        # FIXME - remove when bug fixed
-        try:
-            vijftigplus = Party.objects.get(abbreviation="50PLUS")
-            vijftigplus.api_id = "a34bf6c8-834e-4dba-b4d2-f2f1b3957bd2"
-            vijftigplus.save()
-        except Party.DoesNotExist:
-            pass
+    def _adopt_reregistration(
+        self, fractie_dto: FractieDTO, active_ids: set[str]
+    ) -> None:
+        """
+        Link a party registered again under a new API id to its local record.
+
+        When no local party has the new id, but one has the same abbreviation
+        and an id that is no longer active, it is the same party: the local
+        record takes the new id and keeps the old one as an alias, because
+        the API may still record votes under it (as for 50PLUS).
+
+        Args:
+            fractie_dto (FractieDTO): The party as returned by the API.
+            active_ids (set[str]): Ids of all parties active in the period.
+        """
+        if Party.objects.filter(api_id=fractie_dto.Id).exists():
+            return
+        existing = (
+            Party.objects.filter(abbreviation=fractie_dto.Afkorting)
+            .exclude(api_id__in=active_ids)
+            .first()
+        )
+        if existing is None:
+            return
+        PartyAlias.objects.get_or_create(
+            api_id=existing.api_id, defaults={"party": existing}
+        )
+        logger.info(
+            f"Party {existing.abbreviation} registered again: id "
+            f"{existing.api_id} -> {fractie_dto.Id}, old id kept as alias",
+            extra={"old_id": existing.api_id, "new_id": fractie_dto.Id},
+        )
+        existing.api_id = fractie_dto.Id
+        existing.save(update_fields=["api_id"])
+
+    def _resolve_unknown_parties(
+        self, fractie_ids: set[str], party_lookup: dict[str, Party]
+    ) -> None:
+        """
+        Find aliases for party ids that votes reference but no party has.
+
+        An unknown id whose API record is inactive and has the abbreviation
+        of a known party is an older id of that party: it is stored as an
+        alias and added to `party_lookup`. Other ids stay unknown.
+
+        Args:
+            fractie_ids (set[str]): Unknown party ids referenced by votes.
+            party_lookup (dict[str, Party]): Party per API id; updated.
+        """
+        by_abbreviation = {
+            party.abbreviation: party for party in set(party_lookup.values())
+        }
+        for fractie_id in sorted(fractie_ids):
+            records = self.fetch(
+                object_name="Fractie", filters=[f"Id eq {fractie_id}"]
+            )
+            if not records:
+                continue
+            record = records[0]
+            party = by_abbreviation.get(str(record.get("Afkorting")))
+            if party is None or not record.get("DatumInactief"):
+                continue
+            PartyAlias.objects.get_or_create(
+                api_id=fractie_id, defaults={"party": party}
+            )
+            party_lookup[fractie_id] = party
+            logger.info(
+                f"Votes reference an older id {fractie_id} of "
+                f"{party.abbreviation}; stored as alias",
+                extra={"alias": fractie_id, "party": party.api_id},
+            )
 
     def _members(self, fractie_id: str, on: date) -> set[str]:
         """
@@ -541,7 +612,26 @@ class ParliamentApi:
             expand=expand,
             stage="Fetching motions",
         )
-        party_lookup = {p.api_id: p for p in Party.objects.all()}
+        # Party per API id, including older ids stored as aliases.
+        party_lookup: dict[str, Party] = {
+            p.api_id: p for p in Party.objects.all()
+        }
+        party_lookup.update(
+            {
+                alias.api_id: alias.party
+                for alias in PartyAlias.objects.select_related("party")
+            }
+        )
+        # Expanded rows contain nested lists, unlike fetch's flat row type.
+        referenced = {
+            str(stemming.get("Fractie_Id"))
+            for zaak in cast(list[dict[str, Any]], vote_data)
+            for besluit in zaak.get("Besluit") or []
+            for stemming in besluit.get("Stemming") or []
+        }
+        self._resolve_unknown_parties(
+            referenced - set(party_lookup), party_lookup
+        )
         result = VoteImportResult()
 
         stored_votes: defaultdict[int, dict[int, PartyVote]] = defaultdict(dict)
@@ -585,10 +675,21 @@ class ParliamentApi:
             if created:
                 result.created += 1
 
+            # Count votes under an alias as the party's own, before taking
+            # the majority, so one party never gets two votes on an item.
+            stemmingen = [
+                (
+                    StemmingDTO(
+                        Soort=stemming.Soort,
+                        Fractie_Id=party_lookup[stemming.Fractie_Id].api_id,
+                    )
+                    if stemming.Fractie_Id in party_lookup
+                    else stemming
+                )
+                for stemming in dto.Besluit[0].Stemming
+            ]
             desired: dict[int, VoteType] = {}
-            for fractie_id, vote in aggregate_party_votes(
-                dto.Besluit[0].Stemming
-            ).items():
+            for fractie_id, vote in aggregate_party_votes(stemmingen).items():
                 party = party_lookup.get(fractie_id)
                 if party is None:
                     unknown_parties[fractie_id] += 1

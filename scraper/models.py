@@ -99,6 +99,30 @@ class PartyVote(models.Model):
         )
 
 
+class PartyAlias(models.Model):
+    """
+    An older API id under which the API still records votes for a party.
+
+    Example: 50PLUS was registered again after the 2025 election (new id),
+    but its votes still reference its old, inactive record. The party keeps
+    the current id; the old one becomes an alias, so the votes link to it.
+    Detected during the import (see `ParliamentApi.import_parties` and
+    `ParliamentApi.import_votes`) and correctable in the admin.
+    """
+
+    api_id = models.CharField(max_length=50, unique=True)
+    party = models.ForeignKey(
+        Party, on_delete=models.CASCADE, related_name="aliases"
+    )
+
+    class Meta:
+        verbose_name = "Party Alias"
+        verbose_name_plural = "Party Aliases"
+
+    def __str__(self) -> str:
+        return f"{self.api_id} -> {self.party}"
+
+
 class PartySuccession(models.Model):
     """
     A party that continues another party under a new identity, e.g. a rename

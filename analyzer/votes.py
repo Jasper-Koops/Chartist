@@ -1,6 +1,10 @@
 from collections import defaultdict
+from collections.abc import Iterable
+from datetime import date
 
-from scraper.models import PartySuccession, PartyVote
+from django.utils import timezone
+
+from scraper.models import ParliamentaryItem, PartySuccession, PartyVote
 
 
 def party_votes() -> dict[int, dict[int, str]]:
@@ -49,3 +53,27 @@ def lineage_pairs() -> set[tuple[int, int]]:
             pairs.add((start, current))
             pairs.add((current, start))
     return pairs
+
+
+def item_vote_dates(item_ids: Iterable[int] | None = None) -> dict[int, date]:
+    """
+    The voting date of each item, for ordering items in time.
+
+    Uses `vote_date`; falls back to the local date of the last modification
+    (`date`) for an item without one.
+
+    Args:
+        item_ids (Iterable[int] | None): Items to include; all if None.
+
+    Returns:
+        dict[int, date]: Voting date per item id.
+    """
+    items = ParliamentaryItem.objects.all()
+    if item_ids is not None:
+        items = items.filter(id__in=list(item_ids))
+    return {
+        item_id: vote_date or timezone.localtime(modified).date()
+        for item_id, vote_date, modified in items.values_list(
+            "id", "vote_date", "date"
+        )
+    }

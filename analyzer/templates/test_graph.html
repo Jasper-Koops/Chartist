@@ -129,25 +129,13 @@
     <div id="pca3d"></div>
   </div>
 
-  <div class="agreement-section" id="agreement-alphabetical">
+  <div class="agreement-section" id="agreement-matrix">
     <h2>Voting agreement between parties</h2>
-    <p class="chart-meta">Share of shared motions on which two parties voted the same. Parties in alphabetical order. Click a cell to compare the two parties.</p>
-    <div class="agreement-legend" hidden>
-      <span class="legend-min"></span>
-      <span class="bar"></span>
-      <span class="legend-max"></span>
-    </div>
-    <div class="agreement-scroll">
-      <table class="agreement-table"></table>
-    </div>
-  </div>
-
-  <div class="agreement-section" id="agreement-clustered">
-    <h2>Voting agreement between parties, ordered by similarity</h2>
     <p class="chart-meta">
-      The same matrix, with parties that vote alike placed next to each other
-      (hierarchical clustering, average linkage on 1 - agreement). Voting
-      blocs show as darker blocks along the diagonal.
+      Share of shared motions on which two parties voted the same. Parties
+      that vote alike are placed next to each other (hierarchical clustering,
+      average linkage on 1 - agreement), so voting blocs show as darker
+      blocks along the diagonal. Click a cell to compare the two parties.
     </p>
     <div class="agreement-legend" hidden>
       <span class="legend-min"></span>
@@ -323,7 +311,7 @@
       return clusters[0] || [];
     }
 
-    // Render a matrix into a section, with parties in the given order.
+    // Render the matrix into a section, with parties in the given order.
     function renderMatrixTable(section, matrix, parties, lookup) {
       const table = section.querySelector(".agreement-table");
       const [lo, hi] = agreementDomain(matrix.agreements);
@@ -380,34 +368,26 @@
       }
     }
 
-    async function renderAgreementMatrices() {
-      const sections = [
-        document.getElementById("agreement-alphabetical"),
-        document.getElementById("agreement-clustered"),
-      ];
+    async function renderAgreementMatrix() {
+      const section = document.getElementById("agreement-matrix");
       const payload = await fetchGraphData("/api/v1/agreement/?limit=1");
       const matrix = normalizeParties(payload)[0];
       if (!matrix) {
-        for (const section of sections) {
-          section.querySelector(".chart-meta").textContent =
-            "No agreement matrix yet. Run the analysis first.";
-        }
+        section.querySelector(".chart-meta").textContent =
+          "No agreement matrix yet. Run the analysis first.";
         return;
       }
       const lookup = new Map(
         matrix.agreements.map((a) => [`${a.party}-${a.other_party}`, a])
       );
-      renderMatrixTable(sections[0], matrix, matrix.parties, lookup);
       renderMatrixTable(
-        sections[1], matrix, clusterOrder(matrix.parties, lookup), lookup
+        section, matrix, clusterOrder(matrix.parties, lookup), lookup
       );
     }
 
-    renderAgreementMatrices().catch((error) => {
-      for (const id of ["agreement-alphabetical", "agreement-clustered"]) {
-        document.querySelector(`#${id} .chart-meta`).textContent =
-          `Could not load agreement matrix: ${error.message}`;
-      }
+    renderAgreementMatrix().catch((error) => {
+      document.querySelector("#agreement-matrix .chart-meta").textContent =
+        `Could not load agreement matrix: ${error.message}`;
     });
 
     const formatDate = (value) =>

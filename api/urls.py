@@ -9,6 +9,7 @@ from api.views import (
     PCAComponentPartyScoreViewSet,
     PCAItemLoadingViewSet,
     AgreementMatrixViewSet,
+    StatusView,
 )
 from django.urls import path, include
 
@@ -27,5 +28,6 @@ router.register("agreement", AgreementMatrixViewSet)
 
 
 urlpatterns = [
+    path("status/", StatusView.as_view(), name="status"),
     path("", include(router.urls)),
 ]

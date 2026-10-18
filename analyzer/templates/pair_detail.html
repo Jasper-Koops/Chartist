@@ -1,0 +1,331 @@
+<!doctype html>
+<html>
+<head>
+  <title>{{ party.abbreviation }} and {{ other_party.abbreviation }} - Chartist</title>
+  <style>
+    body {
+      margin: 20px;
+      font-family: Arial, sans-serif;
+      color: #1f1d1a;
+    }
+    main {
+      max-width: 1000px;
+    }
+    h1 {
+      margin: 12px 0 6px 0;
+    }
+    h2 {
+      margin: 28px 0 8px 0;
+    }
+    .chart-meta {
+      color: #666;
+      margin: 0 0 10px 0;
+    }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 12px 0 0 0;
+    }
+    .stat {
+      border: 1px solid #ecebe7;
+      border-radius: 6px;
+      padding: 10px 14px;
+      min-width: 180px;
+    }
+    .stat .value {
+      font-size: 26px;
+      font-weight: bold;
+    }
+    .stat .label {
+      color: #52514e;
+      font-size: 13px;
+      margin-top: 2px;
+    }
+    #timeline-box {
+      height: 300px;
+      border: 1px solid #ddd;
+      padding: 10px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0 0 12px 0;
+    }
+    #search {
+      flex: 1;
+      font-size: 15px;
+      padding: 8px 10px;
+      border: 1px solid #c9c8c3;
+      border-radius: 4px;
+    }
+    #relation {
+      font-size: 14px;
+      padding: 7px;
+    }
+    #motions {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #motions li {
+      padding: 10px 0;
+      border-bottom: 1px solid #ecebe7;
+    }
+    #motions .meta {
+      color: #666;
+      font-size: 13px;
+      margin-top: 3px;
+    }
+    #more {
+      margin-top: 14px;
+      padding: 7px 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a href="/party/{{ party.id }}/">&larr; {{ party.name }}</a>
+    <h1>{{ party.abbreviation }} and {{ other_party.abbreviation }}</h1>
+    <p class="chart-meta" id="summary">Loading...</p>
+    <div class="stats" id="stats"></div>
+
+    <h2>Agreement over time</h2>
+    <p class="chart-meta" id="timeline-meta">
+      Agreement per calendar month (by voting date). Months in which they
+      shared fewer than 50 motions are left empty.
+    </p>
+    <div id="timeline-box"><canvas id="timeline"></canvas></div>
+
+    <h2>Motions</h2>
+    <div class="controls">
+      <input id="search" type="search" placeholder="Search these motions"
+             autocomplete="off" aria-label="Search motions">
+      <select id="relation" aria-label="Which motions">
+        <option value="differed">Voted differently</option>
+        <option value="agreed">Voted the same</option>
+        <option value="all">All shared motions</option>
+      </select>
+    </div>
+    <p class="chart-meta" id="count"></p>
+    <ul id="motions"></ul>
+    <button id="more" type="button" hidden>Load more</button>
+  </main>
+
+  {{ party.id|json_script:"party-id" }}
+  {{ other_party.id|json_script:"other-party-id" }}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <script>
+    const PARTY_ID = JSON.parse(document.getElementById("party-id").textContent);
+    const OTHER_ID = JSON.parse(document.getElementById("other-party-id").textContent);
+    const BASE = `/api/v1/parties/${PARTY_ID}/compare/${OTHER_ID}/`;
+    const MIN_SHARED_MOTIONS = 50;
+    const LINE_COLOR = "#2a78d6";
+    const INK = "#1f1d1a";
+    const GRID = "rgba(0, 0, 0, 0.08)";
+    const PAGE_SIZE = 50;
+    const VOTE_LABEL = { For: "for", Against: "against", Abstain: "did not take part" };
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      return response.json();
+    }
+
+    const formatDate = (iso) =>
+      iso
+        ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+            day: "numeric", month: "short", year: "numeric",
+          })
+        : "unknown date";
+    const monthLabel = (iso) =>
+      new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+        month: "short", year: "numeric",
+      });
+
+    // Every calendar month from the first to the last, so months without
+    // votes (e.g. the summer recess) show as gaps.
+    function allMonths(months) {
+      if (!months.length) return [];
+      const [startYear, startMonth] = months[0].split("-").map(Number);
+      const [endYear, endMonth] = months.at(-1).split("-").map(Number);
+      const result = [];
+      for (let y = startYear, m = startMonth; y < endYear || (y === endYear && m <= endMonth); ) {
+        result.push(`${y}-${String(m).padStart(2, "0")}-01`);
+        m += 1;
+        if (m > 12) {
+          m = 1;
+          y += 1;
+        }
+      }
+      return result;
+    }
+
+    function stat(value, label) {
+      const box = document.createElement("div");
+      box.className = "stat";
+      const big = document.createElement("div");
+      big.className = "value";
+      big.textContent = value;
+      const small = document.createElement("div");
+      small.className = "label";
+      small.textContent = label;
+      box.append(big, small);
+      return box;
+    }
+
+    function renderSummary(data) {
+      const a = data.party.abbreviation;
+      const b = data.other_party.abbreviation;
+      const summary = document.getElementById("summary");
+      if (data.same_lineage) {
+        summary.textContent =
+          `${b} and ${a} are the same party under a different name, so they ` +
+          `are not compared. Motions below use their own recorded votes.`;
+        return;
+      }
+      if (!data.shared_motions) {
+        summary.textContent = `${a} and ${b} have no shared motions.`;
+        return;
+      }
+      summary.textContent =
+        `${a} and ${b} voted the same on ${(data.agreement * 100).toFixed(1)}% ` +
+        `of ${data.shared_motions.toLocaleString()} shared motions.`;
+      document.getElementById("stats").append(
+        stat(`${Math.round(data.agreement * 100)}%`, "agreement"),
+        stat(data.agreed.toLocaleString(), "voted the same"),
+        stat(data.party_for_other_against.toLocaleString(), `${a} for, ${b} against`),
+        stat(data.party_against_other_for.toLocaleString(), `${a} against, ${b} for`),
+      );
+    }
+
+    function renderTimeline(data) {
+      if (!data.timeline.length) {
+        document.getElementById("timeline-meta").textContent =
+          "No monthly agreement for this pair.";
+        document.getElementById("timeline-box").hidden = true;
+        return;
+      }
+      const byMonth = new Map(data.timeline.map((p) => [p.month, p]));
+      const months = allMonths(data.timeline.map((p) => p.month));
+      const values = months.map((month) => {
+        const point = byMonth.get(month);
+        return point && point.agreement !== null && point.shared_motions >= MIN_SHARED_MOTIONS
+          ? point.agreement * 100
+          : null;
+      });
+      const present = values.filter((v) => v !== null);
+      new Chart(document.getElementById("timeline"), {
+        type: "line",
+        data: {
+          labels: months.map(monthLabel),
+          datasets: [{
+            data: values,
+            shared: months.map((month) => byMonth.get(month)?.shared_motions ?? 0),
+            borderColor: LINE_COLOR,
+            borderWidth: 2,
+            pointRadius: 4,
+            pointBackgroundColor: LINE_COLOR,
+            pointHitRadius: 12,
+            spanGaps: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) =>
+                  `${context.parsed.y.toFixed(1)}% of ` +
+                  `${context.dataset.shared[context.dataIndex]} shared motions`,
+              },
+            },
+          },
+          scales: {
+            x: { grid: { color: GRID }, ticks: { color: INK } },
+            y: {
+              min: Math.max(0, Math.floor(Math.min(...present) / 10) * 10 - 10),
+              max: Math.min(100, Math.ceil(Math.max(...present) / 10) * 10 + 10),
+              grid: { color: GRID },
+              ticks: { callback: (value) => `${value}%`, color: INK },
+            },
+          },
+        },
+      });
+    }
+
+    // Motion list
+    const search = document.getElementById("search");
+    const relation = document.getElementById("relation");
+    const list = document.getElementById("motions");
+    const count = document.getElementById("count");
+    const more = document.getElementById("more");
+    let offset = 0;
+    let request = 0;
+    let names = { a: "", b: "" };
+
+    async function loadMotions(reset) {
+      if (reset) {
+        offset = 0;
+        list.replaceChildren();
+      }
+      const current = ++request;
+      const params = new URLSearchParams({
+        relation: relation.value, limit: PAGE_SIZE, offset,
+      });
+      if (search.value.trim()) params.set("search", search.value.trim());
+      try {
+        const data = await fetchJson(`${BASE}motions/?${params}`);
+        if (current !== request) return;
+        count.textContent =
+          `${data.count.toLocaleString()} motion${data.count === 1 ? "" : "s"}`;
+        for (const motion of data.results) {
+          const item = document.createElement("li");
+          const link = document.createElement("a");
+          link.href = `/motion/${motion.id}/`;
+          link.textContent = motion.title;
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent =
+            `${formatDate(motion.vote_date)} · ${motion.status} · ` +
+            `${names.a} ${VOTE_LABEL[motion.party_vote] || "no vote"}, ` +
+            `${names.b} ${VOTE_LABEL[motion.other_party_vote] || "no vote"}`;
+          item.append(link, meta);
+          list.appendChild(item);
+        }
+        offset += data.results.length;
+        more.hidden = !data.next;
+      } catch (error) {
+        if (current === request) count.textContent = `Could not load motions: ${error.message}`;
+      }
+    }
+
+    let debounce;
+    search.addEventListener("input", () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => loadMotions(true), 300);
+    });
+    relation.addEventListener("change", () => loadMotions(true));
+    more.addEventListener("click", () => loadMotions(false));
+
+    (async () => {
+      try {
+        const data = await fetchJson(BASE);
+        names = { a: data.party.abbreviation, b: data.other_party.abbreviation };
+        renderSummary(data);
+        renderTimeline(data);
+        if (data.same_lineage) relation.value = "all";
+      } catch (error) {
+        document.getElementById("summary").textContent =
+          `Could not load the comparison: ${error.message}`;
+      }
+      loadMotions(true);
+    })();
+  </script>
+</body>
+</html>

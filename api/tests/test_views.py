@@ -1,4 +1,9 @@
+from datetime import date
 from typing import Any
+
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from django.utils.dateparse import parse_datetime
 from rest_framework.test import APITestCase
@@ -15,7 +20,14 @@ from analyzer.models import (
     PCAComponentPartyScore,
     PCAItemLoading,
 )
-from scraper.models import Party, ParliamentaryItem, PartyVote, VoteType
+from scraper.models import (
+    ImportRun,
+    ImportRunStatus,
+    Party,
+    ParliamentaryItem,
+    PartyVote,
+    VoteType,
+)
 from scraper.tests.factories import ParliamentaryItemFactory
 
 
@@ -703,3 +715,150 @@ class TestPCAItemLoadingViewSet(APITestCase):
         self.assertEqual(response.status_code, 200)
         for row in data:
             self.assertEqual(row["loading"], pcal.loading)
+
+
+class TestMotionExplorerApi(APITestCase):
+    def setUp(self) -> None:
+        self.old = ParliamentaryItemFactory(
+            title="Motie over stikstof",
+            text=["verzoekt de regering de coördinatie te verbeteren"],
+            vote_date=date(2026, 1, 5),
+            document_id="kst-36848-53",
+        )
+        self.new = ParliamentaryItemFactory(
+            title="Motie over woningbouw",
+            text=["constaterende dat er te weinig woningen zijn"],
+            vote_date=date(2026, 3, 9),
+        )
+        self.party = Party.objects.create(
+            api_id="p1", name="Partij Een", abbreviation="P1"
+        )
+        PartyVote.objects.create(
+            party=self.party, parliamentary_item=self.old, vote=VoteType.FOR
+        )
+
+    def ids(self, params: dict[str, str]) -> list[int]:
+        response = self.client.get(reverse("parliamentaryitem-list"), params)
+        return [item["id"] for item in response.data["results"]]
+
+    def test_newest_vote_first_by_default(self) -> None:
+        self.assertEqual([self.new.id, self.old.id], self.ids({}))
+
+    def test_search_title(self) -> None:
+        self.assertEqual([self.old.id], self.ids({"search": "STIKSTOF"}))
+
+    def test_search_text(self) -> None:
+        self.assertEqual([self.new.id], self.ids({"search": "woningen zijn"}))
+
+    def test_search_text_with_accents(self) -> None:
+        # Stored as JSON, which escapes non-ASCII characters.
+        self.assertEqual([self.old.id], self.ids({"search": "coördinatie"}))
+
+    def test_search_combines_with_filters(self) -> None:
+        self.assertEqual(
+            [],
+            self.ids({"search": "stikstof", "vote_date__gte": "2026-02-01"}),
+        )
+
+    def test_detail_has_documents_and_votes(self) -> None:
+        response = self.client.get(
+            reverse("parliamentaryitem-detail", args=[self.old.id])
+        )
+        data = response.data
+        self.assertEqual(
+            [
+                "https://zoek.officielebekendmakingen.nl/kst-36848-53.html",
+                "https://zoek.officielebekendmakingen.nl/kst-36848-53.pdf",
+            ],
+            [doc["url"] for doc in data["documents"]],
+        )
+        self.assertEqual(
+            [
+                {
+                    "party": self.party.id,
+                    "abbreviation": "P1",
+                    "name": "Partij Een",
+                    "vote": "For",
+                }
+            ],
+            data["votes"],
+        )
+
+    def test_detail_without_document(self) -> None:
+        response = self.client.get(
+            reverse("parliamentaryitem-detail", args=[self.new.id])
+        )
+        self.assertEqual([], response.data["documents"])
+
+    def test_list_leaves_out_detail_fields(self) -> None:
+        response = self.client.get(reverse("parliamentaryitem-list"))
+        for field in ("text", "votes", "documents"):
+            self.assertNotIn(field, response.data["results"][0])
+
+
+class TestStatusSync(APITestCase):
+    def test_last_successful_sync(self) -> None:
+        ImportRun.objects.create(
+            status=ImportRunStatus.SUCCEEDED, finished_at=timezone.now()
+        )
+        data = self.client.get(reverse("status")).data
+        self.assertIsNotNone(data["last_synced_at"])
+        self.assertIsNone(data["last_sync_failed_at"])
+
+    def test_failed_latest_sync_is_reported(self) -> None:
+        success = ImportRun.objects.create(
+            status=ImportRunStatus.SUCCEEDED, finished_at=timezone.now()
+        )
+        failed = ImportRun.objects.create(
+            status=ImportRunStatus.FAILED, finished_at=timezone.now()
+        )
+        data = self.client.get(reverse("status")).data
+        self.assertEqual(success.finished_at, data["last_synced_at"])
+        self.assertEqual(failed.finished_at, data["last_sync_failed_at"])
+
+    def test_never_synced(self) -> None:
+        data = self.client.get(reverse("status")).data
+        self.assertIsNone(data["last_synced_at"])
+
+
+class TestQueryCounts(APITestCase):
+    """
+    Endpoints must not make a query per row (N+1). The counts are fixed so a
+    regression fails the tests instead of slowing the pages down.
+    """
+
+    def setUp(self) -> None:
+        self.parties = generate_parties()
+        generate_party_votes(
+            parliamentary_items=generate_parliamentary_items(6),
+            parties=self.parties,
+        )
+        run_pca_analysis(n_components=3)
+
+    def test_party_list_does_not_query_per_party(self) -> None:
+        url = reverse("party-list")
+        # 15 parties: count, parties, newest analysis, prefetched scores.
+        with self.assertNumQueries(4):
+            response = self.client.get(url, {"limit": 500})
+        self.assertEqual(15, len(response.data["results"]))
+        for party in response.data["results"]:
+            self.assertEqual(3, len(party["party_scores"]))
+
+    def test_status(self) -> None:
+        with self.assertNumQueries(5):
+            self.client.get(reverse("status"))
+
+    def test_compare_only_loads_the_pair_votes(self) -> None:
+        a, b = list(self.parties[:2])
+        url = reverse("party-compare", args=[a.id, b.id])
+        with CaptureQueriesContext(connection) as queries:
+            self.client.get(url)
+        vote_queries = [
+            q["sql"]
+            for q in queries.captured_queries
+            if 'FROM "scraper_partyvote"' in q["sql"]
+        ]
+        self.assertTrue(vote_queries)
+        # Every vote query is limited to specific parties, never all votes.
+        for sql in vote_queries:
+            self.assertIn('"scraper_partyvote"."party_id" IN', sql)

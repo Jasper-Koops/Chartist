@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import StringIO
 
 import numpy as np
@@ -113,6 +113,23 @@ class TestParticipationFromPartyStart(TestCase):
         # Items whose votes are not published yet do not count.
         self.vote(self.established, self.items[:5])
         self.assertEqual(100.0, self.rate(self.established))
+
+    def test_start_uses_voting_date_not_modified_date(self) -> None:
+        # Voted in January, but the record was last edited in June.
+        early = ParliamentaryItemFactory(
+            vote_date=date(2026, 1, 5),
+            date=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        )
+        later = ParliamentaryItemFactory(
+            vote_date=date(2026, 2, 5),
+            date=datetime(2026, 2, 5, tzinfo=timezone.utc),
+        )
+        established = self.party()
+        self.vote(established, [early, later])
+        newcomer = self.party()
+        self.vote(newcomer, [later])
+        # Only `later` came after the newcomer's first vote.
+        self.assertEqual(100.0, self.rate(newcomer))
 
     def test_items_sharing_a_timestamp_are_counted_separately(self) -> None:
         same_time = self.items[0].date
@@ -298,7 +315,10 @@ class TestRunFullAnalysis(TestCase):
         run_full_analysis(n_components=3, stdout=StringIO())
         matrix = AgreementMatrix.objects.get()
         n_parties = self.parties.count()
-        self.assertEqual(n_parties * (n_parties - 1), matrix.agreements.count())
+        self.assertEqual(
+            n_parties * (n_parties - 1),
+            matrix.agreements.filter(month__isnull=True).count(),
+        )
 
     def test_reports_progress_to_stdout(self) -> None:
         stdout = StringIO()

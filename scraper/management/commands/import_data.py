@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from typing import Any
 
 from django.core.management.base import BaseCommand, OutputWrapper
-from scraper.utils import ParliamentApi
+from scraper.utils import ParliamentApi, run_import
 
 
 class ProgressPrinter:
@@ -54,11 +54,13 @@ class Command(BaseCommand):
         api: ParliamentApi = ParliamentApi(
             progress=ProgressPrinter(self.stdout)
         )
-        self.stdout.write(self.style.SUCCESS("Importing party data"))
-        api.import_parties()
-        api.import_successions()
-        self.stdout.write(self.style.SUCCESS("Importing vote data"))
-        result = api.import_votes(refetch_texts=options["refetch_texts"])
+        result = run_import(
+            api,
+            refetch_texts=options["refetch_texts"],
+            announce=lambda message: self.stdout.write(
+                self.style.SUCCESS(message)
+            ),
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Completed import: {result.motions} motions, "

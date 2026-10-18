@@ -1,7 +1,7 @@
 import logging
 
 from celery import chain, shared_task
-from scraper.utils import ParliamentApi
+from scraper.utils import ParliamentApi, run_import
 from analyzer.analysis import run_full_analysis
 
 logger = logging.getLogger(__name__)
@@ -16,10 +16,7 @@ def import_votes() -> bool:
         bool: Whether any votes changed, i.e. whether the analysis input
             changed.
     """
-    api = ParliamentApi()
-    api.import_parties()
-    api.import_successions()
-    result = api.import_votes()
+    result = run_import(ParliamentApi())
     return result.has_vote_changes
 
 

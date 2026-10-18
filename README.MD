@@ -69,11 +69,15 @@ celery -A Chartist worker --loglevel=info
 celery -A Chartist beat --loglevel=info
 ```
 
-## Party successions
+## Party successions and aliases
 
 Successions (a party continuing under a new identity) are detected during the
 import. Check or correct them in the admin under *Party successions*; a
 detection is never deleted automatically, so a correction is kept.
+
+Aliases are older API ids under which the API still records a party's votes
+(e.g. 50PLUS after it was registered again in 2025). They are detected during
+the import too, and listed in the admin under *Party aliases*.
 
 ## Important urls
 - API Root (Interactive): `http://127.0.0.1:8000/api/v1/`
@@ -81,6 +85,8 @@ detection is never deleted automatically, so a correction is kept.
 - Admin Panel: `http://127.0.0.1:8000/admin/`
 - Charts test page (PCA, agreement matrices, party list): `http://127.0.0.1:8000/test-graph/`
 - Party page (agreement bar chart and timeline): `http://127.0.0.1:8000/party/<id>/`
+- Pair view (two parties compared): `http://127.0.0.1:8000/pair/<id>/<other_id>/`
+- PCA component (parties and motions behind an axis): `http://127.0.0.1:8000/component/<number>/`
 - Motion search: `http://127.0.0.1:8000/motions/`
 - Motion page (text, documents, votes): `http://127.0.0.1:8000/motion/<id>/`
 

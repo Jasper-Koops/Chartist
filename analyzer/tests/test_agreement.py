@@ -296,6 +296,15 @@ class TestStatusEndpoint(APITestCase):
         self.assertEqual(0, data["motions_with_votes"])
 
 
+class TestGraphPages(TestCase):
+    def test_both_test_pages_render(self) -> None:
+        for name in ["test-graph", "test-graph-2"]:
+            response = self.client.get(reverse(name))
+            self.assertEqual(200, response.status_code)
+            # Matrix labels link to the party pages.
+            self.assertContains(response, "th.appendChild(partyLink(party))")
+
+
 class TestPartyDetailPage(TestCase):
     def test_shows_party(self) -> None:
         party = make_party()

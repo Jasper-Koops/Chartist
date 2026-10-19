@@ -11,6 +11,12 @@ class TestGraphView(TemplateView):
     template_name = "test_graph.html"
 
 
+class TestGraph2View(TemplateView):
+    """Copy of the test page, as a sandbox for a UI redesign."""
+
+    template_name = "test_graph2.html"
+
+
 class PartyDetailView(TemplateView):
     """Test page for a single party; its charts load from the API."""
 

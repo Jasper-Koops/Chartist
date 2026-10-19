@@ -58,6 +58,13 @@
       transform: rotate(180deg);
       text-align: left;
     }
+    .agreement-table th a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .agreement-table th a:hover {
+      text-decoration: underline;
+    }
     .agreement-table td a {
       color: inherit;
       text-decoration: none;
@@ -311,6 +318,13 @@
       return clusters[0] || [];
     }
 
+    function partyLink(party) {
+      const link = document.createElement("a");
+      link.href = `/party/${party.id}/`;
+      link.textContent = party.abbreviation;
+      return link;
+    }
+
     // Render the matrix into a section, with parties in the given order.
     function renderMatrixTable(section, matrix, parties, lookup) {
       const table = section.querySelector(".agreement-table");
@@ -329,7 +343,7 @@
       for (const party of parties) {
         const th = document.createElement("th");
         th.className = "col";
-        th.textContent = party.abbreviation;
+        th.appendChild(partyLink(party));
         header.appendChild(th);
       }
       table.appendChild(header);
@@ -337,7 +351,7 @@
       for (const party of parties) {
         const row = document.createElement("tr");
         const th = document.createElement("th");
-        th.textContent = party.abbreviation;
+        th.appendChild(partyLink(party));
         row.appendChild(th);
         for (const other of parties) {
           const td = document.createElement("td");

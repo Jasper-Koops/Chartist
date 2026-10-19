@@ -1,10 +1,18 @@
 from bisect import bisect_left
+from typing import NamedTuple
 
+import numpy as np
 import pandas as pd
 from pca import pca
 from analyzer.agreement import run_agreement_analysis
 from analyzer.votes import item_vote_dates, party_votes
-from analyzer.utils import generate_dataframe, log_to_stdout, AnalysisLogger
+from analyzer.utils import (
+    PCA_FIT_COVERAGE,
+    PCA_MIN_PROJECTED_VOTES,
+    AnalysisLogger,
+    generate_dataframe,
+    log_to_stdout,
+)
 from scraper.models import Party, PartyVote
 from analyzer.models import (
     PCAAnalysis,
@@ -71,6 +79,14 @@ def generate_pca_object(
     """
     Generate a PCA object and fit it to the provided data.
 
+    A covariance PCA: each motion is centered but not standardized. Every
+    motion is in the same unit (-1, 0, 1), so there is no difference in
+    scale to correct for, and standardizing would give a near-unanimous
+    motion (one party against the rest) as much weight as a close vote.
+    Centered, a divided vote weighs more. This is the usual choice for
+    votes; methods made for roll calls, like Optimal Classification and
+    NOMINATE, do not standardize votes either.
+
     Args:
         prepared_df (pd.DataFrame): The prepared DataFrame containing the data for PCA.
         labels (list): The row labels for the PCA model.
@@ -79,55 +95,114 @@ def generate_pca_object(
     Returns:
         pca: The PCA model fitted to the data.
     """
-    model = pca(n_components=n_components, normalize=True)
+    model = pca(n_components=n_components, normalize=False)
     model.fit_transform(prepared_df, row_labels=labels)
     return model
 
 
-def prepare_df(log: AnalysisLogger) -> tuple[pd.DataFrame, list[str]]:
+class PreparedVotes(NamedTuple):
     """
-    Prepare the DataFrame for PCA analysis.
+    The vote matrices for the PCA (parties as rows, motion ids as columns;
+    1 for, -1 against, 0 did not take part).
 
-    This function generates a DataFrame, uses the motion IDs as row indices,
-    and transposes the data for PCA analysis.
+    Attributes:
+        fit (pd.DataFrame): Parties the axes are fitted on, with a vote on
+            every column.
+        labels (list[str]): The row labels of `fit`.
+        projected (pd.DataFrame): Parties placed on those axes afterwards,
+            over the same columns; NaN where the party has no vote.
+    """
 
-    The resulting DataFrame has parties as rows and parliamentary items IDs as
-    columns.
+    fit: pd.DataFrame
+    labels: list[str]
+    projected: pd.DataFrame
 
-    Items on which not all parties have voted (i.e., rows with NaN values) are
-    removed.
+
+def prepare_df(log: AnalysisLogger) -> PreparedVotes:
+    """
+    Prepare the vote matrices for the PCA.
+
+    PCA needs a vote from every party on every motion, but a party that
+    started later (e.g. a member who left their party group) has no votes
+    before its start. Dropping those motions for everyone would limit the
+    map to the period since the newest party started; filling them in would
+    invent votes. Instead, as is standard for PCA ("supplementary
+    individuals"):
+
+    - the axes are fitted on the parties with a vote on nearly every motion
+      (`PCA_FIT_COVERAGE`), over the motions all of them voted on;
+    - the other parties are placed on those axes afterwards, using only the
+      motions they voted on (see `project_parties`). Parties with fewer than
+      `PCA_MIN_PROJECTED_VOTES` such votes are left out.
 
     Args:
       log (AnalysisLogger): Logger instance for tracking dataframe generation
         and party exclusions.
 
     Returns:
-        tuple: A tuple containing:
-            - prepared_df (pd.DataFrame): The transposed DataFrame ready for PCA.
-            - labels (list): The column labels of the original DataFrame.
+        PreparedVotes: The matrix to fit on, its row labels, and the matrix
+            of the parties to project.
+
+    Raises:
+        ValueError: If no motion has a vote from every fitted party.
     """
     df = generate_dataframe(log=log)
-    # Remove all rows with NaN values
-    before = len(df)
-    df = df.dropna()
-    removed = before - len(df)
-    # Check how many items were removed
+    votes = df.set_index("Motion ID").transpose().astype(float)
+    votes.columns = [int(item_id) for item_id in votes.columns]
+
+    coverage = votes.notna().mean(axis=1)
+    fit_parties = coverage[coverage >= PCA_FIT_COVERAGE].index
+    fit = votes.loc[fit_parties].dropna(axis=1)
     log.info(
-        f"Removed {removed} parliamentary items with missing votes.",
-        extra={"removed": removed, "before": before, "after": len(df)},
+        f"Fitting on {len(fit.index)} parties; removed "
+        f"{votes.shape[1] - fit.shape[1]} parliamentary items with missing "
+        "votes among them.",
+        extra={"parties": list(fit.index), "items": fit.shape[1]},
     )
-    if df.empty:
+    if fit.empty:
         raise ValueError(
             "No parliamentary items available for PCA analysis. "
             "Run import_data first."
         )
-    labels = df.columns[1:]
-    item_ids = df["Motion ID"]
-    prepared_df = pd.DataFrame(data=df.iloc[:, 1:], columns=labels)
-    prepared_df = prepared_df.rename(index=item_ids)
-    prepared_df = prepared_df.transpose()
 
-    return prepared_df, labels
+    projected = votes.drop(index=fit_parties)[fit.columns]
+    counts = projected.notna().sum(axis=1)
+    too_few = list(counts[counts < PCA_MIN_PROJECTED_VOTES].index)
+    if too_few:
+        log.info(
+            f"Left out of the PCA, too few votes: {', '.join(too_few)}.",
+            extra={"parties": too_few},
+        )
+    projected = projected.drop(index=too_few)
+    return PreparedVotes(fit, list(fit.index), projected)
+
+
+def project_parties(model: pca, projected: pd.DataFrame) -> pd.DataFrame:
+    """
+    Place parties on fitted PCA axes using only the motions they voted on.
+
+    Least-squares projection onto the axes over the observed votes
+    ("projection to the model plane"). Nothing is filled in, so a party
+    with fewer votes is not pulled towards the centre. For a party with
+    every vote this equals the ordinary PCA score.
+
+    Args:
+        model (pca): The fitted PCA (`generate_pca_object`).
+        projected (pd.DataFrame): Parties x the fitted motions, NaN where a
+            party has no vote.
+
+    Returns:
+        pd.DataFrame: Scores per party (rows) and component (PC1, PC2, ...).
+    """
+    fitted = model.results["model"]
+    columns = list(model.results["PC"].columns)
+    scores = {}
+    for party, row in projected.iterrows():
+        voted = row.notna().to_numpy()
+        axes = fitted.components_[:, voted].T
+        deviation = row.to_numpy()[voted] - fitted.mean_[voted]
+        scores[party] = np.linalg.lstsq(axes, deviation, rcond=None)[0]
+    return pd.DataFrame.from_dict(scores, orient="index", columns=columns)
 
 
 def run_pca_analysis(n_components: int = 3) -> None:
@@ -135,7 +210,8 @@ def run_pca_analysis(n_components: int = 3) -> None:
     Run PCA analysis and store the results in the database.
 
     This function prepares the data, performs PCA, and saves the component-party scores
-    in the database. Each principal component's scores are linked to the
+    in the database. Parties that started later are projected onto the axes
+    (see `prepare_df`). Each principal component's scores are linked to the
     corresponding party and analysis instance.
 
     The loadings for each parliamentary item for each component are also stored
@@ -149,9 +225,9 @@ def run_pca_analysis(n_components: int = 3) -> None:
         analysis: PCAAnalysis = PCAAnalysis.objects.create()
         log = AnalysisLogger(logger, {"analysis_id": analysis.id})
 
-        prepared_df, labels = prepare_df(log=log)
+        prepared = prepare_df(log=log)
         model = generate_pca_object(
-            prepared_df, labels, n_components=n_components
+            prepared.fit, prepared.labels, n_components=n_components
         )
 
         # Create PCAComponent records with explained variance
@@ -184,8 +260,13 @@ def run_pca_analysis(n_components: int = 3) -> None:
         if item_loadings:
             PCAItemLoading.objects.bulk_create(item_loadings)
 
-        # Save party scores
-        components = model.results.get("PC")
+        # Save party scores: fitted and projected parties alike.
+        components = pd.concat(
+            [
+                model.results.get("PC"),
+                project_parties(model, prepared.projected),
+            ]
+        )
         dict_version = components.to_dict()
         party_lookup: dict[str, Party] = {
             party.abbreviation: party for party in Party.objects.all()

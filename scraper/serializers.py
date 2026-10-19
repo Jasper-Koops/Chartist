@@ -9,7 +9,14 @@ class PartySerializer(serializers.ModelSerializer[Party]):
 
     class Meta:
         model = Party
-        fields = ["id", "api_id", "name", "abbreviation", "party_scores"]
+        fields = [
+            "id",
+            "api_id",
+            "name",
+            "abbreviation",
+            "participation_rate",
+            "party_scores",
+        ]
 
     def get_party_scores(self, obj: Party) -> Any:
         # Avoid circular import.
@@ -53,15 +60,20 @@ class ParliamentaryItemSerializer(
 class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
     """
     Adds the motion text, document links and the vote of every party,
-    which are left out of list responses.
+    which are left out of list responses. `text` is the full text as
+    published; `core_text` only what the motion says, without the formula.
     """
 
+    core_text = serializers.ListField(
+        child=serializers.CharField(), read_only=True
+    )
     documents = serializers.SerializerMethodField()
     votes = serializers.SerializerMethodField()
 
     class Meta(ParliamentaryItemSerializer.Meta):
         fields = ParliamentaryItemSerializer.Meta.fields + [
             "text",
+            "core_text",
             "document_id",
             "documents",
             "votes",

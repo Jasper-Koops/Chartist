@@ -1,5 +1,15 @@
 from django.test import TestCase
-from scraper.utils import extract_motion_bullet_points
+from django.urls import reverse
+from rest_framework.test import APITestCase
+
+from scraper.tests.factories import ParliamentaryItemFactory
+from scraper.text import extract_motion_text, motion_core
+
+
+def core(xml: bytes) -> list[str]:
+    """The core of a motion, as derived from its stored full text."""
+    return motion_core(extract_motion_text(xml))
+
 
 MOTION_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <wetgeving>
@@ -14,64 +24,64 @@ MOTION_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 </wetgeving>"""
 
 
-class TestExtractMotionBulletPoints(TestCase):
+class TestMotionCore(TestCase):
     def test_extracts_constaterende(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertIn(
             "Constaterende dat er sprake is van een tekort aan woningen",
             bullets,
         )
 
     def test_extracts_multiple_constaterende(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         constaterende = [
             b for b in bullets if b.lower().startswith("constaterende")
         ]
         self.assertEqual(2, len(constaterende))
 
     def test_extracts_overwegende(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertIn(
             "Overwegende dat sneller bouwen bijdraagt aan het oplossen van de wooncrisis",
             bullets,
         )
 
     def test_extracts_verzoekt(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertIn(
             "Verzoekt de regering om de vergunningverlening te versnellen",
             bullets,
         )
 
     def test_extracts_spreekt_uit_multiword_prefix(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertIn(
             "Spreekt uit dat betaalbaar wonen een grondrecht is", bullets
         )
 
     def test_excludes_boilerplate_de_kamer(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertNotIn("De Kamer", bullets)
 
     def test_excludes_boilerplate_gehoord(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertNotIn("gehoord de beraadslaging", bullets)
 
     def test_excludes_order_of_the_day(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertNotIn("en gaat over tot de orde van de dag.", bullets)
 
     def test_trailing_comma_stripped(self) -> None:
         xml = b"<root><al>Constaterende dat dit een test is,</al></root>"
-        bullets = extract_motion_bullet_points(xml)
+        bullets = core(xml)
         self.assertEqual(["Constaterende dat dit een test is"], bullets)
 
     def test_total_bullet_count(self) -> None:
-        bullets = extract_motion_bullet_points(MOTION_XML)
+        bullets = core(MOTION_XML)
         self.assertEqual(5, len(bullets))
 
     def test_empty_xml_returns_empty_list(self) -> None:
-        bullets = extract_motion_bullet_points(b"<root></root>")
+        bullets = core(b"<root></root>")
         self.assertEqual([], bullets)
 
 
@@ -91,7 +101,7 @@ class TestExtractMotionBoundaries(TestCase):
         )
         self.assertEqual(
             ["zegt het vertrouwen in het kabinet op"],
-            extract_motion_bullet_points(xml),
+            core(xml),
         )
 
     def test_keeps_sub_points_and_other_openings(self) -> None:
@@ -114,7 +124,7 @@ class TestExtractMotionBoundaries(TestCase):
                 "een gelijk speelveld;",
                 "forse vermindering van regeldruk",
             ],
-            extract_motion_bullet_points(xml),
+            core(xml),
         )
 
     def test_end_marker_without_period(self) -> None:
@@ -128,11 +138,11 @@ class TestExtractMotionBoundaries(TestCase):
         )
         self.assertEqual(
             ["neemt de inhoud van dit advies over;"],
-            extract_motion_bullet_points(xml),
+            core(xml),
         )
 
     def test_excludes_signatories(self) -> None:
-        bullets = extract_motion_bullet_points(
+        bullets = core(
             motion_xml(
                 "gehoord de beraadslaging,",
                 "verzoekt de regering iets te doen,",
@@ -150,7 +160,7 @@ class TestExtractMotionBoundaries(TestCase):
         )
         self.assertEqual(
             ["verzoekt de regering iets te doen"],
-            extract_motion_bullet_points(xml),
+            core(xml),
         )
 
     def test_start_without_gehoord_de_beraadslaging(self) -> None:
@@ -166,7 +176,7 @@ class TestExtractMotionBoundaries(TestCase):
                 "constaterende dat defensiebedrijven investeren",
                 "verzoekt de regering capaciteit te borgen",
             ],
-            extract_motion_bullet_points(xml),
+            core(xml),
         )
 
     def test_end_marker_without_en(self) -> None:
@@ -179,5 +189,122 @@ class TestExtractMotionBoundaries(TestCase):
         )
         self.assertEqual(
             ["te en maken voor toezichthouders;"],
-            extract_motion_bullet_points(xml),
+            core(xml),
+        )
+
+
+class TestExtractListItems(TestCase):
+    def test_list_items_keep_their_marker(self) -> None:
+        # Structure as published, e.g. kst-21501-20-2447.
+        xml = b"""<?xml version="1.0" encoding="UTF-8"?><kamerstuk>
+          <al>De Kamer,</al>
+          <al>gehoord de beraadslaging,</al>
+          <al-groep>
+            <al>verzoekt de regering zich in te zetten voor:</al>
+            <lijst type="expliciet">
+              <li><li.nr>\xe2\x80\x93</li.nr><al>het behoud van veto's;</al></li>
+              <li><li.nr>1.</li.nr><al>de Kopenhagencriteria,</al>
+                <al>als uitgangspunt</al></li>
+            </lijst>
+            <al>en gaat over tot de orde van de dag.</al>
+          </al-groep>
+          <al-groep><al>Becker</al></al-groep>
+        </kamerstuk>"""
+        self.assertEqual(
+            [
+                "verzoekt de regering zich in te zetten voor:",
+                "\u2013 het behoud van veto's;",
+                "1. de Kopenhagencriteria",
+                "als uitgangspunt",
+            ],
+            core(xml),
+        )
+
+
+PUBLISHED_XML = """<?xml version="1.0" encoding="UTF-8"?><kamerstuk>
+  <titel>MOTIE VAN HET LID BECKER C.S.</titel>
+  <datumtekst>Voorgesteld <datum isodatum="2026-10-12">12 oktober 2026</datum></datumtekst>
+  <tekst>
+    <al>De Kamer,</al>
+    <al>gehoord de beraadslaging,</al>
+    <al>overwegende dat dit plan goede elementen bevat;</al>
+    <al-groep>
+      <al>verzoekt de regering zich in te zetten voor:</al>
+      <lijst>
+        <li><li.nr>–</li.nr><al>het behoud van veto's;</al></li>
+        <li><li.nr>–</li.nr><al>geen veto's voor nieuwe lidstaten,</al></li>
+      </lijst>
+      <al>en gaat over tot de orde van de dag.</al>
+    </al-groep>
+    <al-groep><al>Becker</al><al>Keijzer</al></al-groep>
+  </tekst>
+</kamerstuk>""".encode()
+
+
+class TestExtractFullText(TestCase):
+    def test_full_text_as_published(self) -> None:
+        self.assertEqual(
+            [
+                "Voorgesteld 12 oktober 2026",
+                "De Kamer,",
+                "gehoord de beraadslaging,",
+                "overwegende dat dit plan goede elementen bevat;",
+                "verzoekt de regering zich in te zetten voor:",
+                "\u2013 het behoud van veto's;",
+                "\u2013 geen veto's voor nieuwe lidstaten,",
+                "en gaat over tot de orde van de dag.",
+            ],
+            extract_motion_text(PUBLISHED_XML),
+        )
+
+    def test_core_of_full_text(self) -> None:
+        self.assertEqual(
+            [
+                "overwegende dat dit plan goede elementen bevat;",
+                "verzoekt de regering zich in te zetten voor:",
+                "\u2013 het behoud van veto's;",
+                "\u2013 geen veto's voor nieuwe lidstaten",
+            ],
+            motion_core(extract_motion_text(PUBLISHED_XML)),
+        )
+
+    def test_without_date_line(self) -> None:
+        lines = extract_motion_text(
+            motion_xml(
+                "De Kamer,",
+                "gehoord de beraadslaging,",
+                "verzoekt de regering iets te doen,",
+                "en gaat over tot de orde van de dag.",
+            )
+        )
+        self.assertEqual("De Kamer,", lines[0])
+
+    def test_fallback_keeps_punctuation(self) -> None:
+        self.assertEqual(
+            ["verzoekt de regering iets te doen,"],
+            extract_motion_text(
+                motion_xml("verzoekt de regering iets te doen,", "Wilders")
+            ),
+        )
+
+    def test_core_of_text_stored_without_formula(self) -> None:
+        # Texts stored before the full text was: only the core lines.
+        self.assertEqual(
+            ["constaterende dat het regent", "verzoekt de regering"],
+            motion_core(
+                ["constaterende dat het regent,", "verzoekt de regering"]
+            ),
+        )
+
+
+class TestMotionTextApi(APITestCase):
+    def test_detail_has_full_and_core_text(self) -> None:
+        item = ParliamentaryItemFactory(text=extract_motion_text(PUBLISHED_XML))
+        data = self.client.get(
+            reverse("parliamentaryitem-detail", args=[item.id])
+        ).data
+        self.assertEqual("Voorgesteld 12 oktober 2026", data["text"][0])
+        self.assertEqual(
+            "overwegende dat dit plan goede elementen bevat;",
+            data["core_text"][0],
         )

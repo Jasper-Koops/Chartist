@@ -3,6 +3,8 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from scraper.text import motion_core
+
 
 class Party(models.Model):
     """
@@ -70,6 +72,14 @@ class ParliamentaryItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.item_type} - {self.title} - {self.status}"
+
+    @property
+    def core_text(self) -> list[str]:
+        """
+        What the motion says, without the formula around it (see
+        `scraper.text.motion_core`); `text` holds the full text.
+        """
+        return motion_core(self.text or [])
 
     def clean(self) -> None:
         super().clean()

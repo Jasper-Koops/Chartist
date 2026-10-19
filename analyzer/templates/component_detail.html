@@ -1,195 +1,120 @@
-<!doctype html>
-<html>
-<head>
-  <title>PC{{ number }} - Chartist</title>
-  <style>
-    body {
-      margin: 20px;
-      font-family: Arial, sans-serif;
-      color: #1f1d1a;
-    }
-    main {
-      max-width: 1000px;
-    }
-    h1 {
-      margin: 12px 0 6px 0;
-    }
-    h2 {
-      margin: 28px 0 8px 0;
-    }
-    .chart-meta {
-      color: #666;
-      margin: 0 0 10px 0;
-    }
-    #components a {
-      margin-right: 10px;
-    }
-    #components strong {
-      margin-right: 10px;
-    }
-    #bars-box {
-      border: 1px solid #ddd;
-      padding: 10px;
-    }
-    .sides {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 24px;
-    }
-    .sides ol {
-      padding-left: 22px;
-      margin: 0;
-    }
-    .sides li {
-      padding: 6px 0;
-      border-bottom: 1px solid #ecebe7;
-    }
-    .sides .meta {
-      color: #666;
-      font-size: 13px;
-      margin-top: 2px;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <a href="/test-graph/">&larr; All charts</a>
-    <p id="components"></p>
-    <h1>What drives PC{{ number }}</h1>
-    <p class="chart-meta" id="meta">Loading...</p>
-    <p class="chart-meta">
-      Parties with a high score on this component tend to vote <strong>for</strong>
-      the motions with a positive loading and <strong>against</strong> those with
-      a negative loading; parties with a low score the other way around. The
-      loading says how strongly a motion's votes follow this pattern.
-    </p>
+{% extends "base.html" %}
 
-    <h2>Parties along PC{{ number }}</h2>
-    <p class="chart-meta">Score per party in the newest analysis. Click a bar for the party.</p>
-    <div id="bars-box"><canvas id="bars"></canvas></div>
+{% block title %}Axis PC{{ number }}{% endblock %}
+{% block nav %}axes{% endblock %}
 
-    <h2>Motions with the strongest loadings</h2>
-    <p class="chart-meta" id="ties"></p>
-    <div class="sides">
-      <section>
-        <h3>Positive loading</h3>
-        <ol id="positive"></ol>
-      </section>
-      <section>
-        <h3>Negative loading</h3>
-        <ol id="negative"></ol>
-      </section>
+{% block band %}
+  <ol class="breadcrumbs">
+    <li><a href="{% url 'home' %}">Overview</a></li>
+    <li><a href="{% url 'home' %}#components">Axes</a></li>
+    <li aria-current="page">PC{{ number }}</li>
+  </ol>
+  <p class="eyebrow">Axis of the political landscape</p>
+  <h1>What drives PC{{ number }}</h1>
+  <p class="lead" id="lead">
+    Each axis is a voting pattern: a set of motions on which the parties at
+    one end vote for and the parties at the other end vote against.
+  </p>
+  <div class="band-actions">
+    <nav class="segmented on-band" id="components" aria-label="Axes"></nav>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Parties along PC{{ number }}</h2>
+        <p id="meta">Loading...</p>
+      </div>
     </div>
-  </main>
+    <div class="card-body">
+      <ol class="ranking diverging" id="parties"></ol>
+    </div>
+  </section>
 
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2 id="positive-title">Motions at the high end</h2>
+          <p id="positive-meta">Supported by the parties with a high score, opposed by those with a low score.</p>
+        </div>
+      </div>
+      <ul class="rows" id="positive"></ul>
+    </section>
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2 id="negative-title">Motions at the low end</h2>
+          <p id="negative-meta">Supported by the parties with a low score, opposed by those with a high score.</p>
+        </div>
+      </div>
+      <ul class="rows" id="negative"></ul>
+    </section>
+  </div>
+  <p class="hint" id="ties" style="margin-top: 14px"></p>
   {{ number|json_script:"component-number" }}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block scripts %}
   <script>
     const NUMBER = JSON.parse(document.getElementById("component-number").textContent);
-    // Diverging pair: one hue per side of zero.
-    const POSITIVE = "#2a78d6";
-    const NEGATIVE = "#e34948";
-    const INK = "#1f1d1a";
-    const GRID = "rgba(0, 0, 0, 0.08)";
-
-    async function fetchJson(url) {
-      const response = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return response.json();
-    }
-
-    const formatDate = (iso) =>
-      iso
-        ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-            day: "numeric", month: "short", year: "numeric",
-          })
-        : "unknown date";
+    const LIMIT = 25;
 
     function renderComponentLinks(components) {
-      const box = document.getElementById("components");
-      box.appendChild(document.createTextNode("Components: "));
-      for (const component of components) {
-        const label = `PC${component.number} (${(component.explained_variance * 100).toFixed(1)}%)`;
-        if (component.number === NUMBER) {
-          const current = document.createElement("strong");
-          current.textContent = label;
-          box.appendChild(current);
-        } else {
-          const link = document.createElement("a");
-          link.href = `/component/${component.number}/`;
-          link.textContent = label;
-          box.appendChild(link);
-        }
-      }
+      document.getElementById("components").replaceChildren(
+        ...components.map((c) => {
+          const link = el("a", { href: `/component/${c.number}/` }, `PC${c.number} · ${pct(c.explained_variance, 1)}`);
+          if (c.number === NUMBER) link.setAttribute("aria-current", "page");
+          return link;
+        })
+      );
     }
 
-    function renderBars(parties) {
-      document.getElementById("bars-box").style.height = `${parties.length * 28 + 60}px`;
-      new Chart(document.getElementById("bars"), {
-        type: "bar",
-        data: {
-          labels: parties.map((p) => p.abbreviation),
-          datasets: [{
-            data: parties.map((p) => p.score),
-            partyIds: parties.map((p) => p.id),
-            backgroundColor: parties.map((p) => (p.score >= 0 ? POSITIVE : NEGATIVE)),
-            barThickness: 16,
-            borderRadius: 4,
-            borderSkipped: "start",
-          }],
-        },
-        options: {
-          indexAxis: "y",
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          onClick: (_, elements, chart) => {
-            if (!elements.length) return;
-            const id = chart.data.datasets[0].partyIds[elements[0].index];
-            window.location.href = `/party/${id}/`;
-          },
-          onHover: (event, elements) => {
-            event.native.target.style.cursor = elements.length ? "pointer" : "default";
-          },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: { label: (context) => `Score: ${context.parsed.x.toFixed(2)}` },
-            },
-          },
-          scales: {
-            x: {
-              grid: { color: GRID },
-              title: { display: true, text: `Score on PC${NUMBER}` },
-            },
-            y: { grid: { display: false }, ticks: { color: INK } },
-          },
-        },
-      });
+    // Bars from a zero line: high scores to the right, low to the left.
+    function renderParties(parties) {
+      const top = Math.max(...parties.map((p) => Math.abs(p.score))) || 1;
+      document.getElementById("parties").replaceChildren(
+        ...parties.map((p) => {
+          const bar = el("span");
+          const width = (Math.abs(p.score) / top) * 50;
+          bar.style.width = `${width}%`;
+          bar.style.left = p.score >= 0 ? "50%" : `${50 - width}%`;
+          bar.style.background = p.score >= 0 ? css("--accent") : "#d97706";
+          return el("li", {},
+            el("span", { className: "name" }, el("a", { href: `/party/${p.id}/` }, p.abbreviation)),
+            el("span", { className: "track" }, bar),
+            el("span", { className: "value" }, p.score.toFixed(1)),
+          );
+        })
+      );
     }
 
     function renderMotions(listId, motions) {
       const list = document.getElementById(listId);
-      for (const motion of motions) {
-        const item = document.createElement("li");
-        const link = document.createElement("a");
-        link.href = `/motion/${motion.id}/`;
-        link.textContent = motion.title;
-        const meta = document.createElement("div");
-        meta.className = "meta";
-        meta.textContent =
-          `Loading ${motion.loading.toFixed(4)} · ${formatDate(motion.vote_date)} · ${motion.status}`;
-        item.append(link, meta);
-        list.appendChild(item);
-      }
-      if (!motions.length) list.textContent = "No motions.";
+      list.replaceChildren(...motions.map((motion) =>
+        el("li", {}, el("a", { className: "row-link", href: `/motion/${motion.id}/` },
+          el("div", { className: "title" }, motion.title),
+          el("div", { className: "row-meta" },
+            el("span", {}, formatDate(motion.vote_date)),
+            statusBadge(motion.status),
+            el("span", { className: "tabular", title: "How strongly this motion follows the pattern" }, `Weight ${motion.loading.toFixed(3)}`),
+          ),
+        ))
+      ));
+      if (!motions.length) list.replaceChildren(el("li", { className: "empty-state" }, "No motions."));
     }
+
+    // Name the sides after the parties at each end, e.g. "Supported by FVD,
+    // PVV and Groep Markuszower".
+    const listNames = (parties) =>
+      parties.length > 1 ? `${parties.slice(0, -1).join(", ")} and ${parties.at(-1)}` : parties.join("");
 
     (async () => {
       const meta = document.getElementById("meta");
       try {
-        const payload = await fetchJson("/api/v1/analysis/?ordering=-created_at&limit=1");
-        const analysis = (payload.results || [])[0];
+        const analysis = results(await fetchJson("/api/v1/analysis/?ordering=-created_at&limit=1"))[0];
         if (!analysis) {
           meta.textContent = "No analysis yet. Run the analysis first.";
           return;
@@ -201,28 +126,33 @@
           meta.textContent = `The newest analysis has no PC${NUMBER}.`;
           return;
         }
-        const data = await fetchJson(`/api/v1/pca-components/${component.id}/breakdown/?limit=25`);
-        meta.textContent =
-          `Explains ${(data.explained_variance * 100).toFixed(1)}% of the variation · ` +
-          `analysis from ${new Date(data.created_at).toLocaleString()}`;
-        renderBars(data.parties);
+        const data = await fetchJson(`/api/v1/pca-components/${component.id}/breakdown/?limit=${LIMIT}`);
+        document.getElementById("lead").textContent =
+          `PC${NUMBER} captures ${pct(data.explained_variance, 1)} of all differences in how parties vote. ` +
+          "Parties at one end vote for the motions below, parties at the other end against them.";
+        meta.textContent = `Score per party in the analysis of ${formatDateTime(data.created_at)}. Parties close together vote alike on these motions.`;
+        renderParties(data.parties);
+
+        const high = data.parties.slice(0, 3).map((p) => p.abbreviation);
+        const low = data.parties.slice(-3).reverse().map((p) => p.abbreviation);
+        document.getElementById("positive-meta").textContent = `Mostly supported by ${listNames(high)}; opposed by ${listNames(low)}.`;
+        document.getElementById("negative-meta").textContent = `Mostly supported by ${listNames(low)}; opposed by ${listNames(high)}.`;
         renderMotions("positive", data.positive);
         renderMotions("negative", data.negative);
 
         const ties = [];
         if (data.tied_at_strongest_positive > data.positive.length) {
-          ties.push(`${data.tied_at_strongest_positive} motions share the strongest positive loading`);
+          ties.push(`${data.tied_at_strongest_positive} motions share the strongest weight at the high end`);
         }
         if (data.tied_at_strongest_negative > data.negative.length) {
-          ties.push(`${data.tied_at_strongest_negative} share the strongest negative loading`);
+          ties.push(`${data.tied_at_strongest_negative} at the low end`);
         }
         document.getElementById("ties").textContent = ties.length
-          ? `${ties.join(" and ")}: they have the same voting pattern. The newest are shown.`
-          : "The 25 motions with the strongest loading on each side, newest first among equal loadings.";
+          ? `${ties.join(" and ")}: they have the same voting pattern, so the newest are shown.`
+          : `The ${LIMIT} motions that follow this pattern most strongly on each side; newest first among equals.`;
       } catch (error) {
-        meta.textContent = `Could not load the component: ${error.message}`;
+        meta.textContent = `Could not load the axis: ${error.message}`;
       }
     })();
   </script>
-</body>
-</html>
+{% endblock %}

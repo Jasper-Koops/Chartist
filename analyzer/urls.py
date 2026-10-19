@@ -2,15 +2,15 @@ from django.urls import path
 
 from analyzer.views import (
     ComponentDetailView,
+    HomeView,
     MotionDetailView,
     MotionListView,
     PairDetailView,
     PartyDetailView,
-    TestGraphView,
 )
 
 urlpatterns = [
-    path("test-graph/", TestGraphView.as_view(), name="test-graph"),
+    path("", HomeView.as_view(), name="home"),
     path("party/<int:pk>/", PartyDetailView.as_view(), name="party-detail"),
     path(
         "pair/<int:pk>/<int:other_pk>/",

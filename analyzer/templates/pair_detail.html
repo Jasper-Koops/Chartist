@@ -1,212 +1,155 @@
-<!doctype html>
-<html>
-<head>
-  <title>{{ party.abbreviation }} and {{ other_party.abbreviation }} - Chartist</title>
-  <style>
-    body {
-      margin: 20px;
-      font-family: Arial, sans-serif;
-      color: #1f1d1a;
-    }
-    main {
-      max-width: 1000px;
-    }
-    h1 {
-      margin: 12px 0 6px 0;
-    }
-    h2 {
-      margin: 28px 0 8px 0;
-    }
-    .chart-meta {
-      color: #666;
-      margin: 0 0 10px 0;
-    }
-    .stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin: 12px 0 0 0;
-    }
-    .stat {
-      border: 1px solid #ecebe7;
-      border-radius: 6px;
-      padding: 10px 14px;
-      min-width: 180px;
-    }
-    .stat .value {
-      font-size: 26px;
-      font-weight: bold;
-    }
-    .stat .label {
-      color: #52514e;
-      font-size: 13px;
-      margin-top: 2px;
-    }
-    #timeline-box {
-      height: 300px;
-      border: 1px solid #ddd;
-      padding: 10px;
-    }
-    .controls {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin: 0 0 12px 0;
-    }
-    #search {
-      flex: 1;
-      font-size: 15px;
-      padding: 8px 10px;
-      border: 1px solid #c9c8c3;
-      border-radius: 4px;
-    }
-    #relation {
-      font-size: 14px;
-      padding: 7px;
-    }
-    #motions {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    #motions li {
-      padding: 10px 0;
-      border-bottom: 1px solid #ecebe7;
-    }
-    #motions .meta {
-      color: #666;
-      font-size: 13px;
-      margin-top: 3px;
-    }
-    #more {
-      margin-top: 14px;
-      padding: 7px 14px;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <a href="/party/{{ party.id }}/">&larr; {{ party.name }}</a>
-    <h1>{{ party.abbreviation }} and {{ other_party.abbreviation }}</h1>
-    <p class="chart-meta" id="summary">Loading...</p>
-    <div class="stats" id="stats"></div>
+{% extends "base.html" %}
 
-    <h2>Agreement over time</h2>
-    <p class="chart-meta" id="timeline-meta">
-      Agreement per calendar month (by voting date). Months in which they
-      shared fewer than 50 motions are left empty.
-    </p>
-    <div id="timeline-box"><canvas id="timeline"></canvas></div>
+{% block title %}{{ party.abbreviation }} and {{ other_party.abbreviation }}{% endblock %}
+{% block nav %}parties{% endblock %}
 
-    <h2>Motions</h2>
-    <div class="controls">
-      <input id="search" type="search" placeholder="Search these motions"
-             autocomplete="off" aria-label="Search motions">
-      <select id="relation" aria-label="Which motions">
-        <option value="differed">Voted differently</option>
-        <option value="agreed">Voted the same</option>
-        <option value="all">All shared motions</option>
-      </select>
+{% block band %}
+  <ol class="breadcrumbs">
+    <li><a href="{% url 'home' %}">Overview</a></li>
+    <li><a href="{% url 'party-detail' party.id %}">{{ party.abbreviation }}</a></li>
+    <li aria-current="page">Compared with {{ other_party.abbreviation }}</li>
+  </ol>
+  <p class="eyebrow">Comparison</p>
+  <h1>
+    <a class="plain-link" href="{% url 'party-detail' party.id %}">{{ party.abbreviation }}</a>
+    <span class="abbr">and</span>
+    <a class="plain-link" href="{% url 'party-detail' other_party.id %}">{{ other_party.abbreviation }}</a>
+  </h1>
+  <p class="lead" id="summary">Loading...</p>
+  <div class="band-actions">
+    <a class="btn on-band" href="{% url 'pair-detail' other_party.id party.id %}" title="Compare from {{ other_party.abbreviation }}'s side">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h10l-3-3M13 11H3l3 3"/></svg>
+      Swap sides
+    </a>
+  </div>
+  <div class="stats" id="stats">
+    <div class="stat"><div class="value" id="stat-agreement">-</div><div class="label">voted the same</div></div>
+    <div class="stat"><div class="value" id="stat-shared">-</div><div class="label">motions both voted on</div></div>
+    <div class="stat"><div class="value" id="stat-for-against">-</div><div class="label">{{ party.abbreviation }} for, {{ other_party.abbreviation }} against</div></div>
+    <div class="stat"><div class="value" id="stat-against-for">-</div><div class="label">{{ party.abbreviation }} against, {{ other_party.abbreviation }} for</div></div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="grid-main" id="charts">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Agreement over time</h2>
+          <p id="timeline-meta">Per calendar month. Months in which they shared fewer than 50 motions are left empty.</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-box"><canvas id="timeline" aria-label="Monthly agreement"></canvas></div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>How their votes compare</h2>
+          <p>Motions on which both voted for or against.</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="split" id="split"></div>
+        <div class="split-legend" id="split-legend"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card spaced" id="motions-card">
+    <div class="card-head">
+      <div>
+        <h2>Motions</h2>
+        <p>Newest vote first. Open a motion for its text and every party's vote.</p>
+      </div>
     </div>
-    <p class="chart-meta" id="count"></p>
-    <ul id="motions"></ul>
-    <button id="more" type="button" hidden>Load more</button>
-  </main>
+    <div class="card-body filters">
+      <div class="filter-bar">
+        <div class="grow">
+          <label class="visually-hidden" for="motion-search">Search these motions</label>
+          <input class="field" id="motion-search" type="search" placeholder="Search these motions" autocomplete="off">
+        </div>
+        <div class="segmented" role="group" aria-label="Which motions" id="relation">
+          <button type="button" data-relation="differed" aria-pressed="true">Voted differently</button>
+          <button type="button" data-relation="agreed" aria-pressed="false">Voted the same</button>
+          <button type="button" data-relation="all" aria-pressed="false">All</button>
+        </div>
+      </div>
+      <p class="hint count" id="count"></p>
+    </div>
+    <ul class="rows" id="motions"></ul>
+    <div class="list-foot" id="more-box" hidden>
+      <span class="hint" id="shown"></span>
+      <button class="btn" id="more" type="button">Load more</button>
+    </div>
+  </section>
 
   {{ party.id|json_script:"party-id" }}
   {{ other_party.id|json_script:"other-party-id" }}
+{% endblock %}
+
+{% block libraries %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block scripts %}
   <script>
+    chartDefaults();
     const PARTY_ID = JSON.parse(document.getElementById("party-id").textContent);
     const OTHER_ID = JSON.parse(document.getElementById("other-party-id").textContent);
     const BASE = `/api/v1/parties/${PARTY_ID}/compare/${OTHER_ID}/`;
     const MIN_SHARED_MOTIONS = 50;
-    const LINE_COLOR = "#2a78d6";
-    const INK = "#1f1d1a";
-    const GRID = "rgba(0, 0, 0, 0.08)";
     const PAGE_SIZE = 50;
-    const VOTE_LABEL = { For: "for", Against: "against", Abstain: "did not take part" };
-
-    async function fetchJson(url) {
-      const response = await fetch(url, { headers: { Accept: "application/json" } });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return response.json();
-    }
-
-    const formatDate = (iso) =>
-      iso
-        ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-            day: "numeric", month: "short", year: "numeric",
-          })
-        : "unknown date";
-    const monthLabel = (iso) =>
-      new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-        month: "short", year: "numeric",
-      });
-
-    // Every calendar month from the first to the last, so months without
-    // votes (e.g. the summer recess) show as gaps.
-    function allMonths(months) {
-      if (!months.length) return [];
-      const [startYear, startMonth] = months[0].split("-").map(Number);
-      const [endYear, endMonth] = months.at(-1).split("-").map(Number);
-      const result = [];
-      for (let y = startYear, m = startMonth; y < endYear || (y === endYear && m <= endMonth); ) {
-        result.push(`${y}-${String(m).padStart(2, "0")}-01`);
-        m += 1;
-        if (m > 12) {
-          m = 1;
-          y += 1;
-        }
-      }
-      return result;
-    }
-
-    function stat(value, label) {
-      const box = document.createElement("div");
-      box.className = "stat";
-      const big = document.createElement("div");
-      big.className = "value";
-      big.textContent = value;
-      const small = document.createElement("div");
-      small.className = "label";
-      small.textContent = label;
-      box.append(big, small);
-      return box;
-    }
+    let names = { a: "", b: "" };
 
     function renderSummary(data) {
       const a = data.party.abbreviation;
       const b = data.other_party.abbreviation;
+      names = { a, b };
       const summary = document.getElementById("summary");
       if (data.same_lineage) {
         summary.textContent =
-          `${b} and ${a} are the same party under a different name, so they ` +
-          `are not compared. Motions below use their own recorded votes.`;
+          `${b} and ${a} are the same party under a different name, so they are not ` +
+          "compared. The motions below show their own recorded votes.";
+        document.getElementById("stats").hidden = true;
+        document.getElementById("charts").hidden = true;
         return;
       }
       if (!data.shared_motions) {
-        summary.textContent = `${a} and ${b} have no shared motions.`;
+        summary.textContent = `${a} and ${b} have not both voted on any motion.`;
         return;
       }
       summary.textContent =
-        `${a} and ${b} voted the same on ${(data.agreement * 100).toFixed(1)}% ` +
-        `of ${data.shared_motions.toLocaleString()} shared motions.`;
-      document.getElementById("stats").append(
-        stat(`${Math.round(data.agreement * 100)}%`, "agreement"),
-        stat(data.agreed.toLocaleString(), "voted the same"),
-        stat(data.party_for_other_against.toLocaleString(), `${a} for, ${b} against`),
-        stat(data.party_against_other_for.toLocaleString(), `${a} against, ${b} for`),
-      );
+        `${a} and ${b} voted the same on ${pct(data.agreement, 1)} of the ` +
+        `${data.shared_motions.toLocaleString()} motions they both voted on.`;
+      document.getElementById("stat-agreement").textContent = pct(data.agreement);
+      document.getElementById("stat-shared").textContent = data.shared_motions.toLocaleString();
+      document.getElementById("stat-for-against").textContent = data.party_for_other_against.toLocaleString();
+      document.getElementById("stat-against-for").textContent = data.party_against_other_for.toLocaleString();
+
+      const parts = [
+        { label: "Voted the same", value: data.agreed, color: css("--accent") },
+        { label: `${a} for, ${b} against`, value: data.party_for_other_against, color: "#d97706" },
+        { label: `${a} against, ${b} for`, value: data.party_against_other_for, color: "#0d9488" },
+      ];
+      const split = document.getElementById("split");
+      const legend = document.getElementById("split-legend");
+      for (const part of parts) {
+        const share = part.value / data.shared_motions;
+        const bar = el("span", { title: `${part.label}: ${part.value.toLocaleString()} (${pct(share, 1)})` });
+        bar.style.width = pct(share, 2);
+        bar.style.background = part.color;
+        split.append(bar);
+        const swatch = el("span", { className: "swatch" });
+        swatch.style.background = part.color;
+        legend.append(el("span", {}, swatch, `${part.label} `, el("strong", { className: "tabular" }, pct(share))));
+      }
     }
 
     function renderTimeline(data) {
-      if (!data.timeline.length) {
-        document.getElementById("timeline-meta").textContent =
-          "No monthly agreement for this pair.";
-        document.getElementById("timeline-box").hidden = true;
-        return;
-      }
+      const meta = document.getElementById("timeline-meta");
+      const box = document.querySelector(".chart-box");
       const byMonth = new Map(data.timeline.map((p) => [p.month, p]));
       const months = allMonths(data.timeline.map((p) => p.month));
       const values = months.map((month) => {
@@ -216,17 +159,23 @@
           : null;
       });
       const present = values.filter((v) => v !== null);
+      if (!present.length) {
+        meta.textContent = "No month with enough shared motions yet.";
+        box.hidden = true;
+        return;
+      }
+      const accent = css("--accent");
       new Chart(document.getElementById("timeline"), {
         type: "line",
         data: {
-          labels: months.map(monthLabel),
+          labels: months.map(formatMonth),
           datasets: [{
             data: values,
             shared: months.map((month) => byMonth.get(month)?.shared_motions ?? 0),
-            borderColor: LINE_COLOR,
-            borderWidth: 2,
-            pointRadius: 4,
-            pointBackgroundColor: LINE_COLOR,
+            borderColor: accent,
+            backgroundColor: accent,
+            borderWidth: 2.5,
+            pointRadius: 3,
             pointHitRadius: 12,
             spanGaps: false,
           }],
@@ -239,82 +188,90 @@
           plugins: {
             legend: { display: false },
             tooltip: {
+              displayColors: false,
               callbacks: {
                 label: (context) =>
-                  `${context.parsed.y.toFixed(1)}% of ` +
-                  `${context.dataset.shared[context.dataIndex]} shared motions`,
+                  `${context.parsed.y.toFixed(1)}% of ${context.dataset.shared[context.dataIndex]} shared motions`,
               },
             },
           },
           scales: {
-            x: { grid: { color: GRID }, ticks: { color: INK } },
+            x: { grid: { color: css("--grid") }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
             y: {
               min: Math.max(0, Math.floor(Math.min(...present) / 10) * 10 - 10),
               max: Math.min(100, Math.ceil(Math.max(...present) / 10) * 10 + 10),
-              grid: { color: GRID },
-              ticks: { callback: (value) => `${value}%`, color: INK },
+              grid: { color: css("--grid") },
+              ticks: { callback: (value) => `${value}%` },
             },
           },
         },
       });
     }
 
-    // Motion list
-    const search = document.getElementById("search");
-    const relation = document.getElementById("relation");
+    // ---------- Motion list; the filters live in the URL ----------
+    const params = new URLSearchParams(location.search);
+    const search = document.getElementById("motion-search");
+    const relationButtons = [...document.querySelectorAll("#relation button")];
     const list = document.getElementById("motions");
     const count = document.getElementById("count");
-    const more = document.getElementById("more");
+    const moreBox = document.getElementById("more-box");
+    let relation = params.get("relation") || "differed";
+    search.value = params.get("search") || "";
     let offset = 0;
     let request = 0;
-    let names = { a: "", b: "" };
 
-    // e.g. "PRO for (as GroenLinks-PvdA)" for a vote cast by a predecessor.
-    // The predecessor links to its own party page.
-    function voteNodes(name, vote, inheritedFrom) {
-      const nodes = [`${name} ${VOTE_LABEL[vote] || "no vote"}`];
+    function setRelation(value) {
+      relation = value;
+      relationButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.relation === value)));
+    }
+
+    function syncUrl() {
+      const url = new URL(location.href);
+      url.searchParams.set("relation", relation);
+      if (search.value.trim()) url.searchParams.set("search", search.value.trim());
+      else url.searchParams.delete("search");
+      history.replaceState(null, "", url);
+    }
+
+    // "PRO [For] as GroenLinks-PvdA" for a vote cast by a predecessor.
+    function voteNode(name, vote, inheritedFrom) {
+      const node = el("span", { className: "vote" }, name, voteBadge(vote));
       if (inheritedFrom) {
-        const link = document.createElement("a");
-        link.href = `/party/${inheritedFrom.id}/`;
-        link.textContent = inheritedFrom.abbreviation;
-        nodes.push(" (as ", link, ")");
+        node.append(el("span", {}, "as ",
+          el("a", { href: `/party/${inheritedFrom.id}/`, title: "Vote cast by the predecessor party" }, inheritedFrom.abbreviation)));
       }
-      return nodes;
+      return node;
     }
 
     async function loadMotions(reset) {
       if (reset) {
         offset = 0;
         list.replaceChildren();
+        syncUrl();
       }
       const current = ++request;
-      const params = new URLSearchParams({
-        relation: relation.value, limit: PAGE_SIZE, offset,
-      });
-      if (search.value.trim()) params.set("search", search.value.trim());
+      const query = new URLSearchParams({ relation, limit: PAGE_SIZE, offset });
+      if (search.value.trim()) query.set("search", search.value.trim());
       try {
-        const data = await fetchJson(`${BASE}motions/?${params}`);
+        const data = await fetchJson(`${BASE}motions/?${query}`);
         if (current !== request) return;
-        count.textContent =
-          `${data.count.toLocaleString()} motion${data.count === 1 ? "" : "s"}`;
+        count.textContent = `${data.count.toLocaleString()} motion${data.count === 1 ? "" : "s"}`;
         for (const motion of data.results) {
-          const item = document.createElement("li");
-          const link = document.createElement("a");
-          link.href = `/motion/${motion.id}/`;
-          link.textContent = motion.title;
-          const meta = document.createElement("div");
-          meta.className = "meta";
-          meta.append(
-            `${formatDate(motion.vote_date)} · ${motion.status} · `,
-            ...voteNodes(names.a, motion.party_vote, motion.party_vote_inherited_from),
-            ", ",
-            ...voteNodes(names.b, motion.other_party_vote, motion.other_party_vote_inherited_from),
-          );
-          item.append(link, meta);
-          list.appendChild(item);
+          list.append(el("li", {}, el("div", { className: "row-link" },
+            el("a", { className: "title", href: `/motion/${motion.id}/` }, motion.title),
+            el("div", { className: "row-meta" },
+              el("span", {}, formatDate(motion.vote_date)),
+              statusBadge(motion.status),
+              voteNode(names.a, motion.party_vote, motion.party_vote_inherited_from),
+              voteNode(names.b, motion.other_party_vote, motion.other_party_vote_inherited_from),
+            ),
+          )));
         }
+        if (!data.count) list.append(el("li", { className: "empty-state" }, "No motions match."));
         offset += data.results.length;
-        more.hidden = !data.next;
+        moreBox.hidden = !data.next;
+        document.getElementById("shown").textContent =
+          `Showing ${offset.toLocaleString()} of ${data.count.toLocaleString()}`;
       } catch (error) {
         if (current === request) count.textContent = `Could not load motions: ${error.message}`;
       }
@@ -325,22 +282,26 @@
       clearTimeout(debounce);
       debounce = setTimeout(() => loadMotions(true), 300);
     });
-    relation.addEventListener("change", () => loadMotions(true));
-    more.addEventListener("click", () => loadMotions(false));
+    relationButtons.forEach((button) =>
+      button.addEventListener("click", () => {
+        setRelation(button.dataset.relation);
+        loadMotions(true);
+      })
+    );
+    document.getElementById("more").addEventListener("click", () => loadMotions(false));
 
     (async () => {
       try {
         const data = await fetchJson(BASE);
         names = { a: data.party.abbreviation, b: data.other_party.abbreviation };
         renderSummary(data);
-        renderTimeline(data);
-        if (data.same_lineage) relation.value = "all";
+        if (!data.same_lineage) renderTimeline(data);
+        if (data.same_lineage && !params.get("relation")) relation = "all";
       } catch (error) {
-        document.getElementById("summary").textContent =
-          `Could not load the comparison: ${error.message}`;
+        document.getElementById("summary").textContent = `Could not load the comparison: ${error.message}`;
       }
+      setRelation(relation);
       loadMotions(true);
     })();
   </script>
-</body>
-</html>
+{% endblock %}

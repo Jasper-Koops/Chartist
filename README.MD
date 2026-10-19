@@ -83,8 +83,8 @@ the import too, and listed in the admin under *Party aliases*.
 - API Root (Interactive): `http://127.0.0.1:8000/api/v1/`
 - Data status (last sync, newest vote): `http://127.0.0.1:8000/api/v1/status/`
 - Admin Panel: `http://127.0.0.1:8000/admin/`
-- Charts test page (PCA, agreement matrices, party list): `http://127.0.0.1:8000/test-graph/`
-- Party page (agreement bar chart and timeline): `http://127.0.0.1:8000/party/<id>/`
+- Home (landscape, agreement matrix, parties, axes): `http://127.0.0.1:8000/`
+- Party page (agreement with every party, timeline): `http://127.0.0.1:8000/party/<id>/`
 - Pair view (two parties compared): `http://127.0.0.1:8000/pair/<id>/<other_id>/`
 - PCA component (parties and motions behind an axis): `http://127.0.0.1:8000/component/<number>/`
 - Motion search: `http://127.0.0.1:8000/motions/`

@@ -66,7 +66,7 @@ function allMonths(months) {
 // Shared Chart.js look: the page font and theme colors.
 function chartDefaults() {
   if (!window.Chart) return;
-  Chart.defaults.font.family = "Inter, system-ui, sans-serif";
+  Chart.defaults.font.family = css("--font-sans");
   Chart.defaults.color = css("--ink-3");
   Object.assign(Chart.defaults.plugins.tooltip, {
     backgroundColor: "#111827",

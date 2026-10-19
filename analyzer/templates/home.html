@@ -195,7 +195,8 @@
         .filter(Boolean);
     }
 
-    const LABEL_FONT = "600 12px Inter, system-ui, sans-serif";
+    const LABEL_FONT = `600 13px ${css("--font-sans")}`;
+    const FOCUSED_LABEL_FONT = `700 14px ${css("--font-sans")}`;
     const LABEL_OFFSET = 10;
 
     const labelPlugin = {
@@ -213,7 +214,7 @@
           const point = chart.data.datasets[0].data[index];
           const focused = point.partyId === focusedParty;
           ctx.fillStyle = focusedParty && !focused ? muted : ink;
-          ctx.font = focused ? "700 13px Inter, system-ui, sans-serif" : LABEL_FONT;
+          ctx.font = focused ? FOCUSED_LABEL_FONT : LABEL_FONT;
           ctx.fillText(point.label, element.x + LABEL_OFFSET + (focused ? 3 : 0), element.y);
         });
         ctx.restore();
@@ -244,7 +245,7 @@
 
     function longestLabelWidth(points) {
       const measure = document.createElement("canvas").getContext("2d");
-      measure.font = "700 13px Inter, system-ui, sans-serif";
+      measure.font = FOCUSED_LABEL_FONT;
       return Math.max(0, ...points.map((p) => measure.measureText(p.label).width));
     }
 
@@ -358,7 +359,7 @@
           text: usable.map((p) => p.label),
           customdata: usable.map((p) => p.partyId),
           textposition: "middle right",
-          textfont: { family: "Inter, system-ui, sans-serif", size: 11, color: css("--ink") },
+          textfont: { family: css("--font-sans"), size: 12, color: css("--ink") },
           marker: { size: 6, color: colors(), line: { color: css("--surface"), width: 1 } },
           hovertemplate: "<b>%{text}</b><br>PC1 %{x:.2f} · PC2 %{y:.2f} · PC3 %{z:.2f}<extra></extra>",
         }],

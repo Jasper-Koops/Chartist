@@ -201,7 +201,7 @@
           for (let k = dataset.data.length - 1; k >= 0; k--) {
             if (dataset.data[k] === null) continue;
             ctx.save();
-            ctx.font = dataset.partyId === hovered ? "700 12px Inter, system-ui, sans-serif" : "600 11px Inter, system-ui, sans-serif";
+            ctx.font = `${dataset.partyId === hovered ? "700 13px" : "600 12px"} ${css("--font-sans")}`;
             ctx.fillStyle = css("--ink");
             ctx.textBaseline = "middle";
             ctx.fillText(dataset.label, points[k].x + 6, points[k].y);

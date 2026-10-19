@@ -15,6 +15,7 @@ from django.db.models import (
     Exists,
     F,
     Max,
+    Min,
     OuterRef,
     Prefetch,
     QuerySet,
@@ -433,9 +434,9 @@ class AgreementMatrixViewSet(ReadOnlyModelViewSet[AgreementMatrix]):
 class StatusView(APIView):
     """
     How fresh the data is: when the last successful sync with the API
-    finished (and when the last one failed, if it did), the newest voting
-    date, the number of motions with votes, and when the newest analysis and
-    agreement matrix were made.
+    finished (and when the last one failed, if it did), the oldest and newest
+    voting date, the number of motions with votes, and when the newest
+    analysis and agreement matrix were made.
     """
 
     def get(self, request: Request) -> Response:
@@ -443,7 +444,11 @@ class StatusView(APIView):
         # every vote.
         voted = ParliamentaryItem.objects.filter(
             Exists(PartyVote.objects.filter(parliamentary_item=OuterRef("pk")))
-        ).aggregate(count=Count("id"), latest=Max("vote_date"))
+        ).aggregate(
+            count=Count("id"),
+            earliest=Min("vote_date"),
+            latest=Max("vote_date"),
+        )
         latest_analysis = PCAAnalysis.objects.order_by("-created_at").first()
         latest_matrix = AgreementMatrix.objects.order_by("-created_at").first()
         last_success = ImportRun.objects.filter(
@@ -462,6 +467,7 @@ class StatusView(APIView):
                     and latest_run.status == ImportRunStatus.FAILED
                     else None
                 ),
+                "earliest_vote_date": voted["earliest"],
                 "latest_vote_date": voted["latest"],
                 "motions_with_votes": voted["count"],
                 "latest_analysis_at": (

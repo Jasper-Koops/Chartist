@@ -7,14 +7,10 @@ from django.views.generic import TemplateView
 from scraper.models import ParliamentaryItem, Party, PartySuccession
 
 
-class TestGraphView(TemplateView):
-    template_name = "test_graph.html"
+class HomeView(TemplateView):
+    """Landing page: the landscape, agreement matrix, parties and axes."""
 
-
-class TestGraph2View(TemplateView):
-    """Copy of the test page, as a sandbox for a UI redesign."""
-
-    template_name = "test_graph2.html"
+    template_name = "home.html"
 
 
 class PartyDetailView(TemplateView):

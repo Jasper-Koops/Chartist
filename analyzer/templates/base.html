@@ -1,0 +1,66 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Chartist{% endblock %} · Chartist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'chartist/app.css' %}">
+</head>
+<body data-nav="{% block nav %}{% endblock %}">
+  <a class="visually-hidden" href="#content">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{% url 'home' %}">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 13V8M8 13V3M13 13V6"/>
+          </svg>
+        </span>
+        <span class="brand-name">Chartist</span>
+      </a>
+      <nav class="nav" aria-label="Main">
+        <a href="{% url 'home' %}" data-nav="overview">Overview</a>
+        <a href="{% url 'home' %}#agreement" data-nav="agreement" data-section="agreement">Agreement</a>
+        <a href="{% url 'home' %}#parties" data-nav="parties" data-section="parties">Parties</a>
+        <a href="{% url 'component-detail' 1 %}" data-nav="axes">Axes</a>
+        <a href="{% url 'motion-list' %}" data-nav="motions">Motions</a>
+      </nav>
+      <div class="topbar-right">
+        <div class="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="search-results">
+          <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5" stroke-linecap="round"/>
+          </svg>
+          <input id="search" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="Search parties and motions" aria-label="Search parties and motions"
+                 aria-autocomplete="list" aria-controls="search-results">
+          <kbd>/</kbd>
+          <div class="results" id="search-results" role="listbox" hidden></div>
+        </div>
+        <span class="status-pill" id="status-pill"><span class="dot"></span><span class="text">Loading...</span></span>
+      </div>
+    </div>
+  </header>
+
+  <section class="band{% block band_class %}{% endblock %}">
+    <div class="band-inner">
+      {% block band %}{% endblock %}
+    </div>
+  </section>
+
+  <main id="content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <span>Data: Tweede Kamer open data. Votes are recorded per party.</span>
+    <span id="footer-status"></span>
+  </footer>
+
+  {% block libraries %}{% endblock %}
+  <script src="{% static 'chartist/app.js' %}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

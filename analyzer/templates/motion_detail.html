@@ -1,141 +1,146 @@
-<!doctype html>
-<html>
-<head>
-  <title>{{ motion.title|truncatechars:80 }} - Chartist</title>
-  <style>
-    body {
-      margin: 20px;
-      font-family: Arial, sans-serif;
-      color: #1f1d1a;
-    }
-    main {
-      max-width: 1000px;
-    }
-    h1 {
-      font-size: 24px;
-      margin: 12px 0 6px 0;
-    }
-    h2 {
-      margin: 28px 0 8px 0;
-    }
-    .chart-meta {
-      color: #666;
-      margin: 0 0 10px 0;
-    }
-    #text p {
-      margin: 0 0 8px 0;
-      line-height: 1.5;
-    }
-    #documents a {
-      margin-right: 14px;
-    }
-    .votes {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-    }
-    .votes h3 {
-      font-size: 15px;
-      margin: 0 0 6px 0;
-      border-bottom: 1px solid #ecebe7;
-      padding-bottom: 4px;
-    }
-    .votes ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      line-height: 1.8;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <a href="/motions/">&larr; All motions</a>
-    <h1>{{ motion.title }}</h1>
-    <p class="chart-meta">
-      Voted {{ motion.vote_date|default:"(date unknown)" }} · {{ motion.status }}
-    </p>
+{% extends "base.html" %}
 
-    <h2>Text</h2>
-    <div id="text"><p class="chart-meta">Loading...</p></div>
+{% block title %}{{ motion.title|truncatechars:70 }}{% endblock %}
+{% block nav %}motions{% endblock %}
+{% block band_class %} compact{% endblock %}
 
-    <h2>Documents</h2>
-    <div id="documents"></div>
+{% block band %}
+  <ol class="breadcrumbs">
+    <li><a href="{% url 'home' %}">Overview</a></li>
+    <li><a href="{% url 'motion-list' %}" id="back-to-list">Motions</a></li>
+    <li aria-current="page">Motion</li>
+  </ol>
+  <p class="eyebrow">Motion</p>
+  <h1 class="long">{{ motion.title }}</h1>
+  <div class="band-meta">
+    <span class="badge {{ motion.status|lower }}">{{ motion.status }}</span>
+    <span>{% if motion.vote_date %}Voted on {{ motion.vote_date|date:"j F Y" }}{% else %}Voting date unknown{% endif %}</span>
+  </div>
+{% endblock %}
 
-    <h2>Votes</h2>
-    <p class="chart-meta" id="votes-meta"></p>
-    <div class="votes">
-      <section><h3 id="for-title">For</h3><ul id="for"></ul></section>
-      <section><h3 id="against-title">Against</h3><ul id="against"></ul></section>
-      <section><h3 id="abstain-title">Did not take part</h3><ul id="abstain"></ul></section>
+{% block content %}
+  <div class="grid-main">
+    <section class="card">
+      <div class="card-head"><div><h2>Text</h2></div></div>
+      <div class="card-body">
+        <div class="prose" id="text"><p class="hint">Loading...</p></div>
+      </div>
+    </section>
+
+    <div>
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>How parties voted</h2>
+            <p id="votes-meta">Votes are recorded per party.</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="split" id="split" hidden></div>
+          <div class="vote-groups" id="vote-groups"></div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-head"><div><h2>Documents</h2></div></div>
+        <div class="card-body">
+          <div class="doc-links" id="documents"><span class="hint">Loading...</span></div>
+        </div>
+      </section>
     </div>
-  </main>
-
+  </div>
   {{ motion.id|json_script:"motion-id" }}
+{% endblock %}
+
+{% block scripts %}
   <script>
     const MOTION_ID = JSON.parse(document.getElementById("motion-id").textContent);
 
-    function partyItem(vote) {
-      const item = document.createElement("li");
-      const link = document.createElement("a");
-      link.href = `/party/${vote.party}/`;
-      link.textContent = vote.name;
-      item.appendChild(link);
-      if (vote.abbreviation && vote.abbreviation !== vote.name) {
-        item.appendChild(document.createTextNode(` (${vote.abbreviation})`));
+    // Back to the motion list with the search still applied.
+    if (document.referrer) {
+      const from = new URL(document.referrer);
+      if (from.origin === location.origin && from.pathname === "/motions/") {
+        document.getElementById("back-to-list").href = from.pathname + from.search;
       }
-      return item;
+    }
+
+    const GROUPS = [
+      { vote: "For", title: "For", color: "--for" },
+      { vote: "Against", title: "Against", color: "--against" },
+      { vote: "Abstain", title: "Did not vote", color: "--border-strong" },
+    ];
+
+    // A sub-point starts with its list marker, e.g. "– " or "1. ".
+    const LIST_ITEM = /^(–|-|•|\d+[.)]|[a-z][.)])\s+/;
+    // The fixed formula around every motion, and the proposal date line:
+    // shown, but quieter than what the motion says.
+    const FORMULA = /^(voorgesteld\b|de kamer,?$|gehoord de beraadslaging|en gaat over tot de orde van de dag|gaat over tot de orde van de dag)/i;
+
+    // The text is shown as stored: the full text as published (texts
+    // fetched before that only hold the motion's core).
+    function renderText(motion) {
+      const text = document.getElementById("text");
+      const lines = motion.text || [];
+      if (!lines.length) {
+        text.replaceChildren(el("p", { className: "hint" }, "No text available for this motion. See the documents for the official version."));
+        return;
+      }
+      text.replaceChildren(...lines.map((line) => {
+        const item = line.match(LIST_ITEM);
+        if (item) {
+          return el("p", { className: "item" },
+            el("span", { className: "marker", ariaHidden: "true" }, item[1]),
+            el("span", {}, line.slice(item[0].length)));
+        }
+        return el("p", { className: FORMULA.test(line.trim()) ? "formula" : "" }, line);
+      }));
+    }
+
+    function renderDocuments(motion) {
+      const box = document.getElementById("documents");
+      box.replaceChildren(...motion.documents.map((doc) =>
+        el("a", { className: "btn block", href: doc.url, target: "_blank", rel: "noopener" }, `${doc.label} ↗`)
+      ));
+      if (!motion.documents.length) box.replaceChildren(el("span", { className: "hint" }, "No documents linked."));
+    }
+
+    function renderVotes(motion) {
+      const meta = document.getElementById("votes-meta");
+      if (!motion.votes.length) {
+        meta.textContent = "No votes recorded yet; they are sometimes published after the result.";
+        return;
+      }
+      meta.textContent =
+        "Votes as recorded per party. The result is decided by seats, not by the number of parties.";
+      const split = document.getElementById("split");
+      const groups = document.getElementById("vote-groups");
+      for (const group of GROUPS) {
+        const votes = motion.votes.filter((v) => v.vote === group.vote);
+        if (!votes.length) continue;
+        const bar = el("span", { title: `${group.title}: ${votes.length} parties` });
+        bar.style.width = pct(votes.length / motion.votes.length, 2);
+        bar.style.background = css(group.color);
+        split.append(bar);
+        groups.append(el("div", { className: "vote-group" },
+          el("h3", {}, el("span", {}, group.vote === "Abstain" ? group.title : voteBadge(group.vote)),
+            el("span", { className: "hint tabular" }, `${votes.length} ${votes.length === 1 ? "party" : "parties"}`)),
+          el("div", { className: "party-tags" }, ...votes.map((v) =>
+            el("a", { className: "party-tag", href: `/party/${v.party}/`, title: v.name }, v.abbreviation)
+          )),
+        ));
+      }
+      split.hidden = false;
     }
 
     (async () => {
-      const response = await fetch(`/api/v1/items/${MOTION_ID}/`, {
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) {
-        document.getElementById("text").textContent =
-          `Could not load the motion: HTTP ${response.status}`;
-        return;
+      try {
+        const motion = await fetchJson(`/api/v1/items/${MOTION_ID}/`);
+        renderText(motion);
+        renderDocuments(motion);
+        renderVotes(motion);
+      } catch (error) {
+        document.getElementById("text").replaceChildren(
+          el("p", { className: "hint" }, `Could not load the motion: ${error.message}`));
       }
-      const motion = await response.json();
-
-      const text = document.getElementById("text");
-      text.replaceChildren();
-      for (const line of motion.text || []) {
-        const paragraph = document.createElement("p");
-        paragraph.textContent = line;
-        text.appendChild(paragraph);
-      }
-      if (!(motion.text || []).length) {
-        text.textContent = "No text available for this motion.";
-      }
-
-      const documents = document.getElementById("documents");
-      for (const doc of motion.documents) {
-        const link = document.createElement("a");
-        link.href = doc.url;
-        link.textContent = doc.label;
-        link.target = "_blank";
-        link.rel = "noopener";
-        documents.appendChild(link);
-      }
-      if (!motion.documents.length) documents.textContent = "No documents linked.";
-
-      const groups = { For: "for", Against: "against", Abstain: "abstain" };
-      const counts = { For: 0, Against: 0, Abstain: 0 };
-      for (const vote of motion.votes) {
-        const list = document.getElementById(groups[vote.vote]);
-        if (!list) continue;
-        list.appendChild(partyItem(vote));
-        counts[vote.vote] += 1;
-      }
-      document.getElementById("for-title").textContent = `For (${counts.For})`;
-      document.getElementById("against-title").textContent = `Against (${counts.Against})`;
-      document.getElementById("abstain-title").textContent =
-        `Did not take part (${counts.Abstain})`;
-      document.getElementById("votes-meta").textContent = motion.votes.length
-        ? "Party votes as recorded. Parties without a recorded vote are not listed."
-        : "No votes recorded yet; they are sometimes published after the result.";
     })();
   </script>
-</body>
-</html>
+{% endblock %}

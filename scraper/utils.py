@@ -29,6 +29,7 @@ from scraper.mapper import (
     party_from_dto,
     parliamentary_item_from_dto,
 )
+from scraper.text import extract_motion_text
 from django.db import transaction
 from django.utils import timezone
 import logging
@@ -58,19 +59,6 @@ MOTION_XML_TIMEOUT: tuple[int, int] = (5, 15)
 # towards officielebekendmakingen.nl.
 MAX_TEXT_WORKERS: int = 4
 
-MOTION_START_MARKER: str = "gehoord de beraadslaging"
-# Used when a motion omits 'gehoord de beraadslaging'. Compared to the whole
-# line, so content lines that merely start with 'De Kamer' do not match.
-MOTION_ALT_START_MARKER: str = "de kamer"
-# Matched anywhere in the line; some motions drop the leading 'en'.
-MOTION_END_MARKER: str = "gaat over tot de orde van de dag"
-MOTION_FALLBACK_PREFIXES: tuple[str, ...] = (
-    "constaterende",
-    "overwegende",
-    "verzoekt",
-    "spreekt uit",
-)
-
 # Called as progress(stage, done, total).
 ProgressCallback = Callable[[str, int, int], None]
 
@@ -98,72 +86,6 @@ def build_session() -> requests.Session:
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
-
-
-def extract_motion_bullet_points(
-    xml_content: bytes, document_id: str | None = None
-) -> list[str]:
-    """Extract the content lines from motion XML.
-
-    Accepts raw bytes so that ElementTree can read the encoding declaration
-    and handle the UTF-8 BOM correctly.
-
-    Motions follow a fixed formula: 'De Kamer, gehoord de beraadslaging,'
-    followed by the considerations and operative part, closed by 'en gaat
-    over tot de orde van de dag.' and the signatories. All lines between
-    those two markers are returned, regardless of their wording. When
-    'gehoord de beraadslaging' is missing, 'De Kamer,' is used as the start.
-
-    If either marker is missing, falls back to keeping only lines starting
-    with constaterende, overwegende, verzoekt or spreekt uit.
-
-    Trailing commas are stripped from each line.
-
-    Args:
-        xml_content (bytes): Raw XML bytes of the motion document.
-        document_id (str | None): Optional identifier, used for logging.
-
-    Returns:
-        list[str]: Extracted lines.
-    """
-    root = ET.fromstring(xml_content)
-    lines = [
-        text
-        for elem in root.iter("al")
-        if (text := "".join(elem.itertext()).strip().rstrip(","))
-    ]
-    lowered = [line.lower() for line in lines]
-
-    start = next(
-        (i for i, s in enumerate(lowered) if s.startswith(MOTION_START_MARKER)),
-        None,
-    )
-    if start is None:
-        start = next(
-            (i for i, s in enumerate(lowered) if s == MOTION_ALT_START_MARKER),
-            None,
-        )
-    end = next(
-        (
-            i
-            for i, s in enumerate(lowered)
-            if MOTION_END_MARKER in s and start is not None and i > start
-        ),
-        None,
-    )
-    if start is not None and end is not None:
-        return lines[start + 1 : end]
-
-    if lines:
-        logger.info(
-            f"Motion markers not found in {document_id}, using prefix fallback",
-            extra={"document_id": document_id},
-        )
-    return [
-        line
-        for line, low in zip(lines, lowered)
-        if low.startswith(MOTION_FALLBACK_PREFIXES)
-    ]
 
 
 def aggregate_party_votes(stemmingen: list[StemmingDTO]) -> dict[str, VoteType]:
@@ -775,9 +697,7 @@ class ParliamentApi:
             MOTION_XML_URL.format(externe_id), timeout=MOTION_XML_TIMEOUT
         )
         response.raise_for_status()
-        return extract_motion_bullet_points(
-            response.content, document_id=externe_id
-        )
+        return extract_motion_text(response.content, document_id=externe_id)
 
     def _import_texts(
         self,

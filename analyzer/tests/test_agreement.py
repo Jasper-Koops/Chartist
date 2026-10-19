@@ -285,6 +285,7 @@ class TestStatusEndpoint(APITestCase):
         matrix = run_agreement_analysis()
 
         data = self.client.get(reverse("status")).data
+        self.assertEqual(date(2026, 1, 5), data["earliest_vote_date"])
         self.assertEqual(date(2026, 3, 9), data["latest_vote_date"])
         self.assertEqual(2, data["motions_with_votes"])
         self.assertIsNone(data["latest_analysis_at"])
@@ -292,17 +293,16 @@ class TestStatusEndpoint(APITestCase):
 
     def test_empty_database(self) -> None:
         data = self.client.get(reverse("status")).data
+        self.assertIsNone(data["earliest_vote_date"])
         self.assertIsNone(data["latest_vote_date"])
         self.assertEqual(0, data["motions_with_votes"])
 
 
-class TestGraphPages(TestCase):
-    def test_both_test_pages_render(self) -> None:
-        for name in ["test-graph", "test-graph-2"]:
-            response = self.client.get(reverse(name))
-            self.assertEqual(200, response.status_code)
-            # Matrix labels link to the party pages.
-            self.assertContains(response, "th.appendChild(partyLink(party))")
+class TestHomePage(TestCase):
+    def test_home_page(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, 'id="matrix"')
 
 
 class TestPartyDetailPage(TestCase):

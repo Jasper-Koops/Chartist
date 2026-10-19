@@ -1,126 +1,100 @@
-<!doctype html>
-<html>
-<head>
-  <title>Motions - Chartist</title>
-  <style>
-    body {
-      margin: 20px;
-      font-family: Arial, sans-serif;
-      color: #1f1d1a;
-    }
-    .chart-meta {
-      color: #666;
-      margin: 0 0 10px 0;
-      max-width: 1000px;
-    }
-    .controls {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin: 0 0 14px 0;
-      max-width: 1000px;
-    }
-    #search {
-      flex: 1;
-      font-size: 15px;
-      padding: 8px 10px;
-      border: 1px solid #c9c8c3;
-      border-radius: 4px;
-    }
-    #status {
-      font-size: 14px;
-      padding: 7px;
-    }
-    #results {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      max-width: 1000px;
-    }
-    #results li {
-      padding: 10px 0;
-      border-bottom: 1px solid #ecebe7;
-    }
-    #results .meta {
-      color: #666;
-      font-size: 13px;
-      margin-top: 3px;
-    }
-    #more {
-      margin-top: 14px;
-      padding: 7px 14px;
-    }
-  </style>
-</head>
-<body>
-  <a href="/test-graph/">&larr; All charts</a>
-  <h1>Motions</h1>
-  <p class="chart-meta">
-    Search the title and text of every motion. Click a motion for its text,
-    documents and how each party voted.
-  </p>
-  <div class="controls">
-    <input id="search" type="search" placeholder="Search motions, e.g. stikstof"
-           autocomplete="off" aria-label="Search motions">
-    <select id="status" aria-label="Result">
-      <option value="">All results</option>
-      <option value="Accepted">Accepted</option>
-      <option value="Rejected">Rejected</option>
-      <option value="Pending">Pending</option>
-    </select>
-  </div>
-  <p class="chart-meta" id="count"></p>
-  <ul id="results"></ul>
-  <button id="more" type="button" hidden>Load more</button>
+{% extends "base.html" %}
 
+{% block title %}Motions{% endblock %}
+{% block nav %}motions{% endblock %}
+{% block band_class %} compact{% endblock %}
+
+{% block band %}
+  <ol class="breadcrumbs">
+    <li><a href="{% url 'home' %}">Overview</a></li>
+    <li aria-current="page">Motions</li>
+  </ol>
+  <p class="eyebrow">Motion explorer</p>
+  <h1>Motions</h1>
+  <p class="lead">Search the title and text of every motion. Open one for its full text, the official documents and how each party voted.</p>
+{% endblock %}
+
+{% block content %}
+  <section class="card">
+    <div class="card-body filters">
+      <div class="filter-bar">
+        <div class="grow">
+          <label class="visually-hidden" for="motion-search">Search motions</label>
+          <input class="field" id="motion-search" type="search" placeholder="Search motions, e.g. stikstof or woningbouw" autocomplete="off" autofocus>
+        </div>
+        <div class="segmented" role="group" aria-label="Result" id="status-filter">
+          <button type="button" data-status="" aria-pressed="true">All</button>
+          <button type="button" data-status="Accepted" aria-pressed="false">Accepted</button>
+          <button type="button" data-status="Rejected" aria-pressed="false">Rejected</button>
+          <button type="button" data-status="Pending" aria-pressed="false">Pending</button>
+        </div>
+      </div>
+      <p class="hint count" id="count" aria-live="polite"></p>
+    </div>
+    <ul class="rows" id="motions"></ul>
+    <div class="list-foot" id="more-box" hidden>
+      <span class="hint" id="shown"></span>
+      <button class="btn" id="more" type="button">Load more</button>
+    </div>
+  </section>
+{% endblock %}
+
+{% block scripts %}
   <script>
     const PAGE_SIZE = 50;
-    const search = document.getElementById("search");
-    const status = document.getElementById("status");
-    const results = document.getElementById("results");
+    const params = new URLSearchParams(location.search);
+    const search = document.getElementById("motion-search");
+    const statusButtons = [...document.querySelectorAll("#status-filter button")];
+    const list = document.getElementById("motions");
     const count = document.getElementById("count");
-    const more = document.getElementById("more");
+    const moreBox = document.getElementById("more-box");
+    let status = params.get("status") || "";
+    search.value = params.get("search") || "";
     let offset = 0;
     let request = 0;  // ignore responses of superseded searches
 
-    const formatDate = (iso) =>
-      iso
-        ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-            day: "numeric", month: "short", year: "numeric",
-          })
-        : "unknown date";
+    function setStatus(value) {
+      status = value;
+      statusButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.status === value)));
+    }
+
+    // Keep the filters in the URL, so a search can be shared and survives
+    // going back from a motion.
+    function syncUrl() {
+      const url = new URL(location.href);
+      for (const [key, value] of [["search", search.value.trim()], ["status", status]]) {
+        if (value) url.searchParams.set(key, value);
+        else url.searchParams.delete(key);
+      }
+      history.replaceState(null, "", url);
+    }
 
     async function load(reset) {
       if (reset) {
         offset = 0;
-        results.replaceChildren();
+        list.replaceChildren();
+        syncUrl();
       }
       const current = ++request;
-      const params = new URLSearchParams({ limit: PAGE_SIZE, offset });
-      if (search.value.trim()) params.set("search", search.value.trim());
-      if (status.value) params.set("status", status.value);
+      const query = new URLSearchParams({ limit: PAGE_SIZE, offset });
+      if (search.value.trim()) query.set("search", search.value.trim());
+      if (status) query.set("status", status);
       try {
-        const response = await fetch(`/api/v1/items/?${params}`, {
-          headers: { Accept: "application/json" },
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
+        const data = await fetchJson(`/api/v1/items/?${query}`);
         if (current !== request) return;
-        count.textContent =
-          `${data.count.toLocaleString()} motion${data.count === 1 ? "" : "s"}`;
+        count.textContent = `${data.count.toLocaleString()} motion${data.count === 1 ? "" : "s"}` +
+          (search.value.trim() ? ` matching “${search.value.trim()}”` : "");
         for (const motion of data.results) {
-          const item = document.createElement("li");
-          const link = document.createElement("a");
-          link.href = `/motion/${motion.id}/`;
-          link.textContent = motion.title;
-          const meta = document.createElement("div");
-          meta.className = "meta";
-          meta.textContent = `${formatDate(motion.vote_date)} · ${motion.status}`;
-          item.append(link, meta);
-          results.appendChild(item);
+          list.append(el("li", {}, el("a", { className: "row-link", href: `/motion/${motion.id}/` },
+            el("div", { className: "title" }, motion.title),
+            el("div", { className: "row-meta" }, el("span", {}, formatDate(motion.vote_date)), statusBadge(motion.status)),
+          )));
         }
+        if (!data.count) list.append(el("li", { className: "empty-state" }, "No motions match. Try fewer or other words."));
         offset += data.results.length;
-        more.hidden = !data.next;
+        moreBox.hidden = !data.next;
+        document.getElementById("shown").textContent =
+          `Showing ${offset.toLocaleString()} of ${data.count.toLocaleString()}`;
       } catch (error) {
         if (current === request) count.textContent = `Could not load motions: ${error.message}`;
       }
@@ -131,9 +105,14 @@
       clearTimeout(debounce);
       debounce = setTimeout(() => load(true), 300);
     });
-    status.addEventListener("change", () => load(true));
-    more.addEventListener("click", () => load(false));
+    statusButtons.forEach((button) =>
+      button.addEventListener("click", () => {
+        setStatus(button.dataset.status);
+        load(true);
+      })
+    );
+    document.getElementById("more").addEventListener("click", () => load(false));
+    setStatus(status);
     load(true);
   </script>
-</body>
-</html>
+{% endblock %}

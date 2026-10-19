@@ -32,8 +32,7 @@ the monthly agreement, grouped by topic instead of month).
 
 - **Optimal Classification.** The method Leiden political scientists use to
   map Tweede Kamer parties; made for votes, handles missing votes natively.
-  Only available as an R package. `scripts/compare_pca.py` compares the
-  current PCA settings.
+  Only available as an R package.
 - **Fit measure.** Show how many votes the map classifies correctly (as
   Optimal Classification and NOMINATE report it), measured out of sample,
   instead of only the explained variance.

@@ -13,6 +13,16 @@ logger = logging.getLogger(__name__)
 # really active, e.g. a group that stopped voting.
 PARTICIPATION_THRESHOLD: float = 90.0
 
+# The PCA axes are fitted on the parties with a vote on at least this share
+# of the motions (in practice: present the whole period). The other parties
+# are projected onto those axes afterwards, using only the motions they
+# voted on; see `analyzer.analysis.prepare_df`.
+PCA_FIT_COVERAGE: float = 0.99
+
+# A projected party needs at least this many votes on the fitted motions;
+# below that its position is too uncertain to show. As W-NOMINATE's default.
+PCA_MIN_PROJECTED_VOTES: int = 20
+
 
 class AnalysisLogger(logging.LoggerAdapter[logging.Logger]):
     def process(

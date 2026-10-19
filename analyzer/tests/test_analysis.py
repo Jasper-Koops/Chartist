@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from analyzer.analysis import (
     generate_pca_object,
+    project_parties,
     run_full_analysis,
     run_pca_analysis,
     prepare_df,
@@ -150,10 +151,11 @@ class TestPrepareDF(TestCase):
             parties=generate_parties(),
             calculate_participation_rate=True,
         )
-        prepared_df, labels = prepare_df(log=self.log)
-        self.assertEqual(prepared_df.shape, (15, 5))
+        prepared = prepare_df(log=self.log)
+        self.assertEqual(prepared.fit.shape, (15, 5))
+        self.assertTrue(prepared.projected.empty)
         items: QuerySet[ParliamentaryItem] = ParliamentaryItem.objects.filter(
-            id__in=prepared_df.columns
+            id__in=prepared.fit.columns
         )
         self.assertEqual(5, items.count())
 
@@ -170,9 +172,98 @@ class TestPrepareDF(TestCase):
             calculate_participation_rate=False,
         )
         calculate_party_participation_rate()
-        prepared_df, labels = prepare_df(log=self.log)
+        prepared = prepare_df(log=self.log)
         # One less party
-        self.assertEqual(prepared_df.shape, (14, 5))
+        self.assertEqual(prepared.fit.shape, (14, 5))
+
+
+class TestLateParty(TestCase):
+    """A party that started later is projected, not used to fit the axes."""
+
+    def setUp(self) -> None:
+        self.parties = generate_parties()
+        self.items = [
+            ParliamentaryItemFactory(
+                vote_date=date(2026, 1, 1) + timedelta(days=i)
+            )
+            for i in range(40)
+        ]
+        generate_party_votes(
+            parliamentary_items=ParliamentaryItem.objects.all(),
+            parties=self.parties,
+            calculate_participation_rate=False,
+        )
+        self.late: Party = PartyFactory()
+
+    def vote_late(self, count: int) -> None:
+        for item in self.items[-count:]:
+            PartyVoteFactory(
+                party=self.late, parliamentary_item=item, vote=VoteType.FOR
+            )
+        calculate_party_participation_rate()
+
+    def test_axes_cover_every_motion(self) -> None:
+        self.vote_late(25)
+        prepared = prepare_df(log=AnalysisLogger(logger, {}))
+        self.assertEqual(40, prepared.fit.shape[1])
+        self.assertNotIn(self.late.abbreviation, prepared.labels)
+        self.assertEqual(
+            [self.late.abbreviation], list(prepared.projected.index)
+        )
+        self.assertEqual(15, int(prepared.projected.isna().sum(axis=1).iloc[0]))
+
+    def test_late_party_gets_scores(self) -> None:
+        self.vote_late(25)
+        run_pca_analysis(n_components=3)
+        self.assertEqual(
+            3, PCAComponentPartyScore.objects.filter(party=self.late).count()
+        )
+        self.assertEqual(40 * 3, PCAItemLoading.objects.count())
+
+    def test_too_few_votes_is_left_out(self) -> None:
+        self.vote_late(10)
+        run_pca_analysis(n_components=3)
+        self.assertFalse(
+            PCAComponentPartyScore.objects.filter(party=self.late).exists()
+        )
+        self.assertEqual(45, PCAComponentPartyScore.objects.count())
+
+
+class TestProjectParties(TestCase):
+    def setUp(self) -> None:
+        # Rows lying exactly in a 2D plane, so 3 components capture them
+        # completely.
+        rng = np.random.default_rng(seed=1)
+        positions = rng.normal(size=(8, 2))
+        directions = rng.normal(size=(2, 30))
+        self.df = pd.DataFrame(
+            positions @ directions + rng.normal(size=30),
+            index=list("ABCDEFGH"),
+            columns=range(30),
+        )
+        self.model = generate_pca_object(
+            self.df, list(self.df.index), n_components=3
+        )
+
+    def test_full_row_equals_its_score(self) -> None:
+        projected = project_parties(self.model, self.df.iloc[[0]])
+        np.testing.assert_allclose(
+            self.model.results["PC"].iloc[0].to_numpy(),
+            projected.iloc[0].to_numpy(),
+            atol=1e-8,
+        )
+
+    def test_missing_votes_do_not_pull_to_the_centre(self) -> None:
+        # Half the votes hidden: the same position, where filling in the
+        # average would shrink it.
+        row = self.df.iloc[[2]].copy()
+        row.iloc[0, :15] = np.nan
+        projected = project_parties(self.model, row)
+        np.testing.assert_allclose(
+            self.model.results["PC"].iloc[2].to_numpy()[:2],
+            projected.iloc[0].to_numpy()[:2],
+            atol=1e-8,
+        )
 
 
 class TestRunPCAAnalysis(TestCase):

@@ -7,11 +7,13 @@ from analyzer.views import (
     MotionListView,
     PairDetailView,
     PartyDetailView,
+    PartyLogoView,
 )
 
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
     path("party/<int:pk>/", PartyDetailView.as_view(), name="party-detail"),
+    path("party/<int:pk>/logo/", PartyLogoView.as_view(), name="party-logo"),
     path(
         "pair/<int:pk>/<int:other_pk>/",
         PairDetailView.as_view(),

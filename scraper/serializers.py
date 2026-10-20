@@ -15,6 +15,7 @@ class PartySerializer(serializers.ModelSerializer[Party]):
             "name",
             "abbreviation",
             "participation_rate",
+            "logo_url",
             "party_scores",
         ]
 
@@ -96,6 +97,7 @@ class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
                 "party": vote.party_id,
                 "abbreviation": vote.party.abbreviation,
                 "name": vote.party.name,
+                "logo_url": vote.party.logo_url,
                 "vote": vote.vote,
             }
             for vote in obj.partyvote_set.select_related("party").order_by(

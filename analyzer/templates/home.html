@@ -751,7 +751,7 @@
         const card = el(
           "a", { className: "party-card", href: `/party/${party.id}/` },
           el("div", { className: "top" },
-            el("span", { className: "abbr" }, party.abbreviation),
+            el("span", { className: "id" }, partyLogo(party, { size: "md" }), el("span", { className: "abbr" }, party.abbreviation)),
             el("span", { className: "arrow", ariaHidden: "true" }, "→")),
           el("div", { className: "name" }, party.name !== party.abbreviation ? party.name : ""),
           line("Most with", closest, "most"),

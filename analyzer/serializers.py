@@ -78,6 +78,7 @@ class PartyAgreementSerializer(serializers.ModelSerializer[PartyAgreement]):
 class AgreementPartySerializer(serializers.Serializer[Any]):
     id = serializers.IntegerField()
     abbreviation = serializers.CharField()
+    logo_url = serializers.CharField(allow_null=True)
 
 
 class AgreementMatrixSerializer(serializers.ModelSerializer[AgreementMatrix]):
@@ -109,14 +110,18 @@ class AgreementMatrixSerializer(serializers.ModelSerializer[AgreementMatrix]):
 
     def get_parties(self, obj: AgreementMatrix) -> Any:
         parties = {
-            agreement.party_id: agreement.party.abbreviation
+            agreement.party_id: agreement.party
             for agreement in self.overall(obj)
         }
         return AgreementPartySerializer(
             [
-                {"id": party_id, "abbreviation": abbreviation}
-                for party_id, abbreviation in sorted(
-                    parties.items(), key=lambda p: p[1]
+                {
+                    "id": party_id,
+                    "abbreviation": party.abbreviation,
+                    "logo_url": party.logo_url,
+                }
+                for party_id, party in sorted(
+                    parties.items(), key=lambda p: p[1].abbreviation
                 )
             ],
             many=True,

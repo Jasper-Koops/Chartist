@@ -24,6 +24,21 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+// A party's logo in a fixed frame. Without a logo, `fallback` shows its
+// initials in the same frame (for lists that should stay aligned) and
+// otherwise nothing. Decorative: the name is always shown next to it.
+function partyLogo(party, { size = "", fallback = true } = {}) {
+  const className = `logo ${size}`.trim();
+  if (party.logo_url) {
+    return el("span", { className, ariaHidden: "true" },
+      el("img", { src: party.logo_url, alt: "", loading: "lazy", decoding: "async" }));
+  }
+  if (!fallback) return null;
+  const words = party.abbreviation.split(/\s+/);
+  const initials = words.length > 1 ? words.map((w) => w[0]).join("") : party.abbreviation.slice(0, 2);
+  return el("span", { className: `${className} initials`, ariaHidden: "true" }, initials.slice(0, 3));
+}
+
 const pct = (value, digits = 0) => `${(value * 100).toFixed(digits)}%`;
 
 // Dates from the API are "YYYY-MM-DD" (local) or ISO timestamps.
@@ -171,9 +186,12 @@ const statusRequest = fetchJson("/api/v1/status/");
     const nodes = [];
     if (matches.length) {
       nodes.push(el("div", { className: "group" }, "Parties"));
-      matches.forEach((p) =>
-        nodes.push(option(`/party/${p.id}/`, p.abbreviation, p.name !== p.abbreviation ? p.name : ""))
-      );
+      matches.forEach((p) => {
+        const link = el("a", { href: `/party/${p.id}/`, className: "party", role: "option" },
+          partyLogo(p, { size: "sm" }),
+          el("span", {}, p.abbreviation, p.name !== p.abbreviation ? el("span", { className: "sub" }, p.name) : null));
+        nodes.push(link);
+      });
     }
     const status = el("div", { className: "empty" }, "Searching...");
     box.replaceChildren(...nodes, el("div", { className: "group" }, "Motions"), status);

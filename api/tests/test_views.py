@@ -778,6 +778,7 @@ class TestMotionExplorerApi(APITestCase):
                     "party": self.party.id,
                     "abbreviation": "P1",
                     "name": "Partij Een",
+                    "logo_url": None,
                     "vote": "For",
                 }
             ],

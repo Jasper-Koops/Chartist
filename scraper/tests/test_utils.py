@@ -13,6 +13,7 @@ from scraper.models import (
     ImportRunStatus,
     Party,
     PartyAlias,
+    PartyLogo,
     PartySuccession,
     PartyVote,
     ParliamentaryItem,
@@ -31,6 +32,8 @@ SIMPLE_XML = (
     b"<al>en gaat over tot de orde van de dag.</al></root>"
 )
 MOTION_XML_HOST = "zoek.officielebekendmakingen.nl"
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
 
 
 class MockedResponse:
@@ -68,6 +71,8 @@ def route_responses(
             if isinstance(response, Exception):
                 raise response
             return response
+        if url.endswith("/resource"):
+            return MockedResponse({}, 200, content=PNG)
         if url.endswith("Fractie"):
             return MockedResponse({"value": PARTY_API_RESPONSE}, 200)
         return MockedResponse({"value": zaak_response}, 200)
@@ -102,10 +107,10 @@ class TestParliamentApi(TestCase):
         self.assertEqual(4, result.created)
         self.assertEqual(4, result.texts_fetched)
         self.assertEqual(0, result.texts_failed)
-        # Party + Zaak request + 12 lookups of party ids the votes reference
-        # but the party fixture lacks (see _resolve_unknown_parties) + 4 XML
-        # downloads.
-        self.assertEqual(18, mocked_get.call_count)
+        # Party request + 3 logos + Zaak request + 12 lookups of party ids
+        # the votes reference but the party fixture lacks (see
+        # _resolve_unknown_parties) + 4 XML downloads.
+        self.assertEqual(21, mocked_get.call_count)
 
     @mock.patch("scraper.utils.requests.Session.get")
     def test_import_votes_skips_bad_item(self, mocked_get: mock.Mock) -> None:
@@ -183,6 +188,91 @@ class TestParliamentApi(TestCase):
         self.assertEqual((4, 4), final["Fetching motions"])
         self.assertEqual((4, 4), final["Syncing votes"])
         self.assertEqual((4, 4), final["Fetching motion texts"])
+
+
+class TestPartyLogos(TestCase):
+    """Logos are downloaded with the parties, only when new or changed."""
+
+    def setUp(self) -> None:
+        self.api = ParliamentApi()
+        self.parties = copy.deepcopy(PARTY_API_RESPONSE)
+        self.ids = [str(party["Id"]) for party in self.parties]
+        # ChristenUnie a PNG, SP a JPEG, PvdD fails.
+        self.logos: dict[str, MockedResponse] = {
+            self.ids[0]: MockedResponse({}, 200, content=PNG),
+            self.ids[1]: MockedResponse({}, 200, content=JPEG),
+            self.ids[2]: MockedResponse({}, 404),
+        }
+        self.logo_requests: list[str] = []
+
+    def side_effect(
+        self, url: str, *args: Any, **kwargs: Any
+    ) -> MockedResponse:
+        if url.endswith("/resource"):
+            self.logo_requests.append(url)
+            party_id = url.split("(")[1].split(")")[0]
+            return self.logos[party_id]
+        return MockedResponse({"value": self.parties}, 200)
+
+    def import_parties(self) -> None:
+        with mock.patch(
+            "scraper.utils.requests.Session.get", side_effect=self.side_effect
+        ):
+            self.api.import_parties()
+
+    def test_logos_are_stored_with_their_real_type(self) -> None:
+        self.import_parties()
+        christenunie = Party.objects.get(abbreviation="ChristenUnie")
+        sp = Party.objects.get(abbreviation="SP")
+        # The API says image/gif and image/png; the bytes decide.
+        self.assertEqual("image/png", christenunie.logo.content_type)
+        self.assertEqual(PNG, bytes(christenunie.logo.image))
+        self.assertEqual("image/jpeg", sp.logo.content_type)
+        self.assertEqual(2930, christenunie.logo_length)
+        self.assertEqual(
+            f"/party/{christenunie.pk}/logo/?v=2930", christenunie.logo_url
+        )
+
+    def test_failed_logo_is_skipped(self) -> None:
+        self.import_parties()
+        pvdd = Party.objects.get(abbreviation="PvdD")
+        self.assertIsNone(pvdd.logo_length)
+        self.assertIsNone(pvdd.logo_url)
+        self.assertFalse(PartyLogo.objects.filter(party=pvdd).exists())
+
+    def test_unrecognised_image_is_skipped(self) -> None:
+        self.logos[self.ids[0]] = MockedResponse(
+            {}, 200, content=b"<html>Not found</html>"
+        )
+        self.import_parties()
+        self.assertIsNone(
+            Party.objects.get(abbreviation="ChristenUnie").logo_length
+        )
+
+    def test_unchanged_logo_is_not_downloaded_again(self) -> None:
+        self.import_parties()
+        self.logo_requests.clear()
+        self.import_parties()
+        # Only the logo that failed is tried again.
+        self.assertEqual(1, len(self.logo_requests))
+        self.assertIn(self.ids[2], self.logo_requests[0])
+
+    def test_changed_logo_is_downloaded_again(self) -> None:
+        self.import_parties()
+        self.parties[1]["ContentLength"] = 4000
+        self.logos[self.ids[1]] = MockedResponse({}, 200, content=PNG)
+        self.import_parties()
+        sp = Party.objects.get(abbreviation="SP")
+        self.assertEqual(4000, sp.logo_length)
+        self.assertEqual("image/png", sp.logo.content_type)
+
+    def test_removed_logo_is_deleted(self) -> None:
+        self.import_parties()
+        self.parties[0]["ContentLength"] = None
+        self.import_parties()
+        christenunie = Party.objects.get(abbreviation="ChristenUnie")
+        self.assertIsNone(christenunie.logo_length)
+        self.assertFalse(PartyLogo.objects.filter(party=christenunie).exists())
 
 
 def mocked_xml_url(zaak: dict[str, Any]) -> str:

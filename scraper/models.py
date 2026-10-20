@@ -21,6 +21,15 @@ class Party(models.Model):
         blank=True,
         null=True,
     )
+    logo_length = models.PositiveIntegerField(
+        help_text=_(
+            "The logo's ContentLength as the API reports it (not the file "
+            "size); empty when the party has no logo. Used to notice a new logo."
+        ),
+        blank=True,
+        null=True,
+        editable=False,
+    )
 
     class Meta:
         verbose_name = "Party"
@@ -28,6 +37,29 @@ class Party(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def logo_url(self) -> str | None:
+        # Versioned by size, so browsers can cache it and still see a new one.
+        if not self.logo_length:
+            return None
+        return f"/party/{self.pk}/logo/?v={self.logo_length}"
+
+
+class PartyLogo(models.Model):
+    """
+    The logo of a party, as published by the API (`Fractie/{id}/resource`).
+    Kept apart from `Party` so loading parties does not load the images.
+    """
+
+    party = models.OneToOneField(
+        Party, on_delete=models.CASCADE, primary_key=True, related_name="logo"
+    )
+    image = models.BinaryField()
+    content_type = models.CharField(max_length=20)
+
+    def __str__(self) -> str:
+        return f"Logo of {self.party}"
 
 
 class ParliamentaryItemTypes(models.TextChoices):

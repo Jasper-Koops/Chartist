@@ -15,6 +15,7 @@ class FractieInput(BaseModel):
     AantalStemmen: int
     DatumActief: datetime
     DatumInactief: datetime | None
+    ContentLength: int | None = None
 
 
 @dataclass
@@ -31,6 +32,8 @@ class FractieDTO:
         AantalStemmen (int): Number of votes received by the party.
         DatumActief (datetime | None): Date when the party became active.
         DatumInactief (datetime | None): Date when the party became inactive.
+        ContentLength (int | None): Size in bytes of the party's logo; None
+            when it has none.
     """
 
     Id: str
@@ -40,6 +43,7 @@ class FractieDTO:
     AantalStemmen: int
     DatumActief: datetime | None
     DatumInactief: datetime | None
+    ContentLength: int | None = None
 
     @classmethod
     def from_api(cls, data: Mapping[str, Any]) -> "FractieDTO":
@@ -68,6 +72,7 @@ class FractieDTO:
             AantalStemmen=validated.AantalStemmen,
             DatumActief=validated.DatumActief,
             DatumInactief=validated.DatumInactief,
+            ContentLength=validated.ContentLength,
         )
 
 

@@ -7,7 +7,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from analyzer.agreement import run_agreement_analysis
 from analyzer.models import AgreementMatrix, PartyAgreement
-from scraper.models import ParliamentaryItem, Party, VoteType
+from scraper.models import ParliamentaryItem, Party, PartyLogo, VoteType
 from scraper.tests.factories import (
     ParliamentaryItemFactory,
     PartyFactory,
@@ -315,6 +315,45 @@ class TestPartyDetailPage(TestCase):
     def test_unknown_party_is_404(self) -> None:
         response = self.client.get(reverse("party-detail", args=[999999]))
         self.assertEqual(404, response.status_code)
+
+    def test_shows_logo(self) -> None:
+        party = make_party()
+        self.assertNotContains(
+            self.client.get(reverse("party-detail", args=[party.id])),
+            'class="logo lg"',
+        )
+        PartyLogo.objects.create(
+            party=party, image=b"img", content_type="image/png"
+        )
+        party.logo_length = 3
+        party.save()
+        response = self.client.get(reverse("party-detail", args=[party.id]))
+        self.assertContains(response, f'src="/party/{party.id}/logo/?v=3"')
+
+
+class TestPartyLogo(TestCase):
+    def test_serves_logo(self) -> None:
+        party = make_party()
+        PartyLogo.objects.create(
+            party=party, image=b"img", content_type="image/png"
+        )
+        response = self.client.get(reverse("party-logo", args=[party.id]))
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(b"img", response.content)
+        self.assertEqual("image/png", response["Content-Type"])
+        self.assertIn("immutable", response["Cache-Control"])
+
+    def test_party_without_logo_is_404(self) -> None:
+        party = make_party()
+        response = self.client.get(reverse("party-logo", args=[party.id]))
+        self.assertEqual(404, response.status_code)
+
+    def test_logo_url_in_api(self) -> None:
+        party = make_party()
+        party.logo_length = 3
+        party.save()
+        data = self.client.get(f"/api/v1/parties/{party.id}/").json()
+        self.assertEqual(f"/party/{party.id}/logo/?v=3", data["logo_url"])
 
 
 class TestMotionPages(TestCase):

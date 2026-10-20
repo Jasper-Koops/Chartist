@@ -13,6 +13,7 @@ from scraper.models import (
     ImportRunStatus,
     Party,
     PartyAlias,
+    PartyLogo,
     PartySuccession,
     PartyVote,
     ParliamentaryItem,
@@ -54,6 +55,15 @@ SUCCESSION_MIN_MEMBER_OVERLAP: float = 0.9
 # server-side; a short read timeout plus a retry recovers faster than waiting.
 API_TIMEOUT: tuple[int, int] = (10, 60)
 MOTION_XML_TIMEOUT: tuple[int, int] = (5, 15)
+
+# Image types recognised in a party logo, by their first bytes. The API's
+# ContentType is not reliable (it says image/jpeg for PNG files).
+LOGO_SIGNATURES: dict[bytes, str] = {
+    b"\x89PNG\r\n\x1a\n": "image/png",
+    b"\xff\xd8\xff": "image/jpeg",
+    b"GIF87a": "image/gif",
+    b"GIF89a": "image/gif",
+}
 
 # Number of motion texts downloaded in parallel. Kept low to stay polite
 # towards officielebekendmakingen.nl.
@@ -268,6 +278,8 @@ class ParliamentApi:
 
         A record that fails is logged and skipped; the others are still
         saved (`update_or_create` uses its own savepoint).
+
+        Afterwards the party logos are downloaded (see `import_logos`).
         """
         filters: list[str] = [
             "Verwijderd eq false",
@@ -277,6 +289,7 @@ class ParliamentApi:
             object_name="Fractie", filters=filters, order_by=None
         )
         active_ids = {str(data.get("Id")) for data in party_data}
+        imported: list[FractieDTO] = []
         with transaction.atomic():
             for data in party_data:
                 try:
@@ -286,6 +299,7 @@ class ParliamentApi:
                         api_id=fractie_dto.Id,
                         defaults=party_from_dto(fractie_dto),
                     )
+                    imported.append(fractie_dto)
                 except Exception as e:
                     logger.warning(
                         f"Failed to import party data for {data.get('NaamNL')} with id {data.get('Id')}: {e}",
@@ -296,6 +310,62 @@ class ParliamentApi:
                         },
                     )
                     continue
+        self.import_logos(imported)
+
+    def import_logos(self, fracties: list[FractieDTO]) -> None:
+        """
+        Download the logo of each party, when it is new or changed.
+
+        The API reports a logo's size (`ContentLength`); a logo is only
+        downloaded when that differs from the stored one, so a regular import
+        costs no extra requests. A party whose logo was removed from the API
+        loses it here too. A logo that fails to download, or is not a
+        recognised image, is logged and skipped; the party keeps its old one.
+
+        Args:
+            fracties (list[FractieDTO]): The parties as returned by the API.
+        """
+        parties = Party.objects.in_bulk(
+            [f.Id for f in fracties], field_name="api_id"
+        )
+        for fractie in fracties:
+            party = parties.get(fractie.Id)
+            if party is None or party.logo_length == fractie.ContentLength:
+                continue
+            if not fractie.ContentLength:
+                PartyLogo.objects.filter(party=party).delete()
+                party.logo_length = None
+                party.save(update_fields=["logo_length"])
+                continue
+            try:
+                r = self.session.get(
+                    f"{self.api_url}Fractie({fractie.Id})/resource",
+                    timeout=API_TIMEOUT,
+                )
+                r.raise_for_status()
+                content_type = next(
+                    (
+                        kind
+                        for signature, kind in LOGO_SIGNATURES.items()
+                        if r.content.startswith(signature)
+                    ),
+                    None,
+                )
+                if content_type is None:
+                    raise ValueError("not a PNG, JPEG or GIF image")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to import the logo of {party.abbreviation}: {e}",
+                    extra={"party_id": fractie.Id, "error": str(e)},
+                )
+                continue
+            with transaction.atomic():
+                PartyLogo.objects.update_or_create(
+                    party=party,
+                    defaults={"image": r.content, "content_type": content_type},
+                )
+                party.logo_length = fractie.ContentLength
+                party.save(update_fields=["logo_length"])
 
     def _adopt_reregistration(
         self, fractie_dto: FractieDTO, active_ids: set[str]

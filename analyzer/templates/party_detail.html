@@ -10,7 +10,10 @@
     <li aria-current="page">{{ party.abbreviation }}</li>
   </ol>
   <p class="eyebrow">Party</p>
-  <h1>{{ party.name }}{% if party.abbreviation != party.name %} <span class="abbr">{{ party.abbreviation }}</span>{% endif %}</h1>
+  <div class="party-head">
+    {% if party.logo_url %}<span class="logo lg"><img src="{{ party.logo_url }}" alt="Logo of {{ party.name }}"></span>{% endif %}
+    <h1>{{ party.name }}{% if party.abbreviation != party.name %} <span class="abbr">{{ party.abbreviation }}</span>{% endif %}</h1>
+  </div>
   {% if continues %}
   <p class="notice" id="continues">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v4M8 5h.01" stroke-linecap="round"/></svg>
@@ -100,6 +103,7 @@
     // highlighted, so toggling another party never repaints it.
     const highlights = new Map();
     const names = new Map();
+    const logos = new Map();
     let ranked = [];  // other party ids, closest first
     let hovered = null;  // party under the mouse, in the chart or the list
     let timelineChart = null;
@@ -231,7 +235,9 @@
           toggle.setAttribute("aria-label", `Show ${names.get(row.other_party)} in the timeline`);
           toggle.addEventListener("click", () => toggleHighlight(row.other_party));
           const item = el("li", {},
-            el("span", { className: "name" }, el("a", { href: `/party/${row.other_party}/` }, names.get(row.other_party))),
+            el("span", { className: "name" },
+              partyLogo(logos.get(row.other_party), { size: "sm" }),
+              el("a", { href: `/party/${row.other_party}/` }, names.get(row.other_party))),
             el("span", { className: "track", title: `${pct(row.agreement, 1)} of ${row.shared_motions.toLocaleString()} shared motions` }, bar),
             el("span", { className: "value" }, pct(row.agreement)),
             el("span", { className: "actions" },
@@ -252,7 +258,10 @@
         list.replaceChildren(el("li", { className: "placeholder" }, "No agreement data yet. Run the analysis first."));
         return [];
       }
-      matrix.parties.forEach((p) => names.set(p.id, p.abbreviation));
+      matrix.parties.forEach((p) => {
+        names.set(p.id, p.abbreviation);
+        logos.set(p.id, p);
+      });
       const rows = matrix.agreements
         .filter((a) => a.party === PARTY_ID && a.agreement !== null)
         .sort((a, b) => b.agreement - a.agreement);

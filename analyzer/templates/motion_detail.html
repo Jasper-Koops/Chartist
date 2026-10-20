@@ -124,7 +124,8 @@
           el("h3", {}, el("span", {}, group.vote === "Abstain" ? group.title : voteBadge(group.vote)),
             el("span", { className: "hint tabular" }, `${votes.length} ${votes.length === 1 ? "party" : "parties"}`)),
           el("div", { className: "party-tags" }, ...votes.map((v) =>
-            el("a", { className: "party-tag", href: `/party/${v.party}/`, title: v.name }, v.abbreviation)
+            el("a", { className: "party-tag", href: `/party/${v.party}/`, title: v.name },
+              partyLogo(v, { size: "sm", fallback: false }), v.abbreviation)
           )),
         ));
       }

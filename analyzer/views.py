@@ -1,10 +1,10 @@
 from typing import Any
 
-from django.http import Http404
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, View
 
-from scraper.models import ParliamentaryItem, Party, PartySuccession
+from scraper.models import ParliamentaryItem, Party, PartyLogo, PartySuccession
 
 
 class HomeView(TemplateView):
@@ -34,6 +34,21 @@ class PartyDetailView(TemplateView):
             .first()
         )
         return context
+
+
+class PartyLogoView(View):
+    """
+    A party's logo, as stored by the import. Its URL carries a version
+    (`Party.logo_url`), so the browser may keep it for a year.
+    """
+
+    def get(self, request: HttpRequest, pk: int) -> HttpResponse:
+        logo = get_object_or_404(PartyLogo, party_id=pk)
+        response = HttpResponse(
+            bytes(logo.image), content_type=logo.content_type
+        )
+        response["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
 
 
 class MotionListView(TemplateView):

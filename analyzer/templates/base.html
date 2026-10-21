@@ -40,8 +40,8 @@
           <kbd>/</kbd>
           <div class="results" id="search-results" role="listbox" hidden></div>
         </div>
-        {% comment %}The language: Dutch by default, kept in a cookie once
-        picked (Django's set_language), back on the same page.{% endcomment %}
+        {% comment %}The language: the browser's by default, kept in a cookie
+        once picked (Django's set_language), back on the same page.{% endcomment %}
         <form class="lang-switch" action="{% url 'set_language' %}" method="post" aria-label="{% translate 'Language' %}">
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">

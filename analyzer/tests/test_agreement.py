@@ -388,13 +388,28 @@ class TestAssetVersions(TestCase):
 
 
 class TestLanguage(TestCase):
-    """Dutch by default for everyone; English once picked in the header."""
+    """The browser's language, Dutch otherwise; the one picked in the header
+    wins."""
 
     def test_dutch_by_default(self) -> None:
-        # Also when the browser prefers English.
-        response = self.client.get("/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9")
+        response = self.client.get("/")
         self.assertContains(response, '<html lang="nl">')
         self.assertContains(response, "Wie stemt met wie in de Tweede Kamer")
+
+    def test_follows_the_browser(self) -> None:
+        response = self.client.get("/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9")
+        self.assertContains(response, '<html lang="en">')
+        dutch = self.client.get("/", HTTP_ACCEPT_LANGUAGE="nl-NL,nl;q=0.9")
+        self.assertContains(dutch, '<html lang="nl">')
+
+    def test_other_browser_languages_fall_back_to_dutch(self) -> None:
+        response = self.client.get("/", HTTP_ACCEPT_LANGUAGE="de-DE,de;q=0.9")
+        self.assertContains(response, '<html lang="nl">')
+
+    def test_picked_language_beats_the_browser(self) -> None:
+        self.client.cookies[settings.LANGUAGE_COOKIE_NAME] = "nl"
+        response = self.client.get("/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9")
+        self.assertContains(response, '<html lang="nl">')
 
     def test_english_when_picked(self) -> None:
         self.client.cookies[settings.LANGUAGE_COOKIE_NAME] = "en"

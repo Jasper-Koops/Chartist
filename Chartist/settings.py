@@ -52,7 +52,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "analyzer.middleware.LanguageMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -126,9 +126,8 @@ LOGGING = {
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-# Dutch by default, for everyone: the browser's language is not followed
-# (see analyzer.middleware.LanguageMiddleware). The language picked in the
-# header is kept in a cookie.
+# The language picked in the header (kept in a cookie), else the browser's
+# language, else Dutch (Django's LocaleMiddleware).
 LANGUAGE_CODE = "nl"
 LANGUAGES = [
     ("nl", "Nederlands"),

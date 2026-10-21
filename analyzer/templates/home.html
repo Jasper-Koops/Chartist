@@ -1,144 +1,875 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}How the Tweede Kamer votes{% endblock %}
+{% block title %}{% translate "How the Tweede Kamer votes" %}{% endblock %}
 {% block nav %}overview{% endblock %}
+{% block body_class %}immersive{% endblock %}
+
+{% block styles %}
+  <style>
+    /* One piece on paper: the map opens it, and the chapters below sit on
+       the same paper, divided by rules and type rather than boxes. Controls
+       are words, not buttons. The palette is the site's (app.css). */
+    :root { --hero-bg: var(--bg); }
+
+    /* Immersive opening: the menu is hidden until the visitor scrolls (or
+       tabs into it), then slides in and stays. */
+    .immersive .topbar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      transform: translateY(-100%);
+      transition: transform 0.35s ease;
+    }
+    .immersive.scrolled .topbar, .immersive .topbar:focus-within { transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .immersive .topbar { transition: none; }
+    }
+
+    /* ---------- Controls as words ---------- */
+    .text-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--ink-3);
+      background: none;
+      border: 0;
+      padding: 4px 0;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .text-btn:hover { color: var(--ink); text-decoration: none; }
+    .text-btn svg { width: 14px; height: 14px; flex: none; }
+    .text-btn[aria-pressed="true"] {
+      color: var(--ink);
+      text-decoration: underline;
+      text-decoration-color: var(--accent);
+      text-decoration-thickness: 2px;
+      text-underline-offset: 7px;
+    }
+    .switch { display: inline-flex; align-items: center; gap: 18px; }
+    .switch-label { font-size: 14px; color: var(--ink-3); margin-right: -4px; }
+    /* The map's own controls: clear buttons on darker paper, the chosen
+       view in ink. */
+    .map-seg { background: var(--surface-2); border-color: var(--border-strong); }
+    .map-seg button { font-size: 14px; padding: 6px 14px; color: var(--ink-2); }
+    .map-seg [aria-pressed="true"] { background: var(--ink); color: var(--bg); box-shadow: none; }
+    .pill, .pill-select select {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink);
+      background: var(--surface-2);
+      border: 1px solid var(--border-strong);
+      border-radius: 9px;
+      padding: 6px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .pill:hover, .pill-select select:hover { border-color: var(--ink-3); }
+    .pill svg { width: 14px; height: 14px; flex: none; }
+    .pill-select { position: relative; display: inline-flex; }
+    .pill-select select { appearance: none; padding-right: 30px; }
+    .pill-select::after {
+      content: "";
+      position: absolute;
+      right: 13px;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      border-right: 1.5px solid var(--ink-2);
+      border-bottom: 1.5px solid var(--ink-2);
+      transform: translateY(-75%) rotate(45deg);
+      pointer-events: none;
+    }
+
+    /* ---------- The map ----------
+       The opening map stays pinned for one more screen of scrolling. That
+       scroll flattens it (--p goes from 0 to 1): the title gives way to the
+       map's caption, and the map becomes the flat, readable one. Once flat
+       it stays flat for the visit. */
+    .hero {
+      --morph: 90svh;  /* the scroll that flattens the map */
+      --p: 0;
+      position: relative;
+      height: calc(100svh + var(--morph));
+      min-height: calc(480px + var(--morph));
+      color: var(--ink);
+      background: var(--hero-bg);
+      overflow: clip;  /* clip, not hidden: hidden would stop the pinning */
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hero { --morph: 0px; }
+    }
+    .stage { position: sticky; top: 0; height: 100vh; height: 100svh; min-height: 480px; overflow: hidden; }
+    .hero .plot-frame { position: absolute; inset: 0; }
+    .hero .plot-frame.is-fullscreen { background: var(--hero-bg); padding: 0; }
+    .hero .plot, .hero .plot-frame.is-fullscreen .plot { height: 100%; }
+    .hero .fs-tools, .hero .plot-frame.is-fullscreen .fs-tools { display: none; }
+    /* The column beside the map: its text (the title, which gives way to
+       the map's caption as the map flattens; both share one place), then the
+       map's controls, then the axes. The text lets drags through to the map;
+       the controls and links take clicks. */
+    .map-info {
+      position: absolute;
+      z-index: 2;
+      left: clamp(24px, 4vw, 64px);
+      top: 28px;
+      width: min(540px, calc(100% - 48px));
+      pointer-events: none;
+      transition: top 0.35s ease;
+    }
+    /* Once the menu is in (it stays), the column sits below it. */
+    .immersive.scrolled .map-info { top: calc(var(--header-h) + 24px); }
+    .map-text { display: grid; }
+    .map-text > * { grid-area: 1 / 1; }
+    .hero-copy {
+      opacity: calc(1 - var(--p) * 1.8);
+      transform: translateY(calc(var(--p) * -48px));
+    }
+    .map-caption {
+      width: min(340px, 100%);
+      opacity: calc((var(--p) - 0.55) * 2.2);
+      transform: translateY(calc((1 - var(--p)) * 24px));
+    }
+    .hero.morphed .map-caption { transition: opacity 0.6s ease, transform 0.6s ease; }
+    .hero.morphed .hero-copy { display: none; }  /* the caption alone; the controls move up */
+    .map-caption h2 { font-size: clamp(28px, 3.2vw, 42px); line-height: 1.08; margin: 0 0 14px; }
+    /* How much the axes capture together, so no one has to add them up. */
+    .map-caption .map-total { margin: 10px 0 0; font-size: 15px; color: var(--ink-2); }
+    .map-caption .map-total:empty { display: none; }
+    .map-caption .hint { margin: 14px 0 0; font-size: 14px; color: var(--ink-3); }
+    .hero-copy h1 { font-size: clamp(34px, 5.2vw, 72px); line-height: 1.02; margin: 0 0 14px; }
+    .hero-copy .lead { color: var(--ink-2); font-size: clamp(17px, 1.4vw, 20px); }
+    .hero-legend {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--ink-3);
+    }
+    .hero-legend .bar {
+      width: 140px;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(to right, var(--data-lo), var(--data-mid), var(--data-hi));
+    }
+
+    /* The map's controls, in the column: a labelled row per setting. They
+       come in with the caption, once the map is the readable one (the
+       opening shows only the title, the turning map and its button). */
+    .map-controls, .map-dock { opacity: calc((var(--p) - 0.55) * 2.2); }
+    .hero.morphed :is(.map-controls, .map-dock) { transition: opacity 0.6s ease; }
+    .hero:not(.morphed) .map-controls { pointer-events: none; }
+    .map-controls {
+      width: 340px;
+      margin-top: 26px;
+      padding: 14px 0 16px;
+      border-top: 1px solid var(--border-strong);
+      border-bottom: 1px solid var(--border-strong);
+      pointer-events: auto;
+    }
+    .map-controls .row { display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: center; gap: 10px; }
+    .map-controls .row + .row { margin-top: 10px; }
+    .map-controls .label { font-size: 13px; font-weight: 600; color: var(--ink-3); }
+    .map-controls .map-seg { justify-self: start; }
+    /* As wide as a party name needs, not the whole row. */
+    .map-controls .pick { display: flex; gap: 6px; min-width: 0; }
+    .map-controls .pill-select { flex: none; }
+    .map-controls .pill-select select { width: 170px; max-width: 100%; }
+    .map-controls .actions { grid-template-columns: auto auto; justify-content: start; margin-top: 14px; }
+    .pill.clear { padding: 6px 9px; }
+    .pill.clear[hidden] { display: none; }
+    /* Fullscreen shows that it is on: dark like a chosen view, its other
+       icon, "Exit fullscreen". */
+    .pill .when-on { display: none; }
+    .pill[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+    .pill[aria-pressed="true"] .when-on { display: block; }
+    .pill[aria-pressed="true"] .when-off { display: none; }
+
+    /* Shortcuts to each axis's page, under the controls once the map is
+       flat: tiles to press, like the parties below, each with a round arrow
+       that fills on hover. */
+    .map-axes {
+      width: 340px;
+      margin-top: 18px;
+      display: grid;
+      gap: 8px;
+      opacity: calc((var(--p) - 0.55) * 2.2);
+    }
+    .hero.morphed .map-axes { pointer-events: auto; transition: opacity 0.6s ease; }
+    .map-axes a {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 6px 12px;
+      padding: 9px 10px 10px 14px;
+      color: var(--ink-2);
+      font-size: 14px;
+      background: color-mix(in srgb, var(--surface-2) 60%, var(--bg));
+      border: 1px solid transparent;
+      border-radius: 10px;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+    .map-axes a:hover { text-decoration: none; }
+    .map-axes a:is(:hover, :focus-visible) { background: var(--surface-2); border-color: var(--accent); transform: translateY(-1px); }
+    .map-axes strong { color: var(--ink); font-weight: 700; margin-right: 6px; }
+    .map-axes .share { font-family: var(--font-digits); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+    .map-axes .meter { grid-column: 1 / -1; height: 3px; background: var(--border-strong); border-radius: 2px; }
+    .map-axes .meter span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+    .round-arrow {
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      color: var(--ink-2);
+      font-size: 14px;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    a:is(:hover, :focus-visible) .round-arrow { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+    /* Narrow screens: the controls are docked under the map, in one row of
+       buttons (the labels say it to screen readers only). */
+    .map-dock { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 2; }
+    .map-dock:empty { display: none; }
+    .map-dock .map-controls {
+      width: auto;
+      margin: 0;
+      padding: 5px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      background: color-mix(in srgb, var(--surface-2) 55%, var(--bg));
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      box-shadow: var(--shadow-lg);
+    }
+    .map-dock .map-controls .row { display: flex; gap: 4px; margin: 0; }
+    .map-dock .map-controls .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .map-dock .map-controls .pick { flex: none; }
+    .map-dock .map-controls .actions { margin: 0; }
+    .map-dock .pill span { display: none; }  /* icons, named by their title */
+    .map-dock .pill.labelled span { display: inline; }  /* "Explore" on touch screens */
+    .map-dock .pill[aria-pressed="true"] span { display: inline; }  /* "Exit fullscreen", always said */
+    /* Fullscreen on a wide screen: the docked bar is one row, centred. */
+    @media (min-width: 1000px) {
+      .is-fullscreen .map-dock { left: 50%; right: auto; bottom: 18px; transform: translateX(-50%); }
+      .is-fullscreen .map-dock .map-controls { width: max-content; flex-wrap: nowrap; }
+      .is-fullscreen .map-dock .map-controls .pick { flex: none; }
+    }
+    /* Short windows: tighter, without the hint and the small bars. */
+    @media (min-width: 1000px) and (max-height: 740px) {
+      .map-caption .hint, .map-axes .meter, .map-caption .hero-legend { display: none; }
+      .map-controls { margin-top: 14px; padding: 10px 0 12px; }
+      .map-controls .row + .row { margin-top: 6px; }
+      .map-axes { margin-top: 10px; gap: 5px; }
+      .map-axes a { padding: 5px 8px 5px 12px; }
+    }
+    @media (min-width: 1000px) and (max-height: 560px) {
+      .map-caption .chapter-num { display: none; }
+      .map-caption h2 { font-size: 24px; margin-bottom: 6px; }
+    }
+    @media (max-width: 999px) {
+      .map-axes { display: none; }  /* no room beside the map; chapter 02 has the axes */
+    }
+    /* The opening's button, centred on the page under the map. */
+    .map-start {
+      position: absolute;
+      left: 50%;
+      bottom: 28px;
+      z-index: 2;
+      transform: translateX(-50%);
+    }
+    .map-start {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 22px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--bg);
+      background: var(--ink);
+      border: 0;
+      border-radius: 999px;
+      box-shadow: var(--shadow-lg);
+      cursor: pointer;
+      opacity: calc(1 - var(--p) * 3);
+      transition: background 0.2s ease;
+    }
+    .map-start:hover { background: var(--accent); }
+    .map-start svg { width: 16px; height: 16px; }
+    .hero.morphed .map-start { display: none; }
+
+    /* Fullscreen fills the window with the map (not the whole screen). */
+    .hero.fullscreen .stage { z-index: 101; }  /* above the menu */
+    .is-fullscreen .map-text, .is-fullscreen .map-axes { display: none; }
+    .is-fullscreen .map-info { top: 24px; }
+    .is-fullscreen .map-controls { margin-top: 0; }
+
+    /* Logos and axis labels over the map. */
+    .map-overlay { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+    .map-logos[hidden], .map-axis[hidden], .map-tip[hidden] { display: none; }
+    .map-logo { position: absolute; left: 0; top: 0; line-height: 0; border-radius: 6px; pointer-events: auto; transition: opacity 0.2s ease; }
+    .map-logo .logo { box-shadow: 0 0 0 2px var(--hero-bg), 0 1px 3px rgba(60, 45, 20, 0.18); }
+    .map-logo:is(:hover, :focus-visible) { z-index: 2000 !important; }
+    .map-logos.focusing .map-logo:not(.is-focus) { opacity: 0.25; }
+    .map-axis {
+      position: absolute;
+      left: 0;
+      top: 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-2);
+      white-space: nowrap;
+    }
+    .map-axis span { font-weight: 400; color: var(--ink-3); }
+    a.map-axis { pointer-events: auto; color: var(--ink-2); }
+    a.map-axis:hover { text-decoration: none; color: var(--accent-ink); }
+    a.map-axis:hover span { color: var(--accent-ink); }
+    .map-tip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 2001;
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: var(--tooltip-bg);
+      color: var(--tooltip-ink);
+      font-size: 13px;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
+    .map-tip span { display: block; color: var(--tooltip-ink-2); font-family: var(--font-digits); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+    /* Calm opening: the parties, the title and the map's controls; the
+       hint shows once the visitor grabs the map. */
+    .hero-copy .more { transition: opacity 0.4s ease; }
+    .hero.is-calm .hero-copy .more { opacity: 0; }
+    @media (pointer: coarse) {
+      /* The map fills the first screen: a swipe over it scrolls the page.
+         It turns in fullscreen. */
+      .hero .plot-frame:not(.is-fullscreen) .plot { pointer-events: none; }
+    }
+
+    /* ---------- The figures: one typeset line ---------- */
+    .immersive .band { padding: 0; }
+    .immersive .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 0;
+      margin: 0;
+      padding: 22px 0 24px;
+      border-top: 2px solid var(--ink);
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .immersive .stat {
+      flex: 1 1 auto;
+      background: none;
+      border: 0;
+      border-left: 1px solid var(--border);
+      border-radius: 0;
+      padding: 0 28px;
+    }
+    .immersive .stat:first-child { border-left: 0; padding-left: 0; }
+    .immersive .stat .value { font-family: var(--font-display); font-size: clamp(26px, 2.6vw, 34px); letter-spacing: 0; overflow: visible; }
+    .immersive .stat .label { font-size: 14px; color: var(--ink-3); }
+    /* Two full dates: smaller, so they stay on one line. */
+    .immersive .stat.period .value { font-size: clamp(20px, 1.8vw, 25px); line-height: 1.6; }
+
+    /* ---------- The chapter bar ---------- */
+    .chapter-bar {
+      position: fixed;
+      top: var(--header-h);
+      left: 0;
+      right: 0;
+      z-index: 19;  /* slides out from under the menu */
+      background: color-mix(in srgb, var(--bg) 94%, transparent);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+      transform: translateY(-100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    .chapter-bar.shown { transform: none; opacity: 1; pointer-events: auto; }
+    .chapter-bar .inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 26px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .chapter-bar .label { font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+    .chapter-bar a {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 7px;
+      padding: 10px 0 9px;
+      border-bottom: 2px solid transparent;
+      font-size: 14px;
+      color: var(--ink-3);
+      white-space: nowrap;
+    }
+    .chapter-bar a:hover { color: var(--ink); text-decoration: none; }
+    .chapter-bar a.active { color: var(--ink); border-bottom-color: var(--accent); }
+    .chapter-bar .num { font-family: var(--font-digits); font-size: 12px; font-weight: 600; color: var(--accent-ink); }
+    /* Wide screens: a list in the right margin instead, beside the content
+       (which does not move), the current chapter marked by a blue line. */
+    @media (min-width: 1400px) {
+      .chapter-bar {
+        top: calc(var(--header-h) + 40px);
+        left: auto;
+        right: 8px;
+        width: 118px;
+        background: none;
+        backdrop-filter: none;
+        border: 0;
+        transform: translateX(12px);
+      }
+      .chapter-bar.shown { transform: none; }
+      .chapter-bar .inner { flex-direction: column; align-items: stretch; gap: 2px; padding: 0; overflow: visible; }
+      .chapter-bar .label { margin-bottom: 8px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+      .chapter-bar a {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1px;
+        padding: 5px 0 6px 11px;
+        border-bottom: 0;
+        border-left: 2px solid var(--border);
+        font-size: 12.5px;
+        line-height: 1.25;
+        white-space: normal;
+      }
+      .chapter-bar a.active { border-left-color: var(--accent); }
+      .immersive .chapter { scroll-margin-top: calc(var(--header-h) + 24px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .chapter-bar { transition: none; }
+    }
+    @media (max-width: 640px) {
+      .chapter-bar .inner { padding: 0 16px; gap: 20px; }
+      .chapter-bar .label { display: none; }
+    }
+
+    /* ---------- Chapters ---------- */
+    /* Below the menu and the chapter bar when jumped to. */
+    .chapter { scroll-margin-top: calc(var(--header-h) + 60px); }
+    .chapter { padding: 64px 0 0; }
+    .chapter + .chapter { margin-top: 72px; border-top: 1px solid var(--border-strong); }
+    .chapter-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px 48px;
+      margin-bottom: 32px;
+    }
+    .chapter-num {
+      font-family: var(--font-digits);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      color: var(--accent-ink);
+      margin: 0 0 10px;
+    }
+    .chapter-head h2 { font-size: clamp(28px, 3.2vw, 42px); line-height: 1.08; margin: 0 0 14px; }
+    .chapter-head .lead { color: var(--ink-2); max-width: 62ch; }
+    .chapter-foot { margin: 20px 0 0; font-size: 14px; color: var(--ink-3); }
+
+    /* The axes: three newspaper columns, each axis drawn as a line with the
+       parties on it. */
+    .axes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .axis { padding: 0 32px; border-left: 1px solid var(--border); min-width: 0; }
+    .axis:first-child { padding-left: 0; border-left: 0; }
+    .axis:last-child { padding-right: 0; }
+    .axis-name { font-size: 14px; color: var(--ink-3); margin: 0; }
+    .axis-name strong { color: var(--ink); font-weight: 600; }
+    .axis-share {
+      font-family: var(--font-display);
+      font-size: clamp(44px, 5vw, 64px);
+      font-weight: 700;
+      line-height: 1;
+      margin: 10px 0 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .axis-note { margin: 0; font-size: 14px; color: var(--ink-2); }
+    .axis-line { margin-top: 22px; }
+    /* The way to an axis's page: a button to press, like the parties. */
+    .axis .more {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      padding: 6px 6px 6px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent-ink);
+      background: color-mix(in srgb, var(--surface-2) 60%, var(--bg));
+      border: 1px solid transparent;
+      border-radius: 999px;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .axis .more:hover { text-decoration: none; }
+    .axis .more:is(:hover, :focus-visible) { background: var(--surface-2); border-color: var(--accent); }
+
+    /* Logos: each axis a full-width line, the parties on it by their logos.
+       Hovering or focusing a logo gives the score. */
+    .axes.logos { grid-template-columns: minmax(0, 1fr); }
+    .axes.logos .axis {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      grid-template-areas: "text line" "more line";
+      align-content: start;
+      column-gap: 40px;
+      padding: 28px 0;
+      border-left: 0;
+      border-top: 1px solid var(--border);
+    }
+    .axes.logos .axis:first-child { padding-top: 0; border-top: 0; }
+    .axes.logos .axis-text { grid-area: text; }
+    .axes.logos .axis-line { grid-area: line; align-self: center; margin-top: 0; }
+    .axes.logos .more { grid-area: more; align-self: start; }
+    .axes.logos .axis-share { font-size: clamp(40px, 4vw, 52px); }
+
+    /* Agreement: the matrix straight on the paper. */
+    .immersive .matrix th.row { background: var(--bg); }
+    .immersive .matrix td { border-radius: 2px; }
+    .immersive .legend .bar { width: 160px; height: 6px; border-radius: 3px; }
+    .immersive .focus-chip { background: none; border: 0; padding: 0; font-size: 14px; color: var(--ink-2); }
+    .immersive .focus-chip button { background: none; border: 0; }
+
+    /* Parties: each entry is a link to the party, so it looks like one
+       thing to press: a tile of darker paper (no white) that says what it
+       does, with a round arrow that fills on hover or focus. */
+    .party-index { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .entry {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      padding: 16px 18px 18px;
+      color: inherit;
+      background: color-mix(in srgb, var(--surface-2) 60%, var(--bg));
+      border: 1px solid transparent;
+      border-radius: 12px;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .entry:hover { text-decoration: none; }
+    .entry:is(:hover, :focus-visible) {
+      background: var(--surface-2);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    .entry:active { transform: none; box-shadow: none; }
+    /* Says in words what the tile does, at the bottom where the eye ends. */
+    .entry .go {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-strong);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent-ink);
+    }
+    .entry .arrow {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      color: var(--ink-2);
+      font-size: 15px;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .entry:is(:hover, :focus-visible) .arrow { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+    .entry:is(:hover, :focus-visible) .abbr { color: var(--accent-ink); }
+    .entry:is(:hover, :focus-visible) .go > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+    .entry .logo.initials { background: var(--bg); }
+    .entry .head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .entry .abbr { font-family: var(--font-display); font-size: 21px; font-weight: 700; line-height: 1.15; min-width: 0; }
+    .entry .name { font-size: 13px; color: var(--ink-3); margin: 2px 0 12px; min-height: 1.4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .entry .rel {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr) 36px;
+      gap: 3px 10px;
+      align-items: center;
+      font-size: 13px;
+      padding: 3px 0;
+    }
+    .entry .rel.least { margin-bottom: 14px; }
+    .entry .rel .k { color: var(--ink-3); }
+    .entry .rel .v { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; }
+    .entry .rel .v > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .entry .rel .p { text-align: right; font-family: var(--font-digits); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+    .entry .rel .track { grid-column: 2 / 4; height: 2px; background: var(--border-strong); }
+    .entry .rel .track span { display: block; height: 100%; background: var(--accent); }
+    .entry .rel.least .track span { background: var(--data-lo); }
+
+    /* Chapters fade in as they scroll into view. */
+    .reveal-ready .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal-ready .reveal.is-visible { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal-ready .reveal { opacity: 1; transform: none; transition: none; }
+    }
+
+    @media (max-width: 900px) {
+      .axes { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+      .axis, .axis:first-child, .axis:last-child { padding: 0; border-left: 0; }
+      .axes.logos .axis { grid-template-columns: minmax(0, 1fr); grid-template-areas: "text" "line" "more"; padding: 0; border-top: 0; }
+      .axes.logos .axis-line { margin-top: 16px; }
+    }
+    @media (max-width: 640px) {
+      .map-info { left: 16px; top: 16px; width: calc(100% - 32px); }
+      .hero-copy .lead, .map-caption .hero-legend { display: none; }
+      .map-caption h2 { font-size: 26px; margin-bottom: 4px; }
+      .map-caption .hint { margin-top: 4px; }
+      .map-dock .pill { padding: 6px 8px; }
+      .map-seg button { padding: 6px 11px; }
+      .immersive .stat { flex-basis: 40%; padding: 0 16px; }
+      .immersive .stat:nth-child(odd) { border-left: 0; padding-left: 0; }
+      .chapter { padding-top: 44px; }
+      .chapter + .chapter { margin-top: 48px; }
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}
+  <!-- Where you are on this page (the menu above says which page): appears
+       under the menu once the chapters below the map are reached. -->
+  <nav class="chapter-bar" id="chapter-bar" aria-label="{% translate 'On this page' %}">
+    <div class="inner">
+      <span class="label">{% translate "On this page" %}</span>
+      <a href="#hero" data-section="hero"><span class="num">01</span>{% translate "The map" %}</a>
+      <a href="#axes-chapter" data-section="axes-chapter"><span class="num">02</span>{% translate "Axes" %}</a>
+      <a href="#agreement" data-section="agreement"><span class="num">03</span>{% translate "Agreement" %}</a>
+      <a href="#parties" data-section="parties"><span class="num">04</span>{% translate "Parties" %}</a>
+    </div>
+  </nav>
+  <section class="hero is-calm" id="hero" aria-label="{% translate 'The political landscape' %}">
+    <div class="stage">
+    <div class="plot-frame" id="plot-frame">
+      <div class="plot" id="plot-3d"></div>
+      <!-- Logos and axis labels drawn over the map, following its camera. -->
+      <div class="map-overlay" id="map-overlay">
+        <div class="map-logos" id="map-logos" hidden></div>
+        <a class="map-axis" id="axis-x" href="/component/1/" hidden></a>
+        <a class="map-axis vertical" id="axis-y" href="/component/2/" hidden></a>
+        <div class="map-tip" id="map-tip" hidden></div>
+      </div>
+      <!-- The column beside the map: what it shows (the title, then the
+           map's caption), how to change it, and its axes. -->
+      <div class="map-info" id="map-info">
+        <div class="map-text">
+          <div class="hero-copy">
+            <p class="eyebrow">{% translate "Tweede Kamer · voting analysis" %}</p>
+            <h1>{% translate "Who votes with whom in Dutch parliament" %}</h1>
+            <p class="lead">{% translate "Close together means voting alike." %} <span class="more" id="hero-hint">{% translate "Drag to turn the map, click a party to open it." %}</span></p>
+            <div class="hero-legend" hidden>
+              <span class="legend-lo"></span><span class="bar" aria-hidden="true"></span><span class="legend-hi"></span>
+              <span>· {% translate "colour shows the main divide" %}</span>
+            </div>
+          </div>
+          <div class="map-caption" id="map-caption" inert>
+            <p class="chapter-num">01</p>
+            <h2>{% translate "The map" %}</h2>
+            <p class="map-total" id="map-total"></p>
+            <div class="hero-legend" hidden>
+              <span class="legend-lo"></span><span class="bar" aria-hidden="true"></span><span class="legend-hi"></span>
+              <span>· {% translate "main divide" %}</span>
+            </div>
+            <p class="hint" id="map-hint"></p>
+          </div>
+        </div>
+        <div class="map-controls" id="map-controls" role="toolbar" aria-label="{% translate 'Map' %}" inert>
+          <div class="row">
+            <span class="label" id="label-view">{% translate "View" %}</span>
+            <div class="segmented map-seg" role="group" aria-labelledby="label-view">
+              <button type="button" data-view="flat" aria-pressed="false">2D</button>
+              <button type="button" data-view="depth" aria-pressed="true">3D</button>
+            </div>
+          </div>
+          <div class="row">
+            <span class="label" id="label-marks">{% translate "Parties as" %}</span>
+            <div class="segmented map-seg" role="group" aria-labelledby="label-marks">
+              <button type="button" data-marks="dots" aria-pressed="true">{% translate "Dots" %}</button>
+              <button type="button" data-marks="logos" aria-pressed="false">{% translate "Logos" %}</button>
+            </div>
+          </div>
+          <div class="row">
+            <span class="label" id="label-focus">{% translate "Highlight" %}</span>
+            <div class="pick">
+              <label class="pill-select">
+                <select id="focus" aria-labelledby="label-focus">
+                  <!-- A prompt, not a choice: it cannot be picked. -->
+                  <option value="" disabled selected hidden>{% translate "Choose a party" %}</option>
+                </select>
+              </label>
+              <button class="pill clear" type="button" id="clear-focus" hidden aria-label="{% translate 'Clear the highlight' %}" title="{% translate 'Clear the highlight' %}">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="row actions">
+            <button class="pill" type="button" id="fullscreen" aria-pressed="false" title="{% translate 'Show the map on its own, filling the window' %}">
+              <svg class="when-off" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>
+              <svg class="when-on" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4"/></svg>
+              <span>{% translate "Fullscreen" %}</span>
+            </button>
+            <button class="pill" type="button" id="download" title="{% translate 'Save the map as an image' %}">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
+              <span>{% translate "Save image" %}</span>
+            </button>
+          </div>
+        </div>
+        <nav class="map-axes" id="map-axes" aria-label="{% translate 'The axes' %}" inert></nav>
+      </div>
+      <!-- Narrow screens: the controls are docked here, under the map. -->
+      <div class="map-dock" id="map-dock"></div>
+      <!-- The opening's one action: plays the change to the readable map
+           (as scrolling does). -->
+      <button class="map-start" type="button" id="map-start">
+        {% translate "Explore the map" %}
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>
+      </button>
+    </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block band_class %} compact{% endblock %}
 
 {% block band %}
-    <p class="eyebrow">Tweede Kamer · voting analysis</p>
-    <h1>Who votes with whom in Dutch parliament</h1>
-    <p class="lead">
-      Every recorded vote on a motion since the current parliament was
-      installed, turned into a map of where parties stand and how often
-      they agree.
-    </p>
     <div class="stats">
-      <div class="stat"><div class="value" id="stat-motions">-</div><div class="label">motions with votes</div></div>
-      <div class="stat"><div class="value" id="stat-parties">-</div><div class="label">parties</div></div>
-      <div class="stat"><div class="value" id="stat-period">-</div><div class="label">period covered, first to last vote</div></div>
-      <div class="stat"><div class="value" id="stat-variance">-</div><div class="label">of voting differences shown on the <abbr title="The map's three axes together capture this share of all differences in how parties vote.">map</abbr></div></div>
+      <div class="stat"><div class="value" id="stat-motions">-</div><div class="label">{% translate "motions with votes" %}</div></div>
+      <div class="stat"><div class="value" id="stat-parties">-</div><div class="label">{% translate "parties" %}</div></div>
+      <div class="stat period"><div class="value" id="stat-period">-</div><div class="label">{% translate "first to last vote" %}</div></div>
+      <div class="stat"><div class="value" id="stat-variance">-</div><div class="label">{% translate "of voting differences shown on the" %} <abbr title="{% translate "The map's three axes together capture this share of all differences in how parties vote." %}">{% translate "map" %}</abbr></div></div>
     </div>
 {% endblock %}
 
 {% block content %}
-  <section class="card" id="landscape">
-    <div class="card-head">
+  <section class="chapter" id="axes-chapter">
+    <div class="chapter-head">
       <div>
-        <h2>The political landscape</h2>
-        <p>Parties close together vote alike. The axes are the strongest voting patterns in parliament, found by principal component analysis.</p>
+        <p class="chapter-num">02</p>
+        <h2>{% translate "What the map's axes mean" %}</h2>
+        <p class="lead">{% translate "Each axis is one pattern in how parties vote, found by principal component analysis. Its share says how much of all differences between parties it captures. The map uses the same scale in every direction, so distances compare fairly." %}</p>
       </div>
-      <div class="tools">
-        <select id="focus" aria-label="Highlight a party">
-          <option value="">Highlight a party...</option>
-        </select>
-      </div>
-    </div>
-    <div class="view-bar">
-      <div class="view-tabs" role="tablist" aria-label="View">
-        <button type="button" role="tab" data-view="3d" aria-selected="true" aria-controls="plot-3d">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M10 2 17 6v8l-7 4-7-4V6Z"/><path d="M3 6l7 4 7-4M10 10v8"/></svg>
-          <span><strong>3D view</strong><small>Three axes · drag to rotate</small></span>
-        </button>
-        <button type="button" role="tab" data-view="2d" aria-selected="false" aria-controls="plot-2d">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M10 3v14M3 10h14" opacity="0.5"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/><circle cx="13" cy="12" r="1.2" fill="currentColor"/></svg>
-          <span><strong>2D map</strong><small>The two main axes · flat</small></span>
-        </button>
-      </div>
-      <div class="tools">
-        <button class="btn small" type="button" id="fullscreen">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>
-          Fullscreen
-        </button>
-        <button class="btn small" type="button" id="download">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>
-          Download PNG
-        </button>
+      <div class="switch" role="group" aria-label="{% translate 'Show the parties as' %}" id="axes-mode">
+        <span class="switch-label">{% translate "Show" %}</span>
+        <button class="text-btn" type="button" data-mode="dots" aria-pressed="true">{% translate "Dots" %}</button>
+        <button class="text-btn" type="button" data-mode="logos" aria-pressed="false">{% translate "Logos" %}</button>
       </div>
     </div>
-    <div class="card-body landscape">
-      <div class="plot-frame" id="plot-frame">
-        <div class="plot" id="plot-3d" role="tabpanel"></div>
-        <div class="plot" id="plot-2d" role="tabpanel" hidden><canvas id="pca2d"></canvas></div>
-        <div class="fs-tools">
-          <button class="btn small" type="button" data-action="download">Download PNG</button>
-          <button class="btn small" type="button" data-action="exit-fullscreen">Exit fullscreen</button>
-        </div>
-      </div>
-      <aside class="aside">
-        <h3>The axes</h3>
-        <ul class="axis-list" id="axis-list"><li class="hint">Loading...</li></ul>
-        <h3>How to read it</h3>
-        <p>Both axes use the same scale, so distances are comparable in every direction. Open an axis to see the motions that drive it.</p>
-        <p>Parties that started later in the period are placed using only the motions they voted on.</p>
-        <p class="hint">Click a party to open its page. In 3D, drag to rotate, scroll to zoom and double-click to reset.</p>
-      </aside>
-    </div>
+    <div class="axes" id="axes"><p class="hint">{% translate "Loading..." %}</p></div>
+    <p class="chapter-foot">{% translate "Parties that started later in the period are placed using only the motions they voted on." %}</p>
   </section>
 
-  <section class="card" id="agreement">
-    <div class="card-head">
+  <section class="chapter" id="agreement">
+    <div class="chapter-head">
       <div>
-        <h2>Voting agreement</h2>
-        <p>How often two parties voted the same on the motions they both voted on. Parties that vote alike are grouped, so blocs show as dark squares along the diagonal.</p>
+        <p class="chapter-num">03</p>
+        <h2>{% translate "How often they vote alike" %}</h2>
+        <p class="lead">{% translate "The share of motions on which two parties voted the same, out of those they both voted on. Parties that vote alike are grouped, so blocs show as dark squares along the diagonal." %}</p>
       </div>
       <div class="tools">
         <span class="focus-chip" id="matrix-focus" hidden>
-          Highlighting <strong></strong>
-          <button type="button" aria-label="Clear highlight" title="Clear highlight">×</button>
+          {% translate "Highlighting" %} <strong></strong>
+          <button type="button" aria-label="{% translate 'Clear the highlight' %}" title="{% translate 'Clear the highlight' %}">×</button>
         </span>
         <div class="legend" id="legend" hidden>
           <span id="legend-min"></span><span class="bar" id="legend-bar"></span><span id="legend-max"></span>
         </div>
       </div>
     </div>
-    <div class="card-body">
-      <div class="matrix-scroll">
-        <table class="matrix" id="matrix"><tr><td class="placeholder">Loading...</td></tr></table>
-      </div>
-      <p class="hint" style="margin: 14px 0 0">Click a cell to compare two parties motion by motion, or a name to open the party.</p>
+    <div class="matrix-scroll">
+      <table class="matrix" id="matrix"><tr><td class="placeholder">{% translate "Loading..." %}</td></tr></table>
     </div>
+    <p class="chapter-foot">{% translate "Click a cell to compare two parties motion by motion, or a name to open the party." %}</p>
   </section>
 
-  <section class="card" id="parties">
-    <div class="card-head">
+  <section class="chapter" id="parties">
+    <div class="chapter-head">
       <div>
-        <h2>Parties</h2>
-        <p>Each party with the party it votes with most and least often.</p>
+        <p class="chapter-num">04</p>
+        <h2>{% translate "Every party, its closest and furthest" %}</h2>
+        <p class="lead">{% translate "The party each one votes with most often, and the one it votes with least." %}</p>
       </div>
-      <div class="tools">
-        <select id="party-sort" aria-label="Sort parties">
-          <option value="name">Sort by name</option>
-          <option value="pc1">Sort by position on PC1</option>
-          <option value="ally">Sort by closest ally</option>
-        </select>
-      </div>
-    </div>
-    <div class="card-body">
-      <div class="party-grid" id="party-grid"><p class="hint">Loading...</p></div>
-    </div>
-  </section>
-
-  <section class="card" id="components">
-    <div class="card-head">
-      <div>
-        <h2>What the axes mean</h2>
-        <p>Each component is a voting pattern. Its share says how much of all differences between parties it captures.</p>
+      <div class="switch" role="group" aria-label="{% translate 'Order the parties' %}" id="party-sort">
+        <span class="switch-label">{% translate "Order" %}</span>
+        <button class="text-btn" type="button" data-sort="name" aria-pressed="true">{% translate "A–Z" %}</button>
+        <button class="text-btn" type="button" data-sort="pc1" aria-pressed="false">{% translate "Along the main divide" %}</button>
+        <button class="text-btn" type="button" data-sort="ally" aria-pressed="false">{% translate "Closest ally" %}</button>
       </div>
     </div>
-    <div class="card-body">
-      <div class="component-grid" id="component-grid"><p class="hint">Loading...</p></div>
-    </div>
+    <div class="party-index" id="party-grid"><p class="hint">{% translate "Loading..." %}</p></div>
   </section>
 {% endblock %}
 
 {% block libraries %}
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/plotly.js-gl3d-dist-min@4.1.1/plotly-gl3d.min.js" defer></script>
 {% endblock %}
 
 {% block scripts %}
   <script>
-    chartDefaults();
-
+    Object.assign(window.I18N, {
+      "Could not load the 3D chart library.": "{{ _("Could not load the 3D chart library.")|escapejs }}",
+      "Open fullscreen to explore the map.": "{{ _("Open fullscreen to explore the map.")|escapejs }}",
+      "Combined, the axes explain {share} of the differences.": "{{ _("Combined, the axes explain {share} of the differences.")|escapejs }}",
+      "Click a party to open it.": "{{ _("Click a party to open it.")|escapejs }}",
+      "Drag to turn the map, click a party to open it.": "{{ _("Drag to turn the map, click a party to open it.")|escapejs }}",
+      "of the differences →": "{{ _("of the differences →")|escapejs }}",
+      "→": "{{ _("→")|escapejs }}",
+      "across": "{{ _("across")|escapejs }}",
+      "up and down": "{{ _("up and down")|escapejs }}",
+      "depth": "{{ _("depth")|escapejs }}",
+      "What drives PC{number}": "{{ _("What drives PC{number}")|escapejs }}",
+      "No analysis yet. Run the analysis first.": "{{ _("No analysis yet. Run the analysis first.")|escapejs }}",
+      "across the map": "{{ _("across the map")|escapejs }}",
+      "the depth": "{{ _("the depth")|escapejs }}",
+      "a further pattern": "{{ _("a further pattern")|escapejs }}",
+      "Parties on PC{number}, from {from} to {to}": "{{ _("Parties on PC{number}, from {from} to {to}")|escapejs }}",
+      "of the differences between parties": "{{ _("of the differences between parties")|escapejs }}",
+      "The motions behind it": "{{ _("The motions behind it")|escapejs }}",
+      "No PCA scores yet. Run the analysis first.": "{{ _("No PCA scores yet. Run the analysis first.")|escapejs }}",
+      "No 3D scores yet. Run the analysis first.": "{{ _("No 3D scores yet. Run the analysis first.")|escapejs }}",
+      "Could not load the landscape: {error}": "{{ _("Could not load the landscape: {error}")|escapejs }}",
+      "Loading the map…": "{{ _("Loading the map…")|escapejs }}",
+      "Back to the page (Esc)": "{{ _("Back to the page (Esc)")|escapejs }}",
+      "Show the map on its own, filling the window": "{{ _("Show the map on its own, filling the window")|escapejs }}",
+      "Exit fullscreen": "{{ _("Exit fullscreen")|escapejs }}",
+      "Explore": "{{ _("Explore")|escapejs }}",
+      "Fullscreen": "{{ _("Fullscreen")|escapejs }}",
+      "{a} and {b}: {share} of {count} shared motions": "{{ _("{a} and {b}: {share} of {count} shared motions")|escapejs }}",
+      "Not compared: no shared motions, or the same party under a new name": "{{ _("Not compared: no shared motions, or the same party under a new name")|escapejs }}",
+      "Most with": "{{ _("Most with")|escapejs }}",
+      "Least with": "{{ _("Least with")|escapejs }}",
+      "Open party page": "{{ _("Open party page")|escapejs }}",
+      "No agreement matrix yet. Run the analysis first.": "{{ _("No agreement matrix yet. Run the analysis first.")|escapejs }}",
+      "Could not load agreement: {error}": "{{ _("Could not load agreement: {error}")|escapejs }}",
+    });
     // ---------- Shared state ----------
     // One request each, shared by every section.
     const requests = {
@@ -163,19 +894,18 @@
       history.replaceState(null, "", url);
       focusListeners.forEach((listener) => listener(focusedParty));
     }
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     // ---------- Key figures ----------
     statusRequest.then((status) => {
-      document.getElementById("stat-motions").textContent = status.motions_with_votes.toLocaleString();
-      // Months in the tile; the exact dates on hover.
+      document.getElementById("stat-motions").textContent = number(status.motions_with_votes);
       const period = document.getElementById("stat-period");
       if (status.earliest_vote_date && status.latest_vote_date) {
-        period.textContent = `${formatMonth(status.earliest_vote_date)} – ${formatMonth(status.latest_vote_date)}`;
-        period.title = `${formatDate(status.earliest_vote_date)} – ${formatDate(status.latest_vote_date)}`;
+        period.textContent = `${formatDate(status.earliest_vote_date)} – ${formatDate(status.latest_vote_date)}`;
       }
     }).catch(() => {});
 
-    // ---------- Landscape (PCA) ----------
+    // ---------- The map ----------
     function toPoints(parties) {
       return parties
         .map((party) => {
@@ -188,147 +918,78 @@
             y: scores[2],
             z: Number.isFinite(scores[3]) ? scores[3] : null,
             label: party.abbreviation || party.name,
+            abbreviation: party.abbreviation || party.name,
             name: party.name,
             partyId: party.id,
+            logo_url: party.logo_url,
           };
         })
         .filter(Boolean);
     }
 
-    const LABEL_FONT = `600 13px ${css("--font-sans")}`;
-    const FOCUSED_LABEL_FONT = `700 14px ${css("--font-sans")}`;
-    const LABEL_OFFSET = 10;
-
-    const labelPlugin = {
-      id: "labels",
-      afterDatasetsDraw(chart) {
-        const { ctx } = chart;
-        const ink = css("--ink");
-        const muted = css("--ink-3");
-        const meta = chart.getDatasetMeta(0);
-        ctx.save();
-        ctx.font = LABEL_FONT;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        meta.data.forEach((element, index) => {
-          const point = chart.data.datasets[0].data[index];
-          const focused = point.partyId === focusedParty;
-          ctx.fillStyle = focusedParty && !focused ? muted : ink;
-          ctx.font = focused ? FOCUSED_LABEL_FONT : LABEL_FONT;
-          ctx.fillText(point.label, element.x + LABEL_OFFSET + (focused ? 3 : 0), element.y);
-        });
-        ctx.restore();
-      },
-    };
-
-    function paddedRange(values) {
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const pad = (max - min || 1) * 0.1;
-      return [min - pad, max + pad];
-    }
-
-    // Same units per pixel on both axes, so distances are not distorted.
-    function applyEqualScale(chart, points) {
-      const [xLo, xHi] = paddedRange(points.map((p) => p.x));
-      const [yLo, yHi] = paddedRange(points.map((p) => p.y));
-      for (let pass = 0; pass < 2; pass++) {
-        const { width, height } = chart.chartArea;
-        const unitsPerPx = Math.max((xHi - xLo) / width, (yHi - yLo) / height);
-        const xHalf = (unitsPerPx * width) / 2;
-        const yHalf = (unitsPerPx * height) / 2;
-        Object.assign(chart.options.scales.x, { min: (xLo + xHi) / 2 - xHalf, max: (xLo + xHi) / 2 + xHalf });
-        Object.assign(chart.options.scales.y, { min: (yLo + yHi) / 2 - yHalf, max: (yLo + yHi) / 2 + yHalf });
-        chart.update("none");
-      }
-    }
-
-    function longestLabelWidth(points) {
-      const measure = document.createElement("canvas").getContext("2d");
-      measure.font = FOCUSED_LABEL_FONT;
-      return Math.max(0, ...points.map((p) => measure.measureText(p.label).width));
-    }
-
     const varianceLabel = (variance, number) =>
       Number.isFinite(variance[number]) ? `PC${number} · ${pct(variance[number], 1)}` : `PC${number}`;
 
-    function renderPca2d(points, variance) {
-      const pointColor = (ctx) => {
-        const point = ctx.raw;
-        if (!point) return css("--accent");
-        if (!focusedParty) return css("--accent");
-        return point.partyId === focusedParty ? css("--highlight") : css("--dim");
+    // Color by position on the main axis (PC1): terracotta, through warm
+    // grey, to deep blue (safe for common color-vision types; >= 3.5:1 on
+    // the paper), the same in the map and the axis lines.
+    function mainAxisColor(x, points) {
+      const xs = points.map((p) => p.x);
+      const [lo, hi] = [Math.min(...xs), Math.max(...xs)];
+      const mix = (a, b, t) => {
+        const ca = a.match(/\w\w/g).map((h) => parseInt(h, 16));
+        const cb = b.match(/\w\w/g).map((h) => parseInt(h, 16));
+        return `rgb(${ca.map((c, i) => Math.round(c + (cb[i] - c) * t)).join(", ")})`;
       };
-      const axis = (number) => ({
-        type: "linear",
-        title: { display: true, text: varianceLabel(variance, number), color: css("--ink-2"), font: { size: 12, weight: "600" } },
-        // The zero line marks the centre of the landscape.
-        grid: { color: (ctx) => (ctx.tick?.value === 0 ? css("--zero") : css("--grid")) },
-        border: { display: false },
-        ticks: { includeBounds: false, color: css("--ink-3"), font: { size: 11 } },
-      });
-      const chart = new Chart(document.getElementById("pca2d"), {
-        type: "scatter",
-        data: {
-          datasets: [{
-            data: points,
-            backgroundColor: pointColor,
-            borderColor: css("--surface"),
-            borderWidth: 2,
-            pointRadius: (ctx) => (ctx.raw?.partyId === focusedParty ? 10 : 7),
-            pointHoverRadius: 10,
-          }],
-        },
-        plugins: [backgroundPlugin, labelPlugin],
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          layout: { padding: { right: longestLabelWidth(points) + LABEL_OFFSET + 4 } },
-          onResize: (resized) => requestAnimationFrame(() => applyEqualScale(resized, points)),
-          onClick: (_, elements) => {
-            if (elements.length) window.location.href = `/party/${points[elements[0].index].partyId}/`;
-          },
-          onHover: (event, elements) => {
-            event.native.target.style.cursor = elements.length ? "pointer" : "default";
-          },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              backgroundColor: "#111827",
-              titleColor: "#ffffff",
-              bodyColor: "#e5e7eb",
-              footerColor: "#9ca3af",
-              titleFont: { weight: "600" },
-              padding: 10,
-              cornerRadius: 8,
-              displayColors: false,
-              callbacks: {
-                title: (items) => items[0].raw.name,
-                label: (context) => `PC1 ${context.raw.x.toFixed(2)} · PC2 ${context.raw.y.toFixed(2)}`,
-                footer: () => "Click to open the party",
-              },
-            },
-          },
-          scales: { x: axis(1), y: axis(2) },
-        },
-      });
-      applyEqualScale(chart, points);
-      onFocus(() => chart.update("none"));
-      return chart;
+      const t = (x - lo) / (hi - lo || 1);
+      const [low, middle, high] = [css("--data-lo"), css("--data-mid"), css("--data-hi")];
+      return t < 0.5 ? mix(low, middle, t * 2) : mix(middle, high, t * 2 - 1);
     }
 
-    // Fills the canvas with the card color, so a downloaded PNG has one.
-    const backgroundPlugin = {
-      id: "background",
-      beforeDraw(chart) {
-        const { ctx, width, height } = chart;
-        ctx.save();
-        ctx.fillStyle = css("--surface");
-        ctx.fillRect(0, 0, width, height);
-        ctx.restore();
-      },
+    // A padded range that includes zero: the flat map lies on the zero plane.
+    function paddedRange(values) {
+      const lo = Math.min(0, ...values);
+      const hi = Math.max(0, ...values);
+      const pad = (hi - lo || 1) * 0.08;
+      return [lo - pad, hi + pad];
+    }
+
+    // Camera positions as distance, compass direction and height angle, so
+    // a move between two views turns smoothly instead of cutting through.
+    const toSpherical = ({ x, y, z }) => {
+      const r = Math.hypot(x, y, z);
+      return { r, az: Math.atan2(y, x), el: Math.asin(z / r) };
     };
+    const fromSpherical = ({ r, az, el }) =>
+      ({ x: r * Math.cos(el) * Math.cos(az), y: r * Math.cos(el) * Math.sin(az), z: r * Math.sin(el) });
+
+    // Far enough out that the whole cloud fits the window; further on
+    // narrow screens. The flat view looks straight down, PC1 across and PC2
+    // up, like a printed map.
+    const START_EYE = (target) =>
+      target.clientWidth < 600 ? { x: 1.2, y: 1.2, z: 0.7 } : { x: 1.02, y: 1.02, z: 0.56 };
+    const FLAT_DISTANCE = (target) => (target.clientWidth < 600 ? 1.8 : 1.3);
+
+    // Scrolling over the map scrolls the page; only fullscreen zooms. That
+    // is done by `letPageScroll` below, not by turning Plotly's scrollZoom
+    // off: with it off, Plotly's 3D scene leaves out the axis titles (and
+    // with them the explained variance).
+    // Drawn at the screen's own resolution (sharp on high-density screens,
+    // up to 2x): Plotly would draw at 2x everywhere, which for a map this
+    // size costs a lot of graphics memory on an ordinary screen.
+    const heroConfig = () => ({
+      responsive: true,
+      displaylogo: false,
+      displayModeBar: false,
+      scrollZoom: true,
+      plotGlPixelRatio: Math.min(Math.max(window.devicePixelRatio || 1, 1), 2),
+    });
+    // Plotly's 3D scene takes the wheel even without scroll zoom, so stop
+    // the event on its way down to the scene: the page scrolls as usual.
+    function letPageScroll(target, unless = () => false) {
+      target.addEventListener("wheel", (event) => { if (!unless()) event.stopPropagation(); }, { capture: true });
+    }
+    letPageScroll(document.getElementById("plot-3d"), () => frame.classList.contains("is-fullscreen"));
 
     // Returns false when there is nothing to show in 3D.
     function renderPca3d(points, variance) {
@@ -336,17 +997,37 @@
       const usable = points.filter((p) => Number.isFinite(p.z));
       if (!usable.length) return false;
       if (!window.Plotly) {
-        target.replaceChildren(el("div", { className: "placeholder" }, "Could not load the 3D chart library."));
+        target.replaceChildren(el("div", { className: "placeholder" }, t("Could not load the 3D chart library.")));
         return true;
       }
+      // A highlighted party keeps its color; the others fade.
       const colors = () =>
-        usable.map((p) => (!focusedParty ? css("--accent") : p.partyId === focusedParty ? css("--highlight") : css("--dim")));
+        usable.map((p) => (!focusedParty || p.partyId === focusedParty ? mainAxisColor(p.x, points) : css("--dim")));
+      // Name the ends of the color scale after the parties there.
+      const byX = [...usable].sort((a, b) => a.x - b.x);
+      document.querySelectorAll(".legend-lo").forEach((node) => { node.textContent = byX[0].label; });
+      document.querySelectorAll(".legend-hi").forEach((node) => { node.textContent = byX.at(-1).label; });
+      document.querySelectorAll(".hero-legend").forEach((node) => { node.hidden = false; });
+      // Fixed ranges and sides in proportion to them: one scale in every
+      // direction. Flattening shrinks the box's depth, not the data.
+      const ranges = [usable.map((p) => p.x), usable.map((p) => p.y), usable.map((p) => p.z)].map(paddedRange);
+      const spans = ranges.map(([lo, hi]) => hi - lo);
+      const longest = Math.max(...spans);
+      landscape.depth = spans[2] / longest;
+      Object.assign(landscape, { usable, ranges, variance });
+      markerStyle(target, 0);
+      // The axes are there from the start, but see-through (calm opening);
+      // `showDetails` colours them in. Plotly's 3D scene only draws axis
+      // titles it had when it was built, so axes are never switched off or
+      // their titles blanked: hiding is done with colour (see axesStyle).
       const sceneAxis = (number) => ({
-        title: { text: varianceLabel(variance, number), font: { color: css("--ink-2"), size: 12 } },
-        gridcolor: css("--grid"),
-        zerolinecolor: css("--zero"),
-        tickfont: { color: css("--ink-3"), size: 10 },
-        backgroundcolor: "rgba(0,0,0,0)",
+        range: ranges[number - 1],
+        autorange: false,
+        title: { text: varianceLabel(variance, number), font: { color: CLEAR, size: 12 } },
+        gridcolor: CLEAR,
+        zerolinecolor: CLEAR,
+        tickfont: { color: CLEAR, size: 10 },
+        backgroundcolor: CLEAR,
       });
       Plotly.newPlot(
         target,
@@ -357,83 +1038,628 @@
           y: usable.map((p) => p.y),
           z: usable.map((p) => p.z),
           text: usable.map((p) => p.label),
-          customdata: usable.map((p) => p.partyId),
+          // The party, and its PC3 score for the tooltip (also once flat).
+          customdata: usable.map((p) => [p.partyId, p.z]),
           textposition: "middle right",
-          textfont: { family: css("--font-sans"), size: 12, color: css("--ink") },
-          marker: { size: 6, color: colors(), line: { color: css("--surface"), width: 1 } },
-          hovertemplate: "<b>%{text}</b><br>PC1 %{x:.2f} · PC2 %{y:.2f} · PC3 %{z:.2f}<extra></extra>",
+          textfont: { family: css("--font-sans"), size: landscape.textSize, color: css("--ink") },
+          marker: { size: landscape.markerSize, color: colors(), line: { width: 0 } },
+          hovertemplate: "<b>%{text}</b><br>PC1 %{x:.2f} · PC2 %{y:.2f} · PC3 %{customdata[1]:.2f}<extra></extra>",
         }],
         {
           margin: { l: 0, r: 0, t: 0, b: 0 },
-          paper_bgcolor: css("--surface"),
+          paper_bgcolor: "rgba(0, 0, 0, 0)",  // the paper shows through
           scene: {
-            aspectmode: "data",
-            // Far enough out that the whole cloud and the axis titles fit,
-            // a bit further on narrow screens.
-            camera: { eye: target.clientWidth < 600 ? { x: 1.8, y: 1.8, z: 1.2 } : { x: 1.5, y: 1.5, z: 1.0 } },
+            aspectmode: "manual",
+            aspectratio: { x: spans[0] / longest, y: spans[1] / longest, z: landscape.depth },
+            camera: { eye: START_EYE(target), up: { x: 0, y: 0, z: 1 } },
+            // On wide screens the scene takes the area right of the title,
+            // so the text never covers a party.
+            domain: sceneDomain(target, morph.p),
             xaxis: sceneAxis(1),
             yaxis: sceneAxis(2),
             zaxis: sceneAxis(3),
           },
         },
-        { responsive: true, displaylogo: false, displayModeBar: false }
+        heroConfig()
       );
       target.on("plotly_click", (event) => {
-        const partyId = event.points?.[0]?.customdata;
+        const partyId = event.points?.[0]?.customdata?.[0];
         if (partyId) window.location.href = `/party/${partyId}/`;
       });
       onFocus(() => Plotly.restyle(target, { "marker.color": [colors()] }));
+      buildLogos(usable);
+      calmUntilGrabbed(target);
+      autoRotate(target);
       return true;
     }
 
-    function renderAxisList(analysis) {
-      const list = document.getElementById("axis-list");
-      const components = [...(analysis?.components || [])].sort((a, b) => a.number - b.number);
-      if (!components.length) {
-        list.replaceChildren(el("li", { className: "hint" }, "No analysis yet."));
+    // The opening shows only the parties. Moving the mouse over the map
+    // shows the controls for a while; grabbing the map (or highlighting a
+    // party, or flattening it) shows the axes and everything else for good.
+    function calmUntilGrabbed(target) {
+      const hero = document.getElementById("hero");
+      landscape.showDetails = () => {
+        if (!hero.classList.contains("is-calm")) return;
+        hero.classList.remove("is-calm");
+        Plotly.relayout(target, axesStyle(landscape.flat));
+      };
+      for (const type of ["pointerdown", "touchstart", "keydown"]) {
+        target.addEventListener(type, landscape.showDetails, { once: true, passive: true });
+      }
+      onFocus((partyId) => { if (partyId) landscape.showDetails(); });
+
+      let idle;
+      hero.addEventListener("pointermove", () => {
+        hero.classList.add("pointer-active");
+        clearTimeout(idle);
+        idle = setTimeout(() => hero.classList.remove("pointer-active"), 2500);
+      });
+    }
+
+    // The opening map takes most of the screen: on wide screens everything
+    // right of 30%, so the cloud sits beside the title and reaches under
+    // it where the title leaves room. Once flat (p = 1) it starts where the
+    // caption ends; the controls are in the left column. On narrow screens
+    // below the text, above the controls docked at the bottom.
+    function sceneDomain(target, p = 0) {
+      const width = target.clientWidth;
+      const mix = (a, b) => a + (b - a) * p;
+      if (width < 1000) return { x: [0, 1], y: [0.12, mix(0.82, 0.78)] };
+      const caption = document.getElementById("map-caption");
+      const captionEnd = Math.min((caption.offsetLeft + caption.offsetWidth + 32) / width, 0.4);
+      return { x: [mix(0.3, captionEnd), 1], y: [0.04, mix(1, 0.94)] };
+    }
+
+    // Turn the camera slowly around the vertical axis, until the visitor
+    // touches the graph or changes the view; then it stays where they leave
+    // it. Paused while the graph is out of view or the tab is hidden; off
+    // for reduced motion.
+    function autoRotate(target) {
+      if (reducedMotion) return;
+      const eye = START_EYE(target);
+      const radius = Math.hypot(eye.x, eye.y);
+      let angle = Math.atan2(eye.y, eye.x);
+      const SPEED = (2 * Math.PI) / 60000;  // one turn per minute
+      let running = true;
+      let visible = true;
+      let last = null;
+
+      landscape.stopRotating = () => { running = false; };
+      for (const type of ["pointerdown", "touchstart", "keydown"]) {
+        target.addEventListener(type, landscape.stopRotating, { once: true, passive: true });
+      }
+      new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }).observe(target);
+
+      function frame(now) {
+        if (!running) return;
+        // At most 30 steps a second: smooth enough for a slow turn, and it
+        // leaves the browser time for scrolling.
+        if (last === null) last = now;
+        if (now - last >= 33 && visible && !document.hidden && !landscape.fullscreenBusy) {
+          angle += SPEED * Math.min(now - last, 100);
+          Plotly.relayout(target, {
+            "scene.camera.eye": { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: eye.z },
+          });
+          last = now;
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    const touchScreen = matchMedia("(pointer: coarse)").matches;
+    const heroHint = (flat) => touchScreen
+      ? t("Open fullscreen to explore the map.")
+      : flat ? t("Click a party to open it.") : t("Drag to turn the map, click a party to open it.");
+    const showHint = (flat) => {
+      document.getElementById("hero-hint").textContent = heroHint(flat);
+      document.getElementById("map-hint").textContent = heroHint(flat);
+    };
+    showHint(false);
+
+    // Flat or in depth: the same map. Flattening presses the box flat, so
+    // every party and the grid end up in one plane, while the camera rises
+    // to look straight down; going back lifts them out again. A plan gives
+    // the scene at any point k from 0 (now) to 1 (there), so a timer or the
+    // scroll position can drive it.
+    function planMorph(flat) {
+      const target = document.getElementById("plot-3d");
+      const camera = target.layout.scene.camera || {};
+      const from = toSpherical(camera.eye || START_EYE(target));
+      // Approach the top from below the map (compass -90°), so PC1 ends up
+      // across and PC2 up without the picture spinning at the end.
+      const to = flat
+        ? { r: FLAT_DISTANCE(target), az: -Math.PI / 2, el: Math.PI / 2 - 1e-4 }
+        : toSpherical(START_EYE(target));
+      // The shorter way round.
+      let turn = to.az - from.az;
+      turn = ((turn + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      const FLAT = 0.002;  // depth of the pressed box (0 is not allowed)
+      const fromDepth = target.layout.scene.aspectratio.z;
+      const toDepth = flat ? FLAT : landscape.depth;
+      const fromUp = camera.up || { x: 0, y: 0, z: 1 };
+      const toUp = flat ? { x: 0, y: 1, z: 0 } : { x: 0, y: 0, z: 1 };
+      // In stages, so every frame on the way reads well (scrolling can stop
+      // anywhere): flattening first turns to face the map, then rises and
+      // presses it flat; lifting it out goes the other way round.
+      const stage = (k, a, b) => {
+        const t = Math.min(Math.max((k - a) / (b - a), 0), 1);
+        return t * t * (3 - 2 * t);
+      };
+      const fromFlatness = (landscape.depth - fromDepth) / (landscape.depth - FLAT);
+      return (k) => {
+        const kTurn = flat ? stage(k, 0, 0.55) : stage(k, 0.45, 1);
+        const kRise = flat ? stage(k, 0.2, 1) : stage(k, 0, 0.8);
+        const layout = {
+          "scene.camera": {
+            eye: fromSpherical({
+              r: from.r + (to.r - from.r) * kRise,
+              az: from.az + turn * kTurn,
+              el: from.el + (to.el - from.el) * kRise,
+            }),
+            up: Object.fromEntries(["x", "y", "z"].map((a) => [a, fromUp[a] + (toUp[a] - fromUp[a]) * kRise])),
+            center: { x: 0, y: 0, z: 0 },
+          },
+          "scene.aspectratio.z": fromDepth + (toDepth - fromDepth) * kRise,
+        };
+        // 0 in depth, 1 flat: the markers shrink as the map flattens.
+        return { layout, flatness: fromFlatness + ((flat ? 1 : 0) - fromFlatness) * kRise };
+      };
+    }
+
+    // Big points in depth, where the opening relies on them; small ones
+    // once flat, where they must not hide each other (smaller on phones).
+    const MARKERS = (target) => target.clientWidth < 600
+      ? { depth: [8, 12], flat: [6, 11] }
+      : { depth: [12, 15], flat: [7, 13] };
+    // The size and name size for a flatness; null when they stay the same,
+    // so a frame only restyles the points when they change size.
+    function markerStyle(target, flatness) {
+      const { depth, flat } = MARKERS(target);
+      const size = Math.round(depth[0] + (flat[0] - depth[0]) * flatness);
+      const text = Math.round(depth[1] + (flat[1] - depth[1]) * flatness);
+      landscape.flatness = flatness;
+      if (size === landscape.markerSize && text === landscape.textSize) return null;
+      landscape.markerSize = size;
+      landscape.textSize = text;
+      return { "marker.size": size, "textfont.size": text };
+    }
+    // One call per frame: camera and box, plus the points when they resize.
+    function applyScene(target, { layout, flatness }) {
+      const style = markerStyle(target, flatness);
+      return style ? Plotly.update(target, style, layout) : Plotly.relayout(target, layout);
+    }
+
+    // The switch, the URL and the hint follow the view.
+    function showView(flat) {
+      visit.save({ view: flat ? "flat" : "depth" });
+      document.querySelectorAll("#map-controls [data-view]").forEach((button) =>
+        button.setAttribute("aria-pressed", String((button.dataset.view === "flat") === flat)));
+      const url = new URL(location.href);
+      if (flat) url.searchParams.set("view", "flat");
+      else url.searchParams.delete("view");
+      history.replaceState(null, "", url);
+      showHint(flat);
+    }
+    // The map in depth turns when dragged; the flat map stays where it is
+    // (no dragging it across the screen).
+    const settleScene = (flat) => Plotly.relayout(document.getElementById("plot-3d"), {
+      "scene.dragmode": flat ? false : "turntable",
+      ...axesStyle(flat),
+    });
+
+    // The axes' colours. In depth all three, with their titles (the share
+    // each explains). Flat: the depth axis disappears, and the other two
+    // titles step aside for the overlay's, which name the axes in full.
+    const CLEAR = "rgba(0, 0, 0, 0)";
+    function axesStyle(flat) {
+      const style = {};
+      for (const [axis, shown, titled] of [["xaxis", true, !flat], ["yaxis", true, !flat], ["zaxis", !flat, !flat]]) {
+        style[`scene.${axis}.gridcolor`] = shown ? css("--grid") : CLEAR;
+        style[`scene.${axis}.zerolinecolor`] = shown ? css("--zero") : CLEAR;
+        style[`scene.${axis}.tickfont.color`] = shown ? css("--ink-3") : CLEAR;
+        style[`scene.${axis}.title.font.color`] = titled ? css("--ink-2") : CLEAR;
+      }
+      return style;
+    }
+
+    // The switch: about a second either way. Before the scroll has
+    // flattened the map, this also turns the opening into the caption.
+    function setFlat(flat, { animate = true } = {}) {
+      showView(flat);
+      if (!landscape.has3d || !window.Plotly || landscape.flat === flat) {
+        landscape.flat = flat;
         return;
       }
-      const top = Math.max(...components.map((c) => c.explained_variance));
-      list.replaceChildren(
+      landscape.flat = flat;
+      landscape.stopRotating?.();
+      landscape.showDetails?.();
+      const target = document.getElementById("plot-3d");
+      const plan = planMorph(flat);
+      const fromP = morph.p;
+      morphed();
+      // Before the scroll got there, the map also moves to where the
+      // caption leaves room.
+      const at = (k) => {
+        const frame = plan(k);
+        if (fromP < 1 && !frameEl().classList.contains("is-fullscreen")) {
+          frame.layout["scene.domain"] = sceneDomain(target, fromP + (1 - fromP) * k);
+        }
+        return frame;
+      };
+      if (!animate || reducedMotion) {
+        applyScene(target, at(1)).then(() => settleScene(flat));
+        return;
+      }
+      const DURATION = 1100;
+      const started = performance.now();
+      const run = (now) => {
+        if (landscape.flat !== flat) return;  // changed again halfway
+        const t = Math.min((now - started) / DURATION, 1);
+        applyScene(target, at(t)).then(() => (t < 1 ? requestAnimationFrame(run) : settleScene(flat)));
+      };
+      requestAnimationFrame(run);
+    }
+
+    // ---------- Scrolling flattens the opening map ----------
+    // The scroll over the pinned stage drives the plan from 0 to 1. Until it
+    // reaches 1, scrolling back up lifts the map out again; at 1 the map is
+    // flat for the rest of the visit, also when scrolling back up.
+    // Each frame does one update and skips while the last is still drawing,
+    // so a fast scroll never builds a queue. The map moves sideways (the
+    // costly part) once, after the flattening.
+    // The map's state for this visit (this tab): once the map has formed,
+    // coming back to the page (from a motion, say) opens it formed, in the
+    // view and with the marks left, instead of playing the change again.
+    const visit = {
+      KEY: "chartist.map",
+      read() {
+        try { return JSON.parse(sessionStorage.getItem(this.KEY)) || {}; } catch { return {}; }
+      },
+      save(change) {
+        try { sessionStorage.setItem(this.KEY, JSON.stringify({ ...this.read(), ...change })); } catch { /* not kept */ }
+      },
+    };
+
+    const morph = { p: 0, plan: null, done: false, queued: false, busy: false, again: false };
+    function morphed({ glide = true } = {}) {
+      if (morph.done) return;
+      visit.save({ formed: true });
+      // A formed map is past the opening: the menu is shown from here on.
+      document.body.classList.add("scrolled");
+      morph.done = true;
+      morph.p = 1;
+      const hero = document.getElementById("hero");
+      // The title leaves the column, so the controls and axes below move up
+      // to the caption: they glide there instead of jumping.
+      const moving = [document.getElementById("map-controls"), document.getElementById("map-axes")]
+        .filter((node) => node.closest("#map-info"));
+      const tops = moving.map((node) => node.getBoundingClientRect().top);
+      hero.classList.add("morphed");
+      hero.style.setProperty("--p", 1);
+      if (glide && !reducedMotion) {
+        moving.forEach((node, i) => {
+          const shift = tops[i] - node.getBoundingClientRect().top;
+          if (shift) node.animate([{ transform: `translateY(${shift}px)` }, { transform: "none" }], { duration: 550, easing: "ease" });
+        });
+      }
+      // The pinned stretch has done its job: remove it, and keep everything
+      // on screen where it is. Without this, the flat map stays pinned for
+      // another screen of scrolling, down and back up, while nothing
+      // happens. The browser may already keep the content in place itself
+      // (scroll anchoring), so the correction is measured, not assumed:
+      // whatever the content below the map still moved is scrolled back.
+      const below = document.querySelector(".band");
+      const before = below.getBoundingClientRect().top;
+      hero.style.setProperty("--morph", "0px");
+      const moved = below.getBoundingClientRect().top - before;
+      if (Math.abs(moved) > 0.5) window.scrollBy({ top: moved, behavior: "instant" });
+      document.getElementById("map-caption").inert = false;
+      document.getElementById("map-axes").inert = false;  // its links work from now on
+      document.getElementById("map-controls").inert = false;
+    }
+    // Back on the page in this visit: the map is formed from the start (the
+    // map itself is set to match once drawn, below).
+    const returning = visit.read();
+    if (returning.formed) morphed({ glide: false });
+
+    function scheduleMorph() {
+      if (morph.done || morph.queued) return;
+      morph.queued = true;
+      requestAnimationFrame(morphStep);
+    }
+    function morphStep() {
+      morph.queued = false;
+      if (morph.done) return;
+      const hero = document.getElementById("hero");
+      const distance = hero.offsetHeight - window.innerHeight;
+      const p = distance > 1 ? Math.min(Math.max(window.scrollY / distance, 0), 1) : Number(window.scrollY > 0);
+      hero.style.setProperty("--p", p);
+      if (!landscape.has3d || !window.Plotly) return;
+      if (morph.busy) {
+        morph.again = true;
+        return;
+      }
+      const target = document.getElementById("plot-3d");
+      if (p > 0 && !morph.plan) {
+        landscape.stopRotating?.();
+        landscape.showDetails?.();
+        morph.plan = planMorph(true);
+      }
+      if (!morph.plan) return;
+      morph.busy = true;
+      applyScene(target, morph.plan(p)).then(() => {
+        morph.busy = false;
+        if (p === 0) morph.plan = null;  // back at the start: plan again from wherever the map is turned
+        if (p >= 1) finishMorph(target);
+        else if (morph.again) {
+          morph.again = false;
+          scheduleMorph();
+        }
+      });
+    }
+    // Flat for the rest of the visit; then the map slides over to where the
+    // caption leaves room, in a few frames.
+    function finishMorph(target) {
+      landscape.flat = true;
+      showView(true);
+      settleScene(true);
+      morphed();
+      if (frameEl().classList.contains("is-fullscreen")) return;
+      const STEPS = 10;
+      const slide = (i) => {
+        const k = i / STEPS;
+        Plotly.relayout(target, { "scene.domain": sceneDomain(target, k * k * (3 - 2 * k)) })
+          .then(() => { if (i < STEPS) requestAnimationFrame(() => slide(i + 1)); });
+      };
+      slide(1);
+    }
+    window.addEventListener("scroll", scheduleMorph, { passive: true });
+
+    document.querySelectorAll("#map-controls [data-view]").forEach((button) =>
+      button.addEventListener("click", () => setFlat(button.dataset.view === "flat")));
+
+    // ---------- Over the map: logos and axis labels ----------
+    // Plotly draws no images in 3D, so the logos are a layer on top, placed
+    // with the map's own projection: every frame in which the camera or the
+    // box changed (turning, flattening, dragging), each party's position is
+    // projected to the screen. The flat map gets its axis labels this way
+    // too, with the share each axis explains.
+    const frameEl = () => document.getElementById("plot-frame");
+    function projector(target) {
+      const scene = target._fullLayout?.scene?._scene;
+      const camera = scene?.glplot?.cameraParams;
+      if (!camera) return null;
+      const { model, view, projection } = camera;
+      const scale = scene.dataScale;
+      const box = scene.container.getBoundingClientRect();
+      const origin = target.getBoundingClientRect();
+      const times = (m, v) => [0, 1, 2, 3].map((r) => m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3]);
+      return (x, y, z) => {
+        const v = times(projection, times(view, times(model, [x * scale[0], y * scale[1], z * scale[2], 1])));
+        return {
+          x: box.left - origin.left + ((v[0] / v[3] + 1) / 2) * box.width,
+          y: box.top - origin.top + ((1 - v[1] / v[3]) / 2) * box.height,
+          depth: v[2] / v[3],
+          distance: v[3],  // from the camera
+        };
+      };
+    }
+
+    function buildLogos(usable) {
+      const layer = document.getElementById("map-logos");
+      const tip = document.getElementById("map-tip");
+      layer.replaceChildren(...usable.map((p) => {
+        const link = el("a", { className: "map-logo", href: `/party/${p.partyId}/`, ariaLabel: p.name },
+          partyLogo(p, { size: "md" }));
+        link.dataset.party = p.partyId;
+        const show = () => {
+          tip.replaceChildren(p.name, el("span", {},
+            `PC1 ${number(p.x, 1)} · PC2 ${number(p.y, 1)} · PC3 ${number(p.z, 1)}`));
+          tip.hidden = false;
+          const at = link.style.transform.match(/-?[\d.]+(?=px)/g) || [0, 0];
+          tip.style.transform = `translate(${at[0]}px, ${at[1]}px) translate(-50%, calc(-100% - 18px))`;
+        };
+        for (const type of ["mouseenter", "focus"]) link.addEventListener(type, show);
+        for (const type of ["mouseleave", "blur"]) link.addEventListener(type, () => { tip.hidden = true; });
+        return link;
+      }));
+      onFocus((partyId) => {
+        layer.classList.toggle("focusing", Boolean(partyId));
+        layer.querySelectorAll(".map-logo").forEach((link) =>
+          link.classList.toggle("is-focus", Number(link.dataset.party) === partyId));
+      });
+      requestAnimationFrame(drawOverlay);
+    }
+
+    let overlaySignature = "";
+    function drawOverlay() {
+      requestAnimationFrame(drawOverlay);
+      const target = document.getElementById("plot-3d");
+      if (!landscape.has3d || document.hidden || !heroInView) return;
+      const project = projector(target);
+      if (!project) return;
+      const { view, model } = target._fullLayout.scene._scene.glplot.cameraParams;
+      const box = target._fullLayout.scene._scene.container.getBoundingClientRect();
+      const flat = landscape.flatness >= 0.98;
+      const signature = [...view, ...model, box.left, box.width, box.height, landscape.marks, flat].join();
+      if (signature === overlaySignature) return;
+      overlaySignature = signature;
+
+      if (landscape.marks === "logos") {
+        // Big in depth and bigger still once flat, where they are the map;
+        // in depth, nearer parties larger than those further back.
+        const base = 1.15 + 0.2 * landscape.flatness;
+        const placed = landscape.usable.map((p) => project(p.x, p.y, p.z));
+        const meanDistance = placed.reduce((sum, at) => sum + at.distance, 0) / placed.length;
+        document.querySelectorAll("#map-logos .map-logo").forEach((link, i) => {
+          const at = placed[i];
+          const near = Math.min(Math.max(meanDistance / at.distance, 0.75), 1.35);
+          link.style.transform =
+            `translate(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px) translate(-50%, -50%) scale(${(base * near).toFixed(3)})`;
+          link.style.zIndex = Math.round((1 - at.depth) * 1000);  // nearer on top
+        });
+      }
+      // Flat: name each axis, with its share, beside the map's edge.
+      const [xRange, yRange] = landscape.ranges;
+      const xLabel = document.getElementById("axis-x");
+      const yLabel = document.getElementById("axis-y");
+      xLabel.hidden = yLabel.hidden = !flat;
+      if (!flat) return;
+      const share = (number) => [
+        el("strong", {}, `PC${number} `),
+        el("span", {}, Number.isFinite(landscape.variance[number])
+          ? `· ${pct(landscape.variance[number], 1)} ${t("of the differences →")}` : t("→")),
+      ];
+      xLabel.replaceChildren(...share(1));
+      yLabel.replaceChildren(...share(2));
+      const bottom = project((xRange[0] + xRange[1]) / 2, yRange[0], 0);
+      const left = project(xRange[0], (yRange[0] + yRange[1]) / 2, 0);
+      xLabel.style.transform = `translate(${bottom.x}px, ${bottom.y + 14}px) translate(-50%, 0)`;
+      yLabel.style.transform = `translate(${left.x - 46}px, ${left.y}px) translate(-50%, -50%) rotate(-90deg)`;
+    }
+    let heroInView = true;
+    new IntersectionObserver(([entry]) => { heroInView = entry.isIntersecting; })
+      .observe(document.getElementById("hero"));
+
+    // Dots (Plotly's points and names) or logos (the layer above).
+    function setMarks(mode) {
+      landscape.marks = mode;
+      visit.save({ marks: mode });
+      document.querySelectorAll("#map-controls [data-marks]").forEach((button) =>
+        button.setAttribute("aria-pressed", String(button.dataset.marks === mode)));
+      document.getElementById("map-logos").hidden = mode !== "logos";
+      document.getElementById("map-tip").hidden = true;
+      overlaySignature = "";
+      if (landscape.has3d && window.Plotly) {
+        // Hidden, not removed: without a trace Plotly drops the scene too.
+        const dots = mode === "dots";
+        Plotly.restyle(document.getElementById("plot-3d"), {
+          mode: dots ? "markers+text" : "markers",
+          "marker.opacity": dots ? 1 : 0,
+          hoverinfo: dots ? "all" : "skip",
+        });
+        landscape.showDetails?.();
+      }
+    }
+    document.querySelectorAll("#map-controls [data-marks]").forEach((button) =>
+      button.addEventListener("click", () => setMarks(button.dataset.marks)));
+
+    // ---------- The map's controls: in the column, or docked ----------
+    // Wide screens have the column beside the map; narrower ones dock the
+    // same controls under the map. So does fullscreen, where the map should
+    // get the whole window, not share it with the column.
+    const wideLayout = matchMedia("(min-width: 1000px)");
+    function placeControls() {
+      const controls = document.getElementById("map-controls");
+      const fullscreen = document.getElementById("plot-frame").classList.contains("is-fullscreen");
+      if (wideLayout.matches && !fullscreen) document.getElementById("map-axes").before(controls);
+      else document.getElementById("map-dock").append(controls);
+    }
+    wideLayout.addEventListener("change", placeControls);
+    placeControls();
+
+    // Highlight: the list holds only parties (its prompt cannot be chosen);
+    // the cross next to it clears the highlight.
+    const clearFocus = document.getElementById("clear-focus");
+    clearFocus.addEventListener("click", () => setFocus(null));
+    onFocus((partyId) => { clearFocus.hidden = !partyId; });
+    clearFocus.hidden = !focusedParty;
+
+    // ---------- 02: the axes, each as a line with the parties on it ----------
+    // Dots in three columns, or logos on three full-width lines.
+    const axesView = { analysis: null, points: null, mode: "dots" };
+
+    // Shortcuts under the map's caption: each axis, its share, its page.
+    function renderMapAxes(analysis) {
+      const components = [...(analysis?.components || [])].sort((a, b) => a.number - b.number);
+      const role = { 1: t("across"), 2: t("up and down"), 3: t("depth") };
+      const top = Math.max(0, ...components.map((c) => c.explained_variance)) || 1;
+      // The shares added up, so no one has to.
+      const share = components.reduce((sum, c) => sum + Number(c.explained_variance), 0);
+      document.getElementById("map-total").textContent = components.length
+        ? t("Combined, the axes explain {share} of the differences.", { share: pct(share, 1) }) : "";
+      document.getElementById("map-axes").replaceChildren(...components.map((c) => {
+        const meter = el("span", { className: "meter" }, el("span"));
+        meter.firstChild.style.width = `${(c.explained_variance / top) * 100}%`;
+        return el("a", { href: `/component/${c.number}/`, title: t("What drives PC{number}", { number: c.number }) },
+          el("span", {}, el("strong", {}, `PC${c.number}`), role[c.number] || ""),
+          el("span", { className: "share" }, pct(c.explained_variance, 1)),
+          roundArrow(),
+          meter);
+      }));
+    }
+
+    function renderAxes(analysis, allPoints, mode = axesView.mode) {
+      Object.assign(axesView, { analysis, points: allPoints, mode });
+      const box = document.getElementById("axes");
+      const components = [...(analysis?.components || [])].sort((a, b) => a.number - b.number);
+      if (!components.length || !allPoints.length) {
+        box.replaceChildren(el("p", { className: "hint" }, t("No analysis yet. Run the analysis first.")));
+        return;
+      }
+      box.classList.toggle("logos", mode === "logos");
+      document.querySelectorAll("#axes-mode [data-mode]").forEach((button) =>
+        button.setAttribute("aria-pressed", String(button.dataset.mode === mode)));
+      const role = { 1: t("across the map"), 2: t("up and down"), 3: t("the depth") };
+      const coordinate = { 1: "x", 2: "y", 3: "z" };
+      const pending = [];
+      box.replaceChildren(
         ...components.map((c) => {
-          const meter = el("div", { className: "meter" }, el("span"));
-          meter.firstChild.style.width = `${(c.explained_variance / top) * 100}%`;
-          return el(
-            "li", {},
-            el("a", { href: `/component/${c.number}/` },
-              el("span", {}, `PC${c.number} →`),
-              el("span", {}, pct(c.explained_variance, 1))),
-            meter,
+          const key = coordinate[c.number];
+          const placed = key ? allPoints.filter((p) => Number.isFinite(p[key])) : [];
+          const line = el("div", { role: "group" });
+          const ends = el("div", { className: "party-line-ends" });
+          if (placed.length) {
+            const sorted = [...placed].sort((a, b) => a[key] - b[key]);
+            line.setAttribute("aria-label", t("Parties on PC{number}, from {from} to {to}", { number: c.number, from: sorted[0].label, to: sorted.at(-1).label }));
+            ends.append(el("span", {}, sorted[0].label), el("span", {}, sorted.at(-1).label));
+            // Placed once the line is on the page and has its width.
+            pending.push(() => partyLine(line,
+              placed.map((p) => ({
+                id: p.partyId, abbreviation: p.abbreviation, logo_url: p.logo_url,
+                value: p[key], color: mainAxisColor(p.x, allPoints),
+              })),
+              { mode }));
+          }
+          return el("article", { className: "axis" },
+            el("div", { className: "axis-text" },
+              el("p", { className: "axis-name" }, el("strong", {}, `PC${c.number}`), ` · ${role[c.number] || t("a further pattern")}`),
+              el("div", { className: "axis-share" }, pct(c.explained_variance, 1)),
+              el("p", { className: "axis-note" }, t("of the differences between parties"))),
+            el("div", { className: "axis-line" }, line, ends),
+            el("a", { className: "more", href: `/component/${c.number}/` },
+              el("span", {}, t("The motions behind it")),
+              roundArrow()),
           );
         })
       );
+      pending.forEach((place) => place());
+      // Side by side, the lines line up: all as tall as the tallest.
+      const lines = [...box.querySelectorAll(".party-line")];
+      const tallest = Math.max(0, ...lines.map((line) => line.offsetHeight));
+      if (mode === "dots") lines.forEach((line) => { line.style.height = `${tallest}px`; });
+      highlightAxes(focusedParty);
     }
 
-    function renderComponentCards(analysis) {
-      const grid = document.getElementById("component-grid");
-      const components = [...(analysis?.components || [])].sort((a, b) => a.number - b.number);
-      if (!components.length) {
-        grid.replaceChildren(el("p", { className: "hint" }, "No analysis yet. Run the analysis first."));
-        return;
-      }
-      const role = { 1: "Horizontal axis", 2: "Vertical axis", 3: "Depth axis in 3D" };
-      grid.replaceChildren(
-        ...components.map((c) => {
-          const meter = el("div", { className: "meter" }, el("span"));
-          meter.firstChild.style.width = pct(c.explained_variance);
-          return el(
-            "a", { className: "component-card", href: `/component/${c.number}/` },
-            el("div", { className: "what" }, `PC${c.number} · ${role[c.number] || "Component"}`),
-            el("div", { className: "big" }, pct(c.explained_variance, 1)),
-            el("div", { className: "what" }, "of the differences between parties"),
-            meter,
-            el("span", { className: "more" }, "See the motions that drive it →"),
-          );
-        })
-      );
+    function highlightAxes(partyId) {
+      document.querySelectorAll("#axes .party-line").forEach((line) => highlightOnLine(line, partyId));
     }
+    onFocus(highlightAxes);
+    document.querySelectorAll("#axes-mode [data-mode]").forEach((button) =>
+      button.addEventListener("click", () => {
+        if (axesView.points) renderAxes(axesView.analysis, axesView.points, button.dataset.mode);
+      }));
+    // The marks are placed in pixels: place them again when the width changes.
+    let axesWidth = 0;
+    new ResizeObserver(([entry]) => {
+      const width = Math.round(entry.contentRect.width);
+      if (width === axesWidth) return;
+      axesWidth = width;
+      if (axesView.points) renderAxes(axesView.analysis, axesView.points);
+    }).observe(document.getElementById("axes"));
 
-    (async () => {
+    const landscapeLoaded = (async () => {
       const [parties, analysis] = await Promise.all([
         requests.parties,
         requests.analysis.catch(() => null),
@@ -445,8 +1671,6 @@
       if (analysis?.total_explained_variance) {
         document.getElementById("stat-variance").textContent = pct(analysis.total_explained_variance);
       }
-      renderAxisList(analysis);
-      renderComponentCards(analysis);
 
       const focus = document.getElementById("focus");
       [...parties]
@@ -456,136 +1680,214 @@
       focus.addEventListener("change", () => setFocus(Number(focus.value) || null));
 
       const points = toPoints(parties);
+      renderAxes(analysis, points);
+      renderMapAxes(analysis);
       if (!points.length) {
-        document.getElementById("plot-frame").replaceChildren(
-          el("div", { className: "placeholder" }, "No PCA scores yet. Run the analysis first.")
+        document.getElementById("plot-3d").replaceChildren(
+          el("div", { className: "placeholder" }, t("No PCA scores yet. Run the analysis first."))
         );
         return;
       }
-      landscape.points = points;
-      landscape.variance = variance;
-      if (landscape.view === "3d") {
-        // The first 3D draw sets up WebGL and blocks the page for a moment,
-        // so draw it last: after the rest of the page, when the browser is idle.
-        const target = document.getElementById("plot-3d");
-        target.replaceChildren(el("div", { className: "placeholder" }, "Loading 3D view…"));
-        await Promise.allSettled([plotlyLoaded, requests.matrix]);
-        await afterIdle();
-        if (landscape.has3d === null) target.replaceChildren();
+      await plotlyLoaded;
+      landscape.has3d = renderPca3d(points, variance);
+      if (!landscape.has3d) {
+        document.getElementById("plot-3d").replaceChildren(
+          el("div", { className: "placeholder" }, t("No 3D scores yet. Run the analysis first.")));
+        return;
       }
-      showView(landscape.view);
+      // A shared link to the flat map opens flat; back on the page in this
+      // visit, the map is as it was left.
+      if (new URLSearchParams(location.search).get("view") === "flat") {
+        setFlat(true, { animate: false });
+      } else if (returning.formed) {
+        landscape.stopRotating?.();
+        landscape.showDetails?.();
+        if (returning.view === "depth") {
+          showView(false);
+          settleScene(false);
+        } else {
+          setFlat(true, { animate: false });
+        }
+      }
+      if (returning.marks === "logos") setMarks("logos");
     })().catch((error) => {
-      document.getElementById("plot-frame").replaceChildren(
-        el("div", { className: "placeholder" }, `Could not load the landscape: ${error.message}`)
+      document.getElementById("plot-3d").replaceChildren(
+        el("div", { className: "placeholder" }, t("Could not load the landscape: {error}", { error: error.message }))
       );
     });
 
-    // ---------- Landscape views: 3D (default) and 2D ----------
-    // The view is kept in the URL (?view=2d). Each view renders the first
-    // time it is shown.
     const landscape = {
-      view: new URLSearchParams(location.search).get("view") === "2d" ? "2d" : "3d",
-      points: null,
-      variance: null,
-      chart2d: null,
       has3d: null,
+      depth: null,
+      flat: false,
+      flatness: 0,
+      marks: "dots",
+      markerSize: null,
+      textSize: null,
+      usable: [],
+      ranges: null,
+      variance: {},
+      fullscreenBusy: false,
+      showDetails: null,
+      stopRotating: null,
     };
     // Plotly loads with `defer`, which runs before DOMContentLoaded.
     const plotlyLoaded = new Promise((resolve) => {
       if (document.readyState !== "loading") resolve();
       else document.addEventListener("DOMContentLoaded", resolve, { once: true });
     });
-    const tabs = [...document.querySelectorAll(".view-tabs [role=tab]")];
+    document.getElementById("plot-3d").replaceChildren(el("div", { className: "placeholder" }, t("Loading the map…")));
 
-    // Resolves once the page has painted and the browser has a quiet moment.
-    const afterIdle = () => new Promise((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (window.requestIdleCallback) requestIdleCallback(resolve, { timeout: 1500 });
-        else setTimeout(resolve, 50);
-      }));
-    });
-
-    function showView(view) {
-      if (!landscape.points) return;
-      if (view === "3d" && landscape.has3d === null) {
-        landscape.has3d = renderPca3d(landscape.points, landscape.variance);
-      }
-      if (view === "3d" && !landscape.has3d) view = "2d";  // no PC3 scores
-      landscape.view = view;
-      tabs.forEach((tab) => tab.setAttribute("aria-selected", String(tab.dataset.view === view)));
-      document.getElementById("plot-3d").hidden = view !== "3d";
-      document.getElementById("plot-2d").hidden = view !== "2d";
-      if (view === "2d" && !landscape.chart2d) {
-        landscape.chart2d = renderPca2d(landscape.points, landscape.variance);
-      }
-      const url = new URL(location.href);
-      if (view === "2d") url.searchParams.set("view", "2d");
-      else url.searchParams.delete("view");
-      history.replaceState(null, "", url);
-    }
-    tabs.forEach((tab) => tab.addEventListener("click", () => showView(tab.dataset.view)));
-    document.getElementById("plot-3d").hidden = landscape.view !== "3d";
-    document.getElementById("plot-2d").hidden = landscape.view !== "2d";
-    tabs.forEach((tab) => tab.setAttribute("aria-selected", String(tab.dataset.view === landscape.view)));
-
-    // Fullscreen shows the current view on its own. Browsers without the
-    // Fullscreen API for elements (iPhone Safari) get a full-window overlay.
-    const frame = document.getElementById("plot-frame");
-    const nativeFullscreen = Boolean(frame.requestFullscreen || frame.webkitRequestFullscreen);
-    const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
-
-    function resizePlots() {
-      // Let the new size settle, then redraw at it.
-      requestAnimationFrame(() => {
-        if (landscape.has3d && window.Plotly) Plotly.Plots.resize(document.getElementById("plot-3d"));
-        landscape.chart2d?.resize();
-      });
-    }
+    // Fullscreen fills the browser window with the map, with its controls
+    // (not the whole screen). Escape or the button closes it. Only here does
+    // scrolling zoom.
+    const frame = frameEl();
+    const fullscreenButton = document.getElementById("fullscreen");
     function setFullscreen(on) {
+      landscape.fullscreenBusy = true;
+      setTimeout(() => { landscape.fullscreenBusy = false; }, 300);
       frame.classList.toggle("is-fullscreen", on);
-      document.body.classList.toggle("no-scroll", on && !nativeFullscreen);
-      resizePlots();
-    }
-    function toggleFullscreen() {
-      const on = !frame.classList.contains("is-fullscreen");
-      if (!nativeFullscreen) setFullscreen(on);
-      else if (on) (frame.requestFullscreen || frame.webkitRequestFullscreen).call(frame);
-      else if (fullscreenElement()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-    }
-    for (const type of ["fullscreenchange", "webkitfullscreenchange"]) {
-      document.addEventListener(type, () => setFullscreen(fullscreenElement() === frame));
-    }
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !nativeFullscreen && frame.classList.contains("is-fullscreen")) setFullscreen(false);
-    });
-    document.getElementById("fullscreen").addEventListener("click", toggleFullscreen);
-    frame.querySelector("[data-action=exit-fullscreen]").addEventListener("click", toggleFullscreen);
-
-    // Download the current view as a PNG, at twice the screen resolution.
-    function downloadView() {
-      const stamp = new Date().toISOString().slice(0, 10);
-      if (landscape.view === "3d" && window.Plotly) {
+      document.getElementById("hero").classList.toggle("fullscreen", on);
+      document.body.classList.toggle("no-scroll", on);
+      fullscreenButton.setAttribute("aria-pressed", String(on));
+      placeControls();
+      fullscreenButton.querySelector("span").textContent = fullscreenLabel(on);
+      fullscreenButton.title = on ? t("Back to the page (Esc)") : t("Show the map on its own, filling the window");
+      if (landscape.has3d && window.Plotly) {
         const target = document.getElementById("plot-3d");
-        Plotly.downloadImage(target, {
-          format: "png",
-          filename: `chartist-landscape-3d-${stamp}`,
-          width: target.clientWidth,
-          height: target.clientHeight,
-          scale: 2,
-        });
-      } else if (landscape.chart2d) {
-        el("a", { href: landscape.chart2d.toBase64Image("image/png"), download: `chartist-landscape-2d-${stamp}.png` }).click();
+        // The whole window, above the docked controls, and the camera that
+        // much closer, so the map really grows (back out on leaving).
+        const full = { x: [0, 1], y: [0.12, 0.97] };
+        target.layout.scene.domain = on ? full : sceneDomain(target, morph.p);
+        const camera = target.layout.scene.camera;
+        if (camera?.eye && landscape.fullscreen !== on) {
+          const factor = on ? 0.86 : 1 / 0.86;
+          camera.eye = { x: camera.eye.x * factor, y: camera.eye.y * factor, z: camera.eye.z * factor };
+        }
+        landscape.fullscreen = on;
+        Plotly.react(target, target.data, target.layout, heroConfig());
       }
+      overlaySignature = "";
     }
-    document.getElementById("download").addEventListener("click", downloadView);
-    frame.querySelector("[data-action=download]").addEventListener("click", downloadView);
+    const toggleFullscreen = () => setFullscreen(!frame.classList.contains("is-fullscreen"));
+    // On touch screens the map turns only in fullscreen: the button says so.
+    const fullscreenLabel = (on) => (on ? t("Exit fullscreen") : touchScreen ? t("Explore") : t("Fullscreen"));
+    fullscreenButton.querySelector("span").textContent = fullscreenLabel(false);
+    fullscreenButton.classList.toggle("labelled", touchScreen);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && frame.classList.contains("is-fullscreen")) setFullscreen(false);
+    });
+    fullscreenButton.addEventListener("click", toggleFullscreen);
 
-    // ---------- Agreement matrix ----------
-    // Sequential ramp, light (low agreement) to dark indigo (high), so blocs
-    // show as dark squares.
+    // Save the map as a PNG, at twice the screen resolution. Plotly's own
+    // picture holds the points and grid; the logos and the flat map's axis
+    // labels are a layer above it, so they are painted onto the picture at
+    // the places they have on screen.
+    async function downloadView() {
+      if (!landscape.has3d || !window.Plotly) return;
+      const SCALE = 2;
+      const target = document.getElementById("plot-3d");
+      const width = target.clientWidth;
+      const height = target.clientHeight;
+      // The paper is behind the graph, not in it: paint it in, then go back
+      // to transparent.
+      await Plotly.relayout(target, { paper_bgcolor: css("--hero-bg") });
+      let picture;
+      try {
+        picture = await Plotly.toImage(target, { format: "png", width, height, scale: SCALE });
+      } finally {
+        Plotly.relayout(target, { paper_bgcolor: "rgba(0, 0, 0, 0)" });
+      }
+      const canvas = el("canvas", { width: width * SCALE, height: height * SCALE });
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(await loadImage(picture), 0, 0);
+      ctx.scale(SCALE, SCALE);
+      const origin = target.getBoundingClientRect();
+      const box = (node) => {
+        const r = node.getBoundingClientRect();
+        return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
+      };
+      if (landscape.marks === "logos") {
+        // Back to front, as on screen.
+        const links = [...document.querySelectorAll("#map-logos .map-logo")]
+          .sort((a, b) => Number(a.style.zIndex) - Number(b.style.zIndex));
+        for (const link of links) {
+          const frame = link.querySelector(".logo");
+          const f = box(frame);
+          const faded = getComputedStyle(link).opacity;
+          ctx.globalAlpha = Number(faded);
+          ctx.fillStyle = getComputedStyle(frame).backgroundColor;
+          ctx.strokeStyle = css("--border");
+          ctx.beginPath();
+          ctx.roundRect(f.x, f.y, f.w, f.h, 4);
+          ctx.fill();
+          ctx.stroke();
+          const img = frame.querySelector("img");
+          if (img?.naturalWidth) {
+            // As object-fit: contain does in the frame.
+            const r = box(img);
+            const fit = Math.min(r.w / img.naturalWidth, r.h / img.naturalHeight);
+            const w = img.naturalWidth * fit;
+            const h = img.naturalHeight * fit;
+            ctx.drawImage(img, r.x + (r.w - w) / 2, r.y + (r.h - h) / 2, w, h);
+          } else {
+            const style = getComputedStyle(frame);
+            ctx.fillStyle = style.color;
+            ctx.font = `${style.fontWeight} ${parseFloat(style.fontSize) * (f.h / frame.offsetHeight)}px ${style.fontFamily}`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(frame.textContent, f.x + f.w / 2, f.y + f.h / 2);
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+      // The flat map's axis labels, without the link arrow.
+      for (const label of document.querySelectorAll(".map-axis:not([hidden])")) {
+        const text = label.textContent.replace(/\s*→\s*$/, "");
+        const r = box(label);
+        ctx.save();
+        ctx.fillStyle = css("--ink-2");
+        ctx.font = `600 13px ${css("--font-sans")}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+        if (label.classList.contains("vertical")) ctx.rotate(-Math.PI / 2);
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+      }
+      // Cropped to the map (with room for its axis labels): on screen the
+      // column beside it is part of the same area.
+      const scene = box(target._fullLayout.scene._scene.container);
+      const MARGIN = 48;
+      const crop = {
+        x: Math.max(0, scene.x - MARGIN),
+        y: Math.max(0, scene.y - MARGIN / 2),
+      };
+      crop.w = Math.min(width, scene.x + scene.w + MARGIN / 2) - crop.x;
+      crop.h = Math.min(height, scene.y + scene.h + MARGIN / 2) - crop.y;
+      const cropped = el("canvas", { width: Math.round(crop.w * SCALE), height: Math.round(crop.h * SCALE) });
+      cropped.getContext("2d").drawImage(
+        canvas, crop.x * SCALE, crop.y * SCALE, crop.w * SCALE, crop.h * SCALE, 0, 0, cropped.width, cropped.height);
+      const stamp = new Date().toISOString().slice(0, 10);
+      el("a", {
+        href: cropped.toDataURL("image/png"),
+        download: `chartist-map-${landscape.flat ? "2d" : "3d"}-${landscape.marks}-${stamp}.png`,
+      }).click();
+    }
+    const loadImage = (src) => new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = src;
+    });
+    document.getElementById("download").addEventListener("click", downloadView);
+
+    // ---------- 03: agreement matrix ----------
+    // Sequential ramp from the paper color (low agreement) to deep blue
+    // (high), so blocs show as dark squares.
     const AGREEMENT_RAMP = [
-      "#eef2ff", "#dfe5fe", "#c8d1fc", "#adb8f8", "#929ef2",
-      "#7a84e8", "#6669d9", "#5653c6", "#4740ae",
+      "#f3ece0", "#dde0dd", "#c3d0db", "#a6bdd5", "#88a7cb",
+      "#6a8fbe", "#4f77ad", "#365f9a", "#1f4e8c",
     ];
     function rampRgb(t) {
       const hex = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -692,11 +1994,13 @@
             const rgb = scale(pair.agreement);
             td.style.background = `rgb(${rgb.join(", ")})`;
             td.style.color = cellInk(rgb);
-            td.title = `${party.abbreviation} and ${other.abbreviation}: ${pct(pair.agreement, 1)} of ${pair.shared_motions.toLocaleString()} shared motions`;
+            td.title = t("{a} and {b}: {share} of {count} shared motions", {
+              a: party.abbreviation, b: other.abbreviation, share: pct(pair.agreement, 1), count: number(pair.shared_motions),
+            });
           } else {
             td.className = "none";
             td.textContent = "–";
-            td.title = "Not compared: no shared motions, or the same party under a new name";
+            td.title = t("Not compared: no shared motions, or the same party under a new name");
           }
           row.append(td);
         }
@@ -723,6 +2027,7 @@
       });
     }
 
+    // ---------- 04: every party, closest and furthest ----------
     function closestAndFurthest(partyId, matrix, lookup) {
       const scored = matrix.parties
         .filter((other) => other.id !== partyId)
@@ -732,44 +2037,52 @@
       return { closest: scored[0] || null, furthest: scored.at(-1) || null };
     }
 
-    function renderPartyCards(parties, matrix, lookup) {
+    function renderPartyIndex(parties, matrix, lookup) {
       const grid = document.getElementById("party-grid");
-      const sort = document.getElementById("party-sort");
+      const buttons = [...document.querySelectorAll("#party-sort [data-sort]")];
       const pc1 = (p) => (p.party_scores || []).find((s) => Number(s.component) === 1)?.score ?? -Infinity;
-      const cards = parties.map((party) => {
+      const entries = parties.map((party) => {
         const { closest, furthest } = matrix ? closestAndFurthest(party.id, matrix, lookup) : {};
         const line = (label, entry, kind) => {
           const track = el("span", { className: "track" }, el("span"));
-          track.firstChild.style.width = entry ? pct(entry.pair.agreement) : "0";
+          track.firstChild.style.width = entry ? cssPct(entry.pair.agreement) : "0";
           return el("div", { className: `rel ${kind}` },
             el("span", { className: "k" }, label),
-            el("span", { className: "v", title: entry?.other.abbreviation || "" }, entry ? entry.other.abbreviation : "–"),
+            el("span", { className: "v", title: entry?.other.abbreviation || "" },
+              entry ? partyLogo(entry.other, { size: "sm" }) : null,
+              el("span", {}, entry ? entry.other.abbreviation : "–")),
             el("span", { className: "p" }, entry ? pct(entry.pair.agreement) : ""),
             el("span", { className: "k" }),
             track);
         };
-        const card = el(
-          "a", { className: "party-card", href: `/party/${party.id}/` },
-          el("div", { className: "top" },
-            el("span", { className: "id" }, partyLogo(party, { size: "md" }), el("span", { className: "abbr" }, party.abbreviation)),
-            el("span", { className: "arrow", ariaHidden: "true" }, "→")),
+        const node = el(
+          "a", { className: "entry", href: `/party/${party.id}/` },
+          el("div", { className: "head" },
+            partyLogo(party, { size: "md" }),
+            el("span", { className: "abbr" }, party.abbreviation)),
           el("div", { className: "name" }, party.name !== party.abbreviation ? party.name : ""),
-          line("Most with", closest, "most"),
-          line("Least with", furthest, "least"),
+          line(t("Most with"), closest, "most"),
+          line(t("Least with"), furthest, "least"),
+          el("span", { className: "go" },
+            el("span", {}, t("Open party page")),
+            roundArrow("arrow")),
         );
-        return { party, card, ally: closest?.pair.agreement ?? -1 };
+        return { party, node, ally: closest?.pair.agreement ?? -1 };
       });
       const order = {
         name: (a, b) => a.party.abbreviation.localeCompare(b.party.abbreviation),
         pc1: (a, b) => pc1(a.party) - pc1(b.party),
         ally: (a, b) => b.ally - a.ally,
       };
-      const draw = () => grid.replaceChildren(...[...cards].sort(order[sort.value]).map((c) => c.card));
-      sort.addEventListener("change", draw);
-      draw();
+      const draw = (key) => {
+        buttons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.sort === key)));
+        grid.replaceChildren(...[...entries].sort(order[key]).map((e) => e.node));
+      };
+      buttons.forEach((button) => button.addEventListener("click", () => draw(button.dataset.sort)));
+      draw("name");
     }
 
-    (async () => {
+    const chaptersLoaded = (async () => {
       const [matrix, parties] = await Promise.all([requests.matrix, requests.parties]);
       const names = new Map(parties.map((p) => [p.id, p.name]));
       const lookup = new Map((matrix?.agreements || []).map((a) => [`${a.party}-${a.other_party}`, a]));
@@ -777,14 +2090,90 @@
         renderMatrix(matrix, lookup, names);
       } else {
         document.getElementById("matrix").replaceChildren(
-          el("tr", {}, el("td", { className: "placeholder" }, "No agreement matrix yet. Run the analysis first."))
+          el("tr", {}, el("td", { className: "placeholder" }, t("No agreement matrix yet. Run the analysis first.")))
         );
       }
-      renderPartyCards(parties, matrix, lookup);
+      renderPartyIndex(parties, matrix, lookup);
     })().catch((error) => {
       document.getElementById("matrix").replaceChildren(
-        el("tr", {}, el("td", { className: "placeholder" }, `Could not load agreement: ${error.message}`))
+        el("tr", {}, el("td", { className: "placeholder" }, t("Could not load agreement: {error}", { error: error.message })))
       );
     });
+
+    // A link to a chapter (/#parties): the browser jumps there before the
+    // chapters above it have their content, which then pushes the target
+    // down. Once everything is in, go to it again.
+    Promise.allSettled([landscapeLoaded, chaptersLoaded]).then(() => {
+      const target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target) requestAnimationFrame(() => target.scrollIntoView({ behavior: "instant" }));
+    });
+
+    // "Explore the map": the change to the readable map, played at once.
+    document.getElementById("map-start").addEventListener("click", () => setFlat(true));
+
+    // A jump to a chapter below the map (the menu, a link): the map first
+    // takes its readable form at once, out of sight, so the page has its
+    // final length and the jump lands where it should.
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest("a[href*='#']");
+      if (!link || morph.done || link.pathname !== location.pathname) return;
+      const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+      if (!target || target.closest("#hero")) return;
+      event.preventDefault();
+      setFlat(true, { animate: false });
+      history.pushState(null, "", link.hash);
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth" }));
+    });
+
+
+    // ---------- The chapter bar: shown once the chapters are reached ----------
+    // From when the content below the map reaches the middle of the window;
+    // hidden again back at the map.
+    (() => {
+      const bar = document.getElementById("chapter-bar");
+      const below = document.querySelector(".band");
+      let queued = false;
+      const update = () => {
+        queued = false;
+        bar.classList.toggle("shown", below.getBoundingClientRect().top < window.innerHeight / 2);
+      };
+      window.addEventListener("scroll", () => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(update);
+      }, { passive: true });
+      update();
+    })();
+
+    // ---------- The menu slides in once the visitor scrolls (or the map has
+    // formed, see morphed), and stays ----------
+    (() => {
+      const update = () => {
+        if (window.scrollY <= 24) return;
+        document.body.classList.add("scrolled");
+        window.removeEventListener("scroll", update);
+      };
+      window.addEventListener("scroll", update, { passive: true });
+      update();
+    })();
+
+    // ---------- Chapters fade in as they scroll into view ----------
+    (() => {
+      const sections = [...document.querySelectorAll(".band .stats, main .chapter")];
+      document.body.classList.add("reveal-ready");
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      // As soon as a section's top is a little way into the window, also for
+      // tall sections like the matrix.
+      }, { threshold: 0, rootMargin: "0px 0px -8% 0px" });
+      sections.forEach((section) => {
+        section.classList.add("reveal");
+        observer.observe(section);
+      });
+    })();
   </script>
 {% endblock %}

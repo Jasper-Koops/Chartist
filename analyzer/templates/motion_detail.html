@@ -1,38 +1,98 @@
 {% extends "base.html" %}
+{% load i18n %}
 
 {% block title %}{{ motion.title|truncatechars:70 }}{% endblock %}
 {% block nav %}motions{% endblock %}
 {% block band_class %} compact{% endblock %}
 
+{% block styles %}
+  <style>
+    /* The motion on each axis: a tile to the axis's page. */
+    .motion-axes { display: grid; gap: 10px; }
+    .motion-axis {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      padding: 14px 14px 16px 16px;
+      color: var(--ink-2);
+      font-size: 14px;
+      background: color-mix(in srgb, var(--surface-2) 45%, var(--surface));
+      border: 1px solid transparent;
+      border-radius: 10px;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .motion-axis:hover { text-decoration: none; }
+    .motion-axis:is(:hover, :focus-visible) { background: var(--surface-2); border-color: var(--accent); }
+    .motion-axis .head { display: flex; align-items: center; gap: 8px; }
+    .motion-axis .head strong { color: var(--ink); font-size: 17px; font-family: var(--font-display); }
+    .motion-axis .head .share { color: var(--ink-3); font-size: 13px; }
+    .motion-axis .weight { margin-left: auto; font-family: var(--font-digits); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .motion-axis .weight b { color: var(--ink); font-weight: 700; }
+    .motion-axis .arrow {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid var(--border-strong);
+      color: var(--ink-2);
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+    .motion-axis:is(:hover, :focus-visible) .arrow { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+    .motion-axis .strength { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-3); }
+    .motion-axis .meter { flex: 1 1 auto; max-width: 140px; height: 5px; border-radius: 3px; background: var(--border-strong); }
+    .motion-axis .meter span { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+    .motion-axis .sides { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
+  </style>
+{% endblock %}
+
 {% block band %}
   <ol class="breadcrumbs">
-    <li><a href="{% url 'home' %}">Overview</a></li>
-    <li><a href="{% url 'motion-list' %}" id="back-to-list">Motions</a></li>
-    <li aria-current="page">Motion</li>
+    <li><a href="{% url 'home' %}">{% translate "Overview" %}</a></li>
+    <li><a href="{% url 'motion-list' %}" id="back-to-list">{% translate "Motions" %}</a></li>
+    <li aria-current="page">{% translate "Motion" %}</li>
   </ol>
-  <p class="eyebrow">Motion</p>
+  <p class="eyebrow">{% translate "Motion" %}</p>
   <h1 class="long">{{ motion.title }}</h1>
   <div class="band-meta">
-    <span class="badge {{ motion.status|lower }}">{{ motion.status }}</span>
-    <span>{% if motion.vote_date %}Voted on {{ motion.vote_date|date:"j F Y" }}{% else %}Voting date unknown{% endif %}</span>
+    <span class="badge {{ motion.status|lower }}">{% translate motion.status %}</span>
+    <span>{% if motion.vote_date %}{% blocktranslate with date=motion.vote_date|date:"j F Y" %}Voted on {{ date }}{% endblocktranslate %}{% else %}{% translate "Voting date unknown" %}{% endif %}</span>
   </div>
 {% endblock %}
 
 {% block content %}
   <div class="grid-main">
-    <section class="card">
-      <div class="card-head"><div><h2>Text</h2></div></div>
-      <div class="card-body">
-        <div class="prose" id="text"><p class="hint">Loading...</p></div>
-      </div>
-    </section>
+    <div>
+      <section class="card">
+        <div class="card-head"><div><h2>{% translate "Text" %}</h2></div></div>
+        <div class="card-body">
+          <div class="prose" id="text"><p class="hint">{% translate "Loading..." %}</p></div>
+        </div>
+      </section>
+
+      <!-- Under the text, where the column has room (the votes beside it
+           are taller): where this motion sits on the map's voting
+           patterns, each a way to its axis page. -->
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>{% translate "On the map's axes" %}</h2>
+            <p>{% translate "How strongly this motion follows each voting pattern of the map, compared with all motions. Open an axis to see the motions that drive it." %}</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="motion-axes" id="axes"><span class="hint">{% translate "Loading..." %}</span></div>
+        </div>
+      </section>
+    </div>
 
     <div>
       <section class="card">
         <div class="card-head">
           <div>
-            <h2>How parties voted</h2>
-            <p id="votes-meta">Votes are recorded per party.</p>
+            <h2>{% translate "How parties voted" %}</h2>
+            <p id="votes-meta">{% translate "Votes are recorded per party." %}</p>
           </div>
         </div>
         <div class="card-body">
@@ -41,18 +101,37 @@
         </div>
       </section>
       <section class="card">
-        <div class="card-head"><div><h2>Documents</h2></div></div>
+        <div class="card-head"><div><h2>{% translate "Documents" %}</h2></div></div>
         <div class="card-body">
-          <div class="doc-links" id="documents"><span class="hint">Loading...</span></div>
+          <div class="doc-links" id="documents"><span class="hint">{% translate "Loading..." %}</span></div>
         </div>
       </section>
     </div>
   </div>
+
   {{ motion.id|json_script:"motion-id" }}
 {% endblock %}
 
 {% block scripts %}
   <script>
+    Object.assign(window.I18N, {
+      "No text available for this motion. See the documents for the official version.": "{{ _("No text available for this motion. See the documents for the official version.")|escapejs }}",
+      "Official publication": "{{ _("Official publication")|escapejs }}",
+      "PDF": "{{ _("PDF")|escapejs }}",
+      "No documents linked.": "{{ _("No documents linked.")|escapejs }}",
+      "No votes recorded yet; they are sometimes published after the result.": "{{ _("No votes recorded yet; they are sometimes published after the result.")|escapejs }}",
+      "Votes as recorded per party. The result is decided by seats, not by the number of parties.": "{{ _("Votes as recorded per party. The result is decided by seats, not by the number of parties.")|escapejs }}",
+      "{title}: {count} parties": "{{ _("{title}: {count} parties")|escapejs }}",
+      "{count} party": "{{ _("{count} party")|escapejs }}",
+      "{count} parties": "{{ _("{count} parties")|escapejs }}",
+      "Not part of the newest analysis.": "{{ _("Not part of the newest analysis.")|escapejs }}",
+      "What drives PC{number}": "{{ _("What drives PC{number}")|escapejs }}",
+      "Weight": "{{ _("Weight")|escapejs }}",
+      "Stronger than {share} of motions": "{{ _("Stronger than {share} of motions")|escapejs }}",
+      "Hardly part of this pattern.": "{{ _("Hardly part of this pattern.")|escapejs }}",
+      "On this axis, a vote for it goes with {for}; against it, with {against}.": "{{ _("On this axis, a vote for it goes with {for}; against it, with {against}.")|escapejs }}",
+      "Could not load the motion: {error}": "{{ _("Could not load the motion: {error}")|escapejs }}",
+    });
     const MOTION_ID = JSON.parse(document.getElementById("motion-id").textContent);
 
     // Back to the motion list with the search still applied.
@@ -81,7 +160,7 @@
       const text = document.getElementById("text");
       const lines = motion.text || [];
       if (!lines.length) {
-        text.replaceChildren(el("p", { className: "hint" }, "No text available for this motion. See the documents for the official version."));
+        text.replaceChildren(el("p", { className: "hint" }, t("No text available for this motion. See the documents for the official version.")));
         return;
       }
       text.replaceChildren(...lines.map((line) => {
@@ -98,31 +177,31 @@
     function renderDocuments(motion) {
       const box = document.getElementById("documents");
       box.replaceChildren(...motion.documents.map((doc) =>
-        el("a", { className: "btn block", href: doc.url, target: "_blank", rel: "noopener" }, `${doc.label} ↗`)
+        el("a", { className: "btn block", href: doc.url, target: "_blank", rel: "noopener" }, `${t(doc.label)} ↗`)
       ));
-      if (!motion.documents.length) box.replaceChildren(el("span", { className: "hint" }, "No documents linked."));
+      if (!motion.documents.length) box.replaceChildren(el("span", { className: "hint" }, t("No documents linked.")));
     }
 
     function renderVotes(motion) {
       const meta = document.getElementById("votes-meta");
       if (!motion.votes.length) {
-        meta.textContent = "No votes recorded yet; they are sometimes published after the result.";
+        meta.textContent = t("No votes recorded yet; they are sometimes published after the result.");
         return;
       }
       meta.textContent =
-        "Votes as recorded per party. The result is decided by seats, not by the number of parties.";
+        t("Votes as recorded per party. The result is decided by seats, not by the number of parties.");
       const split = document.getElementById("split");
       const groups = document.getElementById("vote-groups");
       for (const group of GROUPS) {
         const votes = motion.votes.filter((v) => v.vote === group.vote);
         if (!votes.length) continue;
-        const bar = el("span", { title: `${group.title}: ${votes.length} parties` });
-        bar.style.width = pct(votes.length / motion.votes.length, 2);
+        const bar = el("span", { title: t("{title}: {count} parties", { title: t(group.title), count: votes.length }) });
+        bar.style.width = cssPct(votes.length / motion.votes.length);
         bar.style.background = css(group.color);
         split.append(bar);
         groups.append(el("div", { className: "vote-group" },
-          el("h3", {}, el("span", {}, group.vote === "Abstain" ? group.title : voteBadge(group.vote)),
-            el("span", { className: "hint tabular" }, `${votes.length} ${votes.length === 1 ? "party" : "parties"}`)),
+          el("h3", {}, el("span", {}, group.vote === "Abstain" ? t(group.title) : voteBadge(group.vote)),
+            el("span", { className: "hint tabular" }, tn(votes.length, "{count} party", "{count} parties"))),
           el("div", { className: "party-tags" }, ...votes.map((v) =>
             el("a", { className: "party-tag", href: `/party/${v.party}/`, title: v.name },
               partyLogo(v, { size: "sm", fallback: false }), v.abbreviation)
@@ -132,15 +211,48 @@
       split.hidden = false;
     }
 
+    // Each axis: the motion's weight (its loading), how that compares with
+    // all motions, and which end of the axis supports it. Parties at the
+    // high end tend to vote for motions with a positive weight.
+    function renderAxes(motion) {
+      const box = document.getElementById("axes");
+      if (!motion.axes?.length) {
+        box.replaceChildren(el("span", { className: "hint" }, t("Not part of the newest analysis.")));
+        return;
+      }
+      box.replaceChildren(...motion.axes.map((axis) => {
+        const meter = el("span", { className: "meter" }, el("span"));
+        meter.firstChild.style.width = cssPct(axis.stronger_than ?? 0);
+        const [forIt, againstIt] = axis.loading >= 0 ? [axis.high_end, axis.low_end] : [axis.low_end, axis.high_end];
+        return el("a", { className: "motion-axis", href: `/component/${axis.number}/`, title: t("What drives PC{number}", { number: axis.number }) },
+          el("span", { className: "head" },
+            el("strong", {}, `PC${axis.number}`),
+            el("span", { className: "share" }, pct(axis.explained_variance, 1)),
+            el("span", { className: "weight" }, `${t("Weight")} `, el("b", {}, number(axis.loading, 3))),
+            roundArrow("arrow")),
+          el("span", { className: "strength" }, meter,
+            axis.stronger_than === null ? "" : t("Stronger than {share} of motions", { share: pct(axis.stronger_than) })),
+          // About the axis, not this vote: the actual votes come from all
+          // axes together.
+          el("p", { className: "sides" }, (axis.stronger_than ?? 0) < 1 / 3
+            ? t("Hardly part of this pattern.")
+            : t("On this axis, a vote for it goes with {for}; against it, with {against}.", {
+              for: listNames(forIt), against: listNames(againstIt),
+            })),
+        );
+      }));
+    }
+
     (async () => {
       try {
         const motion = await fetchJson(`/api/v1/items/${MOTION_ID}/`);
         renderText(motion);
         renderDocuments(motion);
         renderVotes(motion);
+        renderAxes(motion);
       } catch (error) {
         document.getElementById("text").replaceChildren(
-          el("p", { className: "hint" }, `Could not load the motion: ${error.message}`));
+          el("p", { className: "hint" }, t("Could not load the motion: {error}", { error: error.message })));
       }
     })();
   </script>

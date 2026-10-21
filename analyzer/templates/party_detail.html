@@ -1,26 +1,29 @@
 {% extends "base.html" %}
+{% load i18n %}
 
 {% block title %}{{ party.name }}{% endblock %}
-{% block nav %}parties{% endblock %}
+{% block nav %}overview{% endblock %}
 
 {% block band %}
   <ol class="breadcrumbs">
-    <li><a href="{% url 'home' %}">Overview</a></li>
-    <li><a href="{% url 'home' %}#parties">Parties</a></li>
+    <li><a href="{% url 'home' %}">{% translate "Overview" %}</a></li>
+    <li><a href="{% url 'home' %}#parties">{% translate "Parties" %}</a></li>
     <li aria-current="page">{{ party.abbreviation }}</li>
   </ol>
-  <p class="eyebrow">Party</p>
+  <p class="eyebrow">{% translate "Party" %}</p>
   <div class="party-head">
-    {% if party.logo_url %}<span class="logo lg"><img src="{{ party.logo_url }}" alt="Logo of {{ party.name }}"></span>{% endif %}
+    {% if party.logo_url %}<span class="logo lg"><img src="{{ party.logo_url }}" alt="{% blocktranslate with name=party.name %}Logo of {{ name }}{% endblocktranslate %}"></span>{% endif %}
     <h1>{{ party.name }}{% if party.abbreviation != party.name %} <span class="abbr">{{ party.abbreviation }}</span>{% endif %}</h1>
   </div>
   {% if continues %}
   <p class="notice" id="continues">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v4M8 5h.01" stroke-linecap="round"/></svg>
     <span>
-      Continues <a href="{% url 'party-detail' continues.predecessor.id %}">{{ continues.predecessor.name }}</a>
-      since {{ continues.date|date:"j F Y" }}. Its votes from before then count
-      as {{ party.abbreviation }}'s on this page.
+      {% url 'party-detail' continues.predecessor.id as predecessor_url %}
+      {% blocktranslate trimmed with url=predecessor_url name=continues.predecessor.name date=continues.date|date:"j F Y" abbreviation=party.abbreviation %}
+        Continues <a href="{{ url }}">{{ name }}</a> since {{ date }}. Its votes
+        from before then count as {{ abbreviation }}'s on this page.
+      {% endblocktranslate %}
     </span>
   </p>
   {% endif %}
@@ -28,17 +31,19 @@
   <p class="notice" id="continued-as">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v4M8 5h.01" stroke-linecap="round"/></svg>
     <span>
-      Continued as <a href="{% url 'party-detail' continued_as.successor.id %}">{{ continued_as.successor.name }}</a>
-      since {{ continued_as.date|date:"j F Y" }}. This page shows only the
-      votes of {{ party.abbreviation }} itself, so it ends then.
+      {% url 'party-detail' continued_as.successor.id as successor_url %}
+      {% blocktranslate trimmed with url=successor_url name=continued_as.successor.name date=continued_as.date|date:"j F Y" abbreviation=party.abbreviation %}
+        Continued as <a href="{{ url }}">{{ name }}</a> since {{ date }}. This
+        page shows only the votes of {{ abbreviation }} itself, so it ends then.
+      {% endblocktranslate %}
     </span>
   </p>
   {% endif %}
   <div class="stats">
-    <div class="stat"><div class="value" id="stat-participation">-</div><div class="label">of votes taken part in</div></div>
-    <div class="stat"><div class="value" id="stat-closest">-</div><div class="label">votes most often with</div></div>
-    <div class="stat"><div class="value" id="stat-furthest">-</div><div class="label">votes least often with</div></div>
-    <div class="stat"><div class="value" id="stat-average">-</div><div class="label">average agreement with the others</div></div>
+    <div class="stat"><div class="value" id="stat-participation">-</div><div class="label">{% translate "of votes taken part in" %}</div></div>
+    <div class="stat"><div class="value" id="stat-closest">-</div><div class="label">{% translate "votes most often with" %}</div></div>
+    <div class="stat"><div class="value" id="stat-furthest">-</div><div class="label">{% translate "votes least often with" %}</div></div>
+    <div class="stat"><div class="value" id="stat-average">-</div><div class="label">{% translate "average agreement with the others" %}</div></div>
   </div>
 {% endblock %}
 
@@ -47,12 +52,12 @@
     <section class="card" id="ranking-card">
       <div class="card-head">
         <div>
-          <h2>Agreement with every party</h2>
-          <p id="ranking-meta">Share of shared motions on which {{ party.abbreviation }} voted the same, over the whole period.</p>
+          <h2>{% translate "Agreement with every party" %}</h2>
+          <p id="ranking-meta">{% blocktranslate with abbreviation=party.abbreviation %}Share of shared motions on which {{ abbreviation }} voted the same, over the whole period.{% endblocktranslate %}</p>
         </div>
       </div>
       <div class="card-body">
-        <ol class="ranking" id="ranking"><li class="placeholder">Loading...</li></ol>
+        <ol class="ranking" id="ranking"><li class="placeholder">{% translate "Loading..." %}</li></ol>
       </div>
     </section>
 
@@ -60,17 +65,17 @@
       <section class="card sticky" id="timeline-card">
         <div class="card-head">
           <div>
-            <h2>Agreement over time</h2>
-            <p id="timeline-meta">Per calendar month. Months with fewer than 50 shared motions are left empty. Hover a line to see which party it is; use <em>Show</em> to keep it highlighted.</p>
+            <h2>{% translate "Agreement over time" %}</h2>
+            <p id="timeline-meta">{% blocktranslate trimmed %}Per calendar month. Months with fewer than 50 shared motions are left empty. Hover a line to see which party it is; use <em>Show</em> to keep it highlighted.{% endblocktranslate %}</p>
           </div>
           <div class="tools">
-            <button class="btn small" type="button" id="show-all">Show all</button>
-            <button class="btn small" type="button" id="clear">Clear</button>
+            <button class="btn small" type="button" id="show-all">{% translate "Show all" %}</button>
+            <button class="btn small" type="button" id="clear">{% translate "Clear" %}</button>
           </div>
         </div>
         <div class="card-body">
           <div class="chips" id="highlights"></div>
-          <div class="chart-box"><canvas id="timeline" aria-label="Monthly agreement with other parties"></canvas></div>
+          <div class="chart-box"><canvas id="timeline" aria-label="{% translate 'Monthly agreement with other parties' %}"></canvas></div>
         </div>
       </section>
     </div>
@@ -84,6 +89,21 @@
 
 {% block scripts %}
   <script>
+    Object.assign(window.I18N, {
+      "Show": "{{ _("Show")|escapejs }}",
+      "Shown": "{{ _("Shown")|escapejs }}",
+      "Remove from the chart": "{{ _("Remove from the chart")|escapejs }}",
+      "No party highlighted. Hover a line, or use Show in the list.": "{{ _("No party highlighted. Hover a line, or use Show in the list.")|escapejs }}",
+      "Show {name} in the timeline": "{{ _("Show {name} in the timeline")|escapejs }}",
+      "{share} of {count} shared motions": "{{ _("{share} of {count} shared motions")|escapejs }}",
+      "Compare →": "{{ _("Compare →")|escapejs }}",
+      "No agreement data yet. Run the analysis first.": "{{ _("No agreement data yet. Run the analysis first.")|escapejs }}",
+      "This party has no shared motions with other parties.": "{{ _("This party has no shared motions with other parties.")|escapejs }}",
+      "Could not load the timeline: {error}": "{{ _("Could not load the timeline: {error}")|escapejs }}",
+      "No monthly agreement for this party yet.": "{{ _("No monthly agreement for this party yet.")|escapejs }}",
+      "{party}: {share} ({count} motions)": "{{ _("{party}: {share} ({count} motions)")|escapejs }}",
+      "Could not load agreement: {error}": "{{ _("Could not load agreement: {error}")|escapejs }}",
+    });
     chartDefaults();
     const PARTY_ID = JSON.parse(document.getElementById("party-id").textContent);
 
@@ -91,13 +111,10 @@
     // the month empty instead (e.g. recess months).
     const MIN_SHARED_MOTIONS = 50;
 
-    // Categorical colors for highlighted parties, distinguishable for common
-    // color-vision types. With more than eight highlighted they repeat; the
-    // end labels still name every line.
-    const HIGHLIGHT_COLORS = [
-      "#4f46e5", "#d97706", "#0d9488", "#db2777",
-      "#0284c7", "#65a30d", "#9333ea", "#dc2626",
-    ];
+    // Categorical colors for highlighted parties (the --series-* tokens).
+    // With more than eight highlighted they repeat; the end labels still
+    // name every line.
+    const HIGHLIGHT_COLORS = Array.from({ length: 8 }, (_, i) => css(`--series-${i + 1}`));
 
     // Highlighted party id -> color. A party keeps its color while it stays
     // highlighted, so toggling another party never repaints it.
@@ -148,7 +165,7 @@
         const color = highlights.get(Number(button.dataset.party));
         button.setAttribute("aria-pressed", String(Boolean(color)));
         button.querySelector(".swatch").style.background = color || "";
-        button.querySelector(".label").textContent = color ? "Shown" : "Show";
+        button.querySelector(".label").textContent = color ? t("Shown") : t("Show");
       });
       document.querySelectorAll(".ranking .track span").forEach((bar) => {
         bar.style.background = highlights.get(Number(bar.dataset.party)) || "";
@@ -159,13 +176,13 @@
         ...[...highlights].map(([partyId, color]) => {
           const swatch = el("span", { className: "swatch" });
           swatch.style.background = color;
-          const chip = el("button", { type: "button", className: "chip", title: "Remove from the chart" },
+          const chip = el("button", { type: "button", className: "chip", title: t("Remove from the chart") },
             swatch, names.get(partyId) || "", el("span", { className: "x", ariaHidden: "true" }, "×"));
           chip.addEventListener("click", () => toggleHighlight(partyId));
           return chip;
         })
       );
-      if (!highlights.size) chips.append(el("span", { className: "hint" }, "No party highlighted. Hover a line, or use Show in the list."));
+      if (!highlights.size) chips.append(el("span", { className: "hint" }, t("No party highlighted. Hover a line, or use Show in the list.")));
     }
 
     document.getElementById("show-all").addEventListener("click", () => {
@@ -227,22 +244,22 @@
       list.replaceChildren(
         ...rows.map((row) => {
           const bar = el("span");
-          bar.style.width = pct(row.agreement);
+          bar.style.width = cssPct(row.agreement);
           bar.dataset.party = row.other_party;
           const toggle = el("button", { type: "button", className: "toggle" },
-            el("span", { className: "swatch" }), el("span", { className: "label" }, "Show"));
+            el("span", { className: "swatch" }), el("span", { className: "label" }, t("Show")));
           toggle.dataset.party = row.other_party;
-          toggle.setAttribute("aria-label", `Show ${names.get(row.other_party)} in the timeline`);
+          toggle.setAttribute("aria-label", t("Show {name} in the timeline", { name: names.get(row.other_party) }));
           toggle.addEventListener("click", () => toggleHighlight(row.other_party));
           const item = el("li", {},
             el("span", { className: "name" },
               partyLogo(logos.get(row.other_party), { size: "sm" }),
               el("a", { href: `/party/${row.other_party}/` }, names.get(row.other_party))),
-            el("span", { className: "track", title: `${pct(row.agreement, 1)} of ${row.shared_motions.toLocaleString()} shared motions` }, bar),
+            el("span", { className: "track", title: t("{share} of {count} shared motions", { share: pct(row.agreement, 1), count: number(row.shared_motions) }) }, bar),
             el("span", { className: "value" }, pct(row.agreement)),
             el("span", { className: "actions" },
               toggle,
-              el("a", { className: "compare", href: `/pair/${PARTY_ID}/${row.other_party}/` }, "Compare →")),
+              el("a", { className: "compare", href: `/pair/${PARTY_ID}/${row.other_party}/` }, t("Compare →"))),
           );
           item.addEventListener("mouseenter", () => setHovered(row.other_party));
           item.addEventListener("mouseleave", () => setHovered(null));
@@ -255,7 +272,7 @@
       const matrix = results(await fetchJson("/api/v1/agreement/?limit=1"))[0];
       const list = document.getElementById("ranking");
       if (!matrix) {
-        list.replaceChildren(el("li", { className: "placeholder" }, "No agreement data yet. Run the analysis first."));
+        list.replaceChildren(el("li", { className: "placeholder" }, t("No agreement data yet. Run the analysis first.")));
         return [];
       }
       matrix.parties.forEach((p) => {
@@ -266,7 +283,7 @@
         .filter((a) => a.party === PARTY_ID && a.agreement !== null)
         .sort((a, b) => b.agreement - a.agreement);
       if (!rows.length) {
-        list.replaceChildren(el("li", { className: "placeholder" }, "This party has no shared motions with other parties."));
+        list.replaceChildren(el("li", { className: "placeholder" }, t("This party has no shared motions with other parties.")));
         return [];
       }
       ranked = rows.map((row) => row.other_party);
@@ -286,11 +303,11 @@
       try {
         payload = await fetchJson(`/api/v1/parties/${PARTY_ID}/agreement-timeline/`);
       } catch (error) {
-        meta.textContent = `Could not load the timeline: ${error.message}`;
+        meta.textContent = t("Could not load the timeline: {error}", { error: error.message });
         return;
       }
       if (!payload.series.length) {
-        meta.textContent = "No monthly agreement for this party yet.";
+        meta.textContent = t("No monthly agreement for this party yet.");
         document.querySelector("#timeline-card .chart-box").hidden = true;
         return;
       }
@@ -341,16 +358,18 @@
               itemSort: (a, b) => b.parsed.y - a.parsed.y,
               bodyFont: { size: 12 },
               callbacks: {
-                label: (context) =>
-                  `${context.dataset.label}: ${context.parsed.y.toFixed(1)}% ` +
-                  `(${context.dataset.shared[context.dataIndex]} motions)`,
+                label: (context) => t("{party}: {share} ({count} motions)", {
+                  party: context.dataset.label,
+                  share: `${number(context.parsed.y, 1)}%`,
+                  count: number(context.dataset.shared[context.dataIndex]),
+                }),
                 labelColor: (context) => {
                   const partyId = context.dataset.partyId;
-                  const color = partyId === hovered ? "#ffffff" : highlights.get(partyId) || "#6b7280";
+                  const color = partyId === hovered ? css("--tooltip-ink") : highlights.get(partyId) || css("--tooltip-ink-3");
                   return { borderColor: color, backgroundColor: color };
                 },
                 labelTextColor: (context) =>
-                  context.dataset.partyId === hovered || highlights.has(context.dataset.partyId) ? "#ffffff" : "#9ca3af",
+                  context.dataset.partyId === hovered || highlights.has(context.dataset.partyId) ? css("--tooltip-ink") : css("--tooltip-ink-3"),
               },
             },
           },
@@ -378,7 +397,7 @@
     fetchJson(`/api/v1/parties/${PARTY_ID}/`)
       .then((party) => {
         setStat("stat-participation",
-          party.participation_rate === null ? "-" : `${party.participation_rate.toFixed(1)}%`);
+          party.participation_rate === null ? "-" : `${number(party.participation_rate, 1)}%`);
       })
       .catch(() => {});
 
@@ -388,7 +407,7 @@
         rows = await renderAgreement();
       } catch (error) {
         document.getElementById("ranking").replaceChildren(
-          el("li", { className: "placeholder" }, `Could not load agreement: ${error.message}`));
+          el("li", { className: "placeholder" }, t("Could not load agreement: {error}", { error: error.message })));
       }
       await renderTimeline(rows);
     })();

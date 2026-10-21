@@ -1,0 +1,1111 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-21 23:42+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: nl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: analyzer/templates/base.html:14
+msgid "Skip to content"
+msgstr "Naar de inhoud"
+
+#: analyzer/templates/base.html:25
+msgid "Main"
+msgstr "Hoofdmenu"
+
+#: analyzer/templates/base.html:29 analyzer/templates/component_detail.html:17
+#: analyzer/templates/motion_detail.html:52
+#: analyzer/templates/motion_list.html:25 analyzer/templates/pair_detail.html:9
+#: analyzer/templates/party_detail.html:9
+msgid "Overview"
+msgstr "Overzicht"
+
+#: analyzer/templates/base.html:30 analyzer/templates/component_detail.html:18
+#: analyzer/templates/component_detail.html:27 analyzer/templates/home.html:665
+msgid "Axes"
+msgstr "Assen"
+
+#: analyzer/templates/base.html:31 analyzer/templates/base.html:98
+#: analyzer/templates/motion_detail.html:53
+#: analyzer/templates/motion_list.html:4 analyzer/templates/motion_list.html:26
+#: analyzer/templates/motion_list.html:29
+#: analyzer/templates/pair_detail.html:64
+msgid "Motions"
+msgstr "Moties"
+
+#: analyzer/templates/base.html:39
+msgid "Search parties and motions"
+msgstr "Zoek partijen en moties"
+
+#: analyzer/templates/base.html:47
+msgid "Language"
+msgstr "Taal"
+
+#: analyzer/templates/base.html:70
+msgid "Data:"
+msgstr "Gegevens:"
+
+#: analyzer/templates/base.html:70
+msgid "Tweede Kamer open data"
+msgstr "open data van de Tweede Kamer"
+
+#: analyzer/templates/base.html:71
+msgid "through its"
+msgstr "via de"
+
+#: analyzer/templates/base.html:71
+msgid "OData API"
+msgstr "OData-API"
+
+#: analyzer/templates/base.html:72 analyzer/templates/motion_detail.html:95
+msgid "Votes are recorded per party."
+msgstr "Stemmen worden per partij vastgelegd."
+
+#: analyzer/templates/base.html:74 analyzer/templates/component_detail.html:36
+#: analyzer/templates/home.html:786 analyzer/templates/home.html:808
+#: analyzer/templates/home.html:827 analyzer/templates/motion_detail.html:70
+#: analyzer/templates/motion_detail.html:85
+#: analyzer/templates/motion_detail.html:106
+#: analyzer/templates/pair_detail.html:19
+#: analyzer/templates/party_detail.html:60
+msgid "Loading..."
+msgstr "Laden..."
+
+#: analyzer/templates/base.html:82
+msgid "Unknown date"
+msgstr "Datum onbekend"
+
+#: analyzer/templates/base.html:83 analyzer/templates/motion_list.html:43
+msgid "Accepted"
+msgstr "Aangenomen"
+
+#: analyzer/templates/base.html:84 analyzer/templates/motion_list.html:44
+msgid "Rejected"
+msgstr "Verworpen"
+
+#: analyzer/templates/base.html:85 analyzer/templates/motion_list.html:45
+msgid "Pending"
+msgstr "In behandeling"
+
+#: analyzer/templates/base.html:86
+msgid "For"
+msgstr "Voor"
+
+#: analyzer/templates/base.html:87
+msgid "Against"
+msgstr "Tegen"
+
+#: analyzer/templates/base.html:88
+msgid "Did not vote"
+msgstr "Niet gestemd"
+
+#: analyzer/templates/base.html:89
+msgid "No vote"
+msgstr "Geen stem"
+
+#: analyzer/templates/base.html:90
+#, python-brace-format
+msgid "Sync failed {when}"
+msgstr "Bijwerken mislukt {when}"
+
+#: analyzer/templates/base.html:91
+#, python-brace-format
+msgid "Synced {when}"
+msgstr "Bijgewerkt {when}"
+
+#: analyzer/templates/base.html:92
+msgid "Never synced"
+msgstr "Nog nooit bijgewerkt"
+
+#: analyzer/templates/base.html:93
+#, python-brace-format
+msgid "Votes through {date}"
+msgstr "Stemmingen t/m {date}"
+
+#: analyzer/templates/base.html:94
+#, python-brace-format
+msgid "Analysis {when}"
+msgstr "Analyse {when}"
+
+#: analyzer/templates/base.html:95
+msgid "No analysis yet"
+msgstr "Nog geen analyse"
+
+#: analyzer/templates/base.html:96
+msgid "Status unavailable"
+msgstr "Status niet beschikbaar"
+
+#: analyzer/templates/base.html:97 analyzer/templates/home.html:667
+#: analyzer/templates/party_detail.html:10
+msgid "Parties"
+msgstr "Partijen"
+
+#: analyzer/templates/base.html:99
+msgid "Searching..."
+msgstr "Zoeken..."
+
+#: analyzer/templates/base.html:100
+msgid "Type at least 3 letters to search motions."
+msgstr "Typ minstens 3 letters om moties te zoeken."
+
+#: analyzer/templates/base.html:101
+msgid "No motions found."
+msgstr "Geen moties gevonden."
+
+#: analyzer/templates/base.html:102
+#, python-brace-format
+msgid "Show all {count} matching motions"
+msgstr "Toon alle {count} gevonden moties"
+
+#: analyzer/templates/base.html:103
+#, python-brace-format
+msgid "Could not search motions: {error}"
+msgstr "Moties zoeken mislukt: {error}"
+
+#: analyzer/templates/base.html:104
+#, python-brace-format
+msgid "{a} and {b}"
+msgstr "{a} en {b}"
+
+#: analyzer/templates/component_detail.html:4
+#, python-format
+msgid "Axis PC%(number)s"
+msgstr "As PC%(number)s"
+
+#: analyzer/templates/component_detail.html:21
+msgid "Axis of the political landscape"
+msgstr "As van het politieke landschap"
+
+#: analyzer/templates/component_detail.html:22
+#, python-format
+msgid "What drives PC%(number)s"
+msgstr "Wat PC%(number)s bepaalt"
+
+#: analyzer/templates/component_detail.html:24
+msgid ""
+"Each axis is a voting pattern: a set of motions on which the parties at one "
+"end vote for and the parties at the other end vote against."
+msgstr "Elke as is een stempatroon: een groep moties waarvoor de partijen aan de ene kant stemmen en de partijen aan de andere kant tegen."
+
+#: analyzer/templates/component_detail.html:35
+#, python-format
+msgid "Parties along PC%(number)s"
+msgstr "Partijen langs PC%(number)s"
+
+#: analyzer/templates/component_detail.html:54
+msgid "Motions at the high end"
+msgstr "Moties aan de hoge kant"
+
+#: analyzer/templates/component_detail.html:55
+msgid ""
+"Supported by the parties with a high score, opposed by those with a low "
+"score."
+msgstr "Gesteund door de partijen met een hoge score, tegengestemd door die met een lage score."
+
+#: analyzer/templates/component_detail.html:63
+msgid "Motions at the low end"
+msgstr "Moties aan de lage kant"
+
+#: analyzer/templates/component_detail.html:64
+msgid ""
+"Supported by the parties with a low score, opposed by those with a high "
+"score."
+msgstr "Gesteund door de partijen met een lage score, tegengestemd door die met een hoge score."
+
+#: analyzer/templates/component_detail.html:77
+msgid "How strongly this motion follows the pattern"
+msgstr "Hoe sterk deze motie het patroon volgt"
+
+#: analyzer/templates/component_detail.html:78
+#: analyzer/templates/motion_detail.html:129
+msgid "Weight"
+msgstr "Gewicht"
+
+#: analyzer/templates/component_detail.html:79
+msgid "No motions."
+msgstr "Geen moties."
+
+#: analyzer/templates/component_detail.html:80 analyzer/templates/home.html:849
+msgid "No analysis yet. Run the analysis first."
+msgstr "Nog geen analyse. Voer eerst de analyse uit."
+
+#: analyzer/templates/component_detail.html:81
+#, python-brace-format
+msgid "The newest analysis has no PC{number}."
+msgstr "De nieuwste analyse heeft geen PC{number}."
+
+#: analyzer/templates/component_detail.html:82
+#, python-brace-format
+msgid ""
+"PC{number} captures {share} of all differences in how parties vote. Parties "
+"at one end vote for the motions below, parties at the other end against them."
+msgstr "PC{number} vat {share} van alle verschillen in hoe partijen stemmen. Partijen aan de ene kant stemmen voor de moties hieronder, partijen aan de andere kant ertegen."
+
+#: analyzer/templates/component_detail.html:83
+#, python-brace-format
+msgid ""
+"Score per party in the analysis of {when}. Parties close together vote alike "
+"on these motions."
+msgstr "Score per partij in de analyse van {when}. Partijen dicht bij elkaar stemmen gelijk op deze moties."
+
+#: analyzer/templates/component_detail.html:84
+#, python-brace-format
+msgid "Mostly supported by {for}; opposed by {against}."
+msgstr "Vooral gesteund door {for}; tegengestemd door {against}."
+
+#: analyzer/templates/component_detail.html:85
+#, python-brace-format
+msgid ""
+"{high} motions share the strongest weight at the high end, and {low} at the "
+"low end: they have the same voting pattern, so the newest are shown."
+msgstr "{high} moties delen het sterkste gewicht aan de hoge kant, en {low} aan de lage kant: ze hebben hetzelfde stempatroon, dus de nieuwste worden getoond."
+
+#: analyzer/templates/component_detail.html:86
+#, python-brace-format
+msgid ""
+"{count} motions share the strongest weight at the high end: they have the "
+"same voting pattern, so the newest are shown."
+msgstr "{count} moties delen het sterkste gewicht aan de hoge kant: ze hebben hetzelfde stempatroon, dus de nieuwste worden getoond."
+
+#: analyzer/templates/component_detail.html:87
+#, python-brace-format
+msgid ""
+"{count} motions share the strongest weight at the low end: they have the "
+"same voting pattern, so the newest are shown."
+msgstr "{count} moties delen het sterkste gewicht aan de lage kant: ze hebben hetzelfde stempatroon, dus de nieuwste worden getoond."
+
+#: analyzer/templates/component_detail.html:88
+#, python-brace-format
+msgid ""
+"The {limit} motions that follow this pattern most strongly on each side; "
+"newest first among equals."
+msgstr "De {limit} moties die dit patroon aan elke kant het sterkst volgen; bij gelijke stand de nieuwste eerst."
+
+#: analyzer/templates/component_detail.html:89
+#, python-brace-format
+msgid "Could not load the axis: {error}"
+msgstr "As laden mislukt: {error}"
+
+#: analyzer/templates/home.html:4
+msgid "How the Tweede Kamer votes"
+msgstr "Hoe de Tweede Kamer stemt"
+
+#: analyzer/templates/home.html:661 analyzer/templates/home.html:663
+msgid "On this page"
+msgstr "Op deze pagina"
+
+#: analyzer/templates/home.html:664 analyzer/templates/home.html:696
+msgid "The map"
+msgstr "De kaart"
+
+#: analyzer/templates/home.html:666
+msgid "Agreement"
+msgstr "Overeenstemming"
+
+#: analyzer/templates/home.html:670
+msgid "The political landscape"
+msgstr "Het politieke landschap"
+
+#: analyzer/templates/home.html:686
+msgid "Tweede Kamer · voting analysis"
+msgstr "Tweede Kamer · stemanalyse"
+
+#: analyzer/templates/home.html:687
+msgid "Who votes with whom in Dutch parliament"
+msgstr "Wie stemt met wie in de Tweede Kamer"
+
+#: analyzer/templates/home.html:688
+msgid "Close together means voting alike."
+msgstr "Dicht bij elkaar betekent: gelijk stemmen."
+
+#: analyzer/templates/home.html:688 analyzer/templates/home.html:842
+msgid "Drag to turn the map, click a party to open it."
+msgstr "Sleep om de kaart te draaien, klik op een partij om die te openen."
+
+#: analyzer/templates/home.html:691
+msgid "colour shows the main divide"
+msgstr "kleur toont de hoofdscheiding"
+
+#: analyzer/templates/home.html:700
+msgid "main divide"
+msgstr "hoofdscheiding"
+
+#: analyzer/templates/home.html:705
+msgid "Map"
+msgstr "Kaart"
+
+#: analyzer/templates/home.html:707
+msgid "View"
+msgstr "Weergave"
+
+#: analyzer/templates/home.html:714
+msgid "Parties as"
+msgstr "Partijen als"
+
+#: analyzer/templates/home.html:716 analyzer/templates/home.html:782
+msgid "Dots"
+msgstr "Stippen"
+
+#: analyzer/templates/home.html:717 analyzer/templates/home.html:783
+msgid "Logos"
+msgstr "Logo's"
+
+#: analyzer/templates/home.html:721
+msgid "Highlight"
+msgstr "Uitlichten"
+
+#: analyzer/templates/home.html:726
+msgid "Choose a party"
+msgstr "Kies een partij"
+
+#: analyzer/templates/home.html:729 analyzer/templates/home.html:800
+msgid "Clear the highlight"
+msgstr "Uitlichting wissen"
+
+#: analyzer/templates/home.html:735 analyzer/templates/home.html:861
+msgid "Show the map on its own, filling the window"
+msgstr "Toon alleen de kaart, over het hele venster"
+
+#: analyzer/templates/home.html:738 analyzer/templates/home.html:864
+msgid "Fullscreen"
+msgstr "Volledig scherm"
+
+#: analyzer/templates/home.html:740
+msgid "Save the map as an image"
+msgstr "Sla de kaart op als afbeelding"
+
+#: analyzer/templates/home.html:742
+msgid "Save image"
+msgstr "Afbeelding opslaan"
+
+#: analyzer/templates/home.html:746
+msgid "The axes"
+msgstr "De assen"
+
+#: analyzer/templates/home.html:753
+msgid "Explore the map"
+msgstr "Verken de kaart"
+
+#: analyzer/templates/home.html:765
+msgid "motions with votes"
+msgstr "moties met stemmingen"
+
+#: analyzer/templates/home.html:766
+msgid "parties"
+msgstr "partijen"
+
+#: analyzer/templates/home.html:767
+msgid "first to last vote"
+msgstr "eerste tot laatste stemming"
+
+#: analyzer/templates/home.html:768
+msgid "of voting differences shown on the"
+msgstr "van de stemverschillen getoond op de"
+
+#: analyzer/templates/home.html:768
+msgid ""
+"The map's three axes together capture this share of all differences in how "
+"parties vote."
+msgstr "De drie assen van de kaart vatten samen dit deel van alle verschillen in hoe partijen stemmen."
+
+#: analyzer/templates/home.html:768
+msgid "map"
+msgstr "kaart"
+
+#: analyzer/templates/home.html:777
+msgid "What the map's axes mean"
+msgstr "Wat de assen van de kaart betekenen"
+
+#: analyzer/templates/home.html:778
+msgid ""
+"Each axis is one pattern in how parties vote, found by principal component "
+"analysis. Its share says how much of all differences between parties it "
+"captures. The map uses the same scale in every direction, so distances "
+"compare fairly."
+msgstr "Elke as is één patroon in hoe partijen stemmen, gevonden met hoofdcomponentenanalyse. Het aandeel zegt hoeveel van alle verschillen tussen partijen de as vat. De kaart gebruikt in elke richting dezelfde schaal, dus afstanden zijn eerlijk te vergelijken."
+
+#: analyzer/templates/home.html:780
+msgid "Show the parties as"
+msgstr "Toon de partijen als"
+
+#: analyzer/templates/home.html:781 analyzer/templates/party_detail.html:93
+msgid "Show"
+msgstr "Toon"
+
+#: analyzer/templates/home.html:787
+msgid ""
+"Parties that started later in the period are placed using only the motions "
+"they voted on."
+msgstr "Partijen die later in de periode begonnen, staan op basis van alleen de moties waarover zij stemden."
+
+#: analyzer/templates/home.html:794
+msgid "How often they vote alike"
+msgstr "Hoe vaak ze gelijk stemmen"
+
+#: analyzer/templates/home.html:795
+msgid ""
+"The share of motions on which two parties voted the same, out of those they "
+"both voted on. Parties that vote alike are grouped, so blocs show as dark "
+"squares along the diagonal."
+msgstr "Het aandeel moties waarop twee partijen hetzelfde stemden, van de moties waarover ze allebei stemden. Partijen die gelijk stemmen staan bij elkaar, dus blokken verschijnen als donkere vlakken langs de diagonaal."
+
+#: analyzer/templates/home.html:799
+msgid "Highlighting"
+msgstr "Uitgelicht:"
+
+#: analyzer/templates/home.html:810
+msgid ""
+"Click a cell to compare two parties motion by motion, or a name to open the "
+"party."
+msgstr "Klik op een vak om twee partijen motie voor motie te vergelijken, of op een naam om de partij te openen."
+
+#: analyzer/templates/home.html:817
+msgid "Every party, its closest and furthest"
+msgstr "Elke partij, haar naaste en verste"
+
+#: analyzer/templates/home.html:818
+msgid ""
+"The party each one votes with most often, and the one it votes with least."
+msgstr "De partij waarmee elke partij het vaakst gelijk stemt, en die waarmee het minst."
+
+#: analyzer/templates/home.html:820
+msgid "Order the parties"
+msgstr "Orden de partijen"
+
+#: analyzer/templates/home.html:821
+msgid "Order"
+msgstr "Volgorde"
+
+#: analyzer/templates/home.html:822
+msgid "A–Z"
+msgstr "A–Z"
+
+#: analyzer/templates/home.html:823
+msgid "Along the main divide"
+msgstr "Langs de hoofdscheiding"
+
+#: analyzer/templates/home.html:824
+msgid "Closest ally"
+msgstr "Naaste bondgenoot"
+
+#: analyzer/templates/home.html:838
+msgid "Could not load the 3D chart library."
+msgstr "De 3D-grafiekbibliotheek kon niet laden."
+
+#: analyzer/templates/home.html:839
+msgid "Open fullscreen to explore the map."
+msgstr "Open volledig scherm om de kaart te verkennen."
+
+#: analyzer/templates/home.html:840
+#, python-brace-format
+msgid "Combined, the axes explain {share} of the differences."
+msgstr "Samen verklaren de assen {share} van de verschillen."
+
+#: analyzer/templates/home.html:841
+msgid "Click a party to open it."
+msgstr "Klik op een partij om die te openen."
+
+#: analyzer/templates/home.html:843
+msgid "of the differences →"
+msgstr "van de verschillen →"
+
+#: analyzer/templates/home.html:844
+msgid "→"
+msgstr "→"
+
+#: analyzer/templates/home.html:845
+msgid "across"
+msgstr "horizontaal"
+
+#: analyzer/templates/home.html:846
+msgid "up and down"
+msgstr "verticaal"
+
+#: analyzer/templates/home.html:847
+msgid "depth"
+msgstr "diepte"
+
+#: analyzer/templates/home.html:848 analyzer/templates/motion_detail.html:128
+#, python-brace-format
+msgid "What drives PC{number}"
+msgstr "Wat PC{number} bepaalt"
+
+#: analyzer/templates/home.html:850
+msgid "across the map"
+msgstr "horizontaal op de kaart"
+
+#: analyzer/templates/home.html:851
+msgid "the depth"
+msgstr "de diepte"
+
+#: analyzer/templates/home.html:852
+msgid "a further pattern"
+msgstr "een verder patroon"
+
+#: analyzer/templates/home.html:853
+#, python-brace-format
+msgid "Parties on PC{number}, from {from} to {to}"
+msgstr "Partijen op PC{number}, van {from} tot {to}"
+
+#: analyzer/templates/home.html:854
+msgid "of the differences between parties"
+msgstr "van de verschillen tussen partijen"
+
+#: analyzer/templates/home.html:855
+msgid "The motions behind it"
+msgstr "De moties erachter"
+
+#: analyzer/templates/home.html:856
+msgid "No PCA scores yet. Run the analysis first."
+msgstr "Nog geen PCA-scores. Voer eerst de analyse uit."
+
+#: analyzer/templates/home.html:857
+msgid "No 3D scores yet. Run the analysis first."
+msgstr "Nog geen 3D-scores. Voer eerst de analyse uit."
+
+#: analyzer/templates/home.html:858
+#, python-brace-format
+msgid "Could not load the landscape: {error}"
+msgstr "Landschap laden mislukt: {error}"
+
+#: analyzer/templates/home.html:859
+msgid "Loading the map…"
+msgstr "Kaart laden…"
+
+#: analyzer/templates/home.html:860
+msgid "Back to the page (Esc)"
+msgstr "Terug naar de pagina (Esc)"
+
+#: analyzer/templates/home.html:862
+msgid "Exit fullscreen"
+msgstr "Volledig scherm sluiten"
+
+#: analyzer/templates/home.html:863
+msgid "Explore"
+msgstr "Verken"
+
+#: analyzer/templates/home.html:865
+#, python-brace-format
+msgid "{a} and {b}: {share} of {count} shared motions"
+msgstr "{a} en {b}: {share} van {count} gedeelde moties"
+
+#: analyzer/templates/home.html:866
+msgid "Not compared: no shared motions, or the same party under a new name"
+msgstr "Niet vergeleken: geen gedeelde moties, of dezelfde partij onder een nieuwe naam"
+
+#: analyzer/templates/home.html:867
+msgid "Most with"
+msgstr "Meest met"
+
+#: analyzer/templates/home.html:868
+msgid "Least with"
+msgstr "Minst met"
+
+#: analyzer/templates/home.html:869
+msgid "Open party page"
+msgstr "Partijpagina openen"
+
+#: analyzer/templates/home.html:870
+msgid "No agreement matrix yet. Run the analysis first."
+msgstr "Nog geen overeenstemmingsmatrix. Voer eerst de analyse uit."
+
+#: analyzer/templates/home.html:871 analyzer/templates/party_detail.html:105
+#, python-brace-format
+msgid "Could not load agreement: {error}"
+msgstr "Overeenstemming laden mislukt: {error}"
+
+#: analyzer/templates/motion_detail.html:54
+#: analyzer/templates/motion_detail.html:56
+msgid "Motion"
+msgstr "Motie"
+
+#: analyzer/templates/motion_detail.html:60
+#, python-format
+msgid "Voted on %(date)s"
+msgstr "Gestemd op %(date)s"
+
+#: analyzer/templates/motion_detail.html:60
+msgid "Voting date unknown"
+msgstr "Stemdatum onbekend"
+
+#: analyzer/templates/motion_detail.html:68
+msgid "Text"
+msgstr "Tekst"
+
+#: analyzer/templates/motion_detail.html:80
+msgid "On the map's axes"
+msgstr "Op de assen van de kaart"
+
+#: analyzer/templates/motion_detail.html:81
+msgid ""
+"How strongly this motion follows each voting pattern of the map, compared "
+"with all motions. Open an axis to see the motions that drive it."
+msgstr "Hoe sterk deze motie elk stempatroon van de kaart volgt, vergeleken met alle moties. Open een as voor de moties die haar bepalen."
+
+#: analyzer/templates/motion_detail.html:94
+msgid "How parties voted"
+msgstr "Hoe partijen stemden"
+
+#: analyzer/templates/motion_detail.html:104
+msgid "Documents"
+msgstr "Documenten"
+
+#: analyzer/templates/motion_detail.html:118
+msgid ""
+"No text available for this motion. See the documents for the official "
+"version."
+msgstr "Geen tekst beschikbaar voor deze motie. Zie de documenten voor de officiële versie."
+
+#: analyzer/templates/motion_detail.html:119
+msgid "Official publication"
+msgstr "Officiële publicatie"
+
+#: analyzer/templates/motion_detail.html:120
+msgid "PDF"
+msgstr "PDF"
+
+#: analyzer/templates/motion_detail.html:121
+msgid "No documents linked."
+msgstr "Geen documenten gekoppeld."
+
+#: analyzer/templates/motion_detail.html:122
+msgid "No votes recorded yet; they are sometimes published after the result."
+msgstr "Nog geen stemmen vastgelegd; die worden soms na de uitslag gepubliceerd."
+
+#: analyzer/templates/motion_detail.html:123
+msgid ""
+"Votes as recorded per party. The result is decided by seats, not by the "
+"number of parties."
+msgstr "Stemmen zoals per partij vastgelegd. De uitslag wordt bepaald door zetels, niet door het aantal partijen."
+
+#: analyzer/templates/motion_detail.html:124
+#, python-brace-format
+msgid "{title}: {count} parties"
+msgstr "{title}: {count} partijen"
+
+#: analyzer/templates/motion_detail.html:125
+#, python-brace-format
+msgid "{count} party"
+msgstr "{count} partij"
+
+#: analyzer/templates/motion_detail.html:126
+#, python-brace-format
+msgid "{count} parties"
+msgstr "{count} partijen"
+
+#: analyzer/templates/motion_detail.html:127
+msgid "Not part of the newest analysis."
+msgstr "Geen deel van de nieuwste analyse."
+
+#: analyzer/templates/motion_detail.html:130
+#, python-brace-format
+msgid "Stronger than {share} of motions"
+msgstr "Sterker dan {share} van de moties"
+
+#: analyzer/templates/motion_detail.html:131
+msgid "Hardly part of this pattern."
+msgstr "Nauwelijks deel van dit patroon."
+
+#: analyzer/templates/motion_detail.html:132
+#, python-brace-format
+msgid ""
+"On this axis, a vote for it goes with {for}; against it, with {against}."
+msgstr "Op deze as hoort een stem vóór bij {for}; ertegen bij {against}."
+
+#: analyzer/templates/motion_detail.html:133
+#, python-brace-format
+msgid "Could not load the motion: {error}"
+msgstr "Motie laden mislukt: {error}"
+
+#: analyzer/templates/motion_list.html:28
+msgid "Motion explorer"
+msgstr "Moties verkennen"
+
+#: analyzer/templates/motion_list.html:30
+msgid ""
+"Search the title and text of every motion. Open one for its full text, the "
+"official documents and how each party voted."
+msgstr "Zoek in de titel en tekst van elke motie. Open er een voor de volledige tekst, de officiële documenten en hoe elke partij stemde."
+
+#: analyzer/templates/motion_list.html:38
+msgid "Search motions"
+msgstr "Zoek moties"
+
+#: analyzer/templates/motion_list.html:39
+msgid "Search motions, e.g. stikstof or woningbouw"
+msgstr "Zoek moties, bijv. stikstof of woningbouw"
+
+#: analyzer/templates/motion_list.html:41
+msgid "Result"
+msgstr "Uitslag"
+
+#: analyzer/templates/motion_list.html:42
+#: analyzer/templates/pair_detail.html:77
+msgid "All"
+msgstr "Alle"
+
+#: analyzer/templates/motion_list.html:50
+msgid "Sort"
+msgstr "Sorteren"
+
+#: analyzer/templates/motion_list.html:52
+msgid "Newest first"
+msgstr "Nieuwste eerst"
+
+#: analyzer/templates/motion_list.html:54
+#, python-format
+msgid "PC%(number)s: high end first"
+msgstr "PC%(number)s: hoge kant eerst"
+
+#: analyzer/templates/motion_list.html:55
+#, python-format
+msgid "PC%(number)s: low end first"
+msgstr "PC%(number)s: lage kant eerst"
+
+#: analyzer/templates/motion_list.html:64
+#: analyzer/templates/pair_detail.html:85
+msgid "Load more"
+msgstr "Meer laden"
+
+#: analyzer/templates/motion_list.html:72
+#: analyzer/templates/pair_detail.html:110
+#, python-brace-format
+msgid "{count} motion"
+msgstr "{count} motie"
+
+#: analyzer/templates/motion_list.html:73
+#: analyzer/templates/pair_detail.html:111
+#, python-brace-format
+msgid "{count} motions"
+msgstr "{count} moties"
+
+#: analyzer/templates/motion_list.html:74
+#, python-brace-format
+msgid "{count} motion matching “{query}”"
+msgstr "{count} motie met “{query}”"
+
+#: analyzer/templates/motion_list.html:75
+#, python-brace-format
+msgid "{count} motions matching “{query}”"
+msgstr "{count} moties met “{query}”"
+
+#: analyzer/templates/motion_list.html:76
+msgid "No motions match. Try fewer or other words."
+msgstr "Geen moties gevonden. Probeer minder of andere woorden."
+
+#: analyzer/templates/motion_list.html:77
+#: analyzer/templates/pair_detail.html:113
+#, python-brace-format
+msgid "Showing {shown} of {count}"
+msgstr "{shown} van {count} getoond"
+
+#: analyzer/templates/motion_list.html:78
+#: analyzer/templates/pair_detail.html:114
+#, python-brace-format
+msgid "Could not load motions: {error}"
+msgstr "Moties laden mislukt: {error}"
+
+#: analyzer/templates/motion_list.html:79
+#, python-brace-format
+msgid "PC{number}: weight {weight}, stronger than {share} of motions"
+msgstr "PC{number}: gewicht {weight}, sterker dan {share} van de moties"
+
+#: analyzer/templates/pair_detail.html:4
+#, python-format
+msgid "%(a)s and %(b)s"
+msgstr "%(a)s en %(b)s"
+
+#: analyzer/templates/pair_detail.html:11
+#, python-format
+msgid "Compared with %(b)s"
+msgstr "Vergeleken met %(b)s"
+
+#: analyzer/templates/pair_detail.html:13
+msgid "Comparison"
+msgstr "Vergelijking"
+
+#: analyzer/templates/pair_detail.html:16
+msgid "and"
+msgstr "en"
+
+#: analyzer/templates/pair_detail.html:21
+#, python-format
+msgid "Compare from %(b)s's side"
+msgstr "Vergelijk vanuit %(b)s"
+
+#: analyzer/templates/pair_detail.html:23
+msgid "Swap sides"
+msgstr "Wissel om"
+
+#: analyzer/templates/pair_detail.html:27
+msgid "voted the same"
+msgstr "hetzelfde gestemd"
+
+#: analyzer/templates/pair_detail.html:28
+msgid "motions both voted on"
+msgstr "moties waarover beide stemden"
+
+#: analyzer/templates/pair_detail.html:29
+#, python-format
+msgid "%(a)s for, %(b)s against"
+msgstr "%(a)s voor, %(b)s tegen"
+
+#: analyzer/templates/pair_detail.html:30
+#, python-format
+msgid "%(a)s against, %(b)s for"
+msgstr "%(a)s tegen, %(b)s voor"
+
+#: analyzer/templates/pair_detail.html:39
+#: analyzer/templates/party_detail.html:68
+msgid "Agreement over time"
+msgstr "Overeenstemming door de tijd"
+
+#: analyzer/templates/pair_detail.html:40
+msgid ""
+"Per calendar month. Months in which they shared fewer than 50 motions are "
+"left empty."
+msgstr "Per kalendermaand. Maanden met minder dan 50 gedeelde moties blijven leeg."
+
+#: analyzer/templates/pair_detail.html:44
+msgid "Monthly agreement"
+msgstr "Overeenstemming per maand"
+
+#: analyzer/templates/pair_detail.html:50
+msgid "How their votes compare"
+msgstr "Hoe hun stemmen zich verhouden"
+
+#: analyzer/templates/pair_detail.html:51
+msgid "Motions on which both voted for or against."
+msgstr "Moties waarop beide voor of tegen stemden."
+
+#: analyzer/templates/pair_detail.html:65
+msgid "Newest vote first. Open a motion for its text and every party's vote."
+msgstr "Nieuwste stemming eerst. Open een motie voor de tekst en de stem van elke partij."
+
+#: analyzer/templates/pair_detail.html:71
+#: analyzer/templates/pair_detail.html:72
+msgid "Search these motions"
+msgstr "Zoek in deze moties"
+
+#: analyzer/templates/pair_detail.html:74
+msgid "Which motions"
+msgstr "Welke moties"
+
+#: analyzer/templates/pair_detail.html:75
+msgid "Voted differently"
+msgstr "Anders gestemd"
+
+#: analyzer/templates/pair_detail.html:76
+#: analyzer/templates/pair_detail.html:103
+msgid "Voted the same"
+msgstr "Hetzelfde gestemd"
+
+#: analyzer/templates/pair_detail.html:100
+#, python-brace-format
+msgid ""
+"{b} and {a} are the same party under a different name, so they are not "
+"compared. The motions below show their own recorded votes."
+msgstr "{b} en {a} zijn dezelfde partij onder een andere naam, dus ze worden niet vergeleken. De moties hieronder tonen hun eigen vastgelegde stemmen."
+
+#: analyzer/templates/pair_detail.html:101
+#, python-brace-format
+msgid "{a} and {b} have not both voted on any motion."
+msgstr "{a} en {b} hebben niet allebei over een motie gestemd."
+
+#: analyzer/templates/pair_detail.html:102
+#, python-brace-format
+msgid ""
+"{a} and {b} voted the same on {share} of the {count} motions they both voted "
+"on."
+msgstr "{a} en {b} stemden hetzelfde op {share} van de {count} moties waarover ze allebei stemden."
+
+#: analyzer/templates/pair_detail.html:104
+#, python-brace-format
+msgid "{a} for, {b} against"
+msgstr "{a} voor, {b} tegen"
+
+#: analyzer/templates/pair_detail.html:105
+#, python-brace-format
+msgid "{a} against, {b} for"
+msgstr "{a} tegen, {b} voor"
+
+#: analyzer/templates/pair_detail.html:106
+msgid "No month with enough shared motions yet."
+msgstr "Nog geen maand met genoeg gedeelde moties."
+
+#: analyzer/templates/pair_detail.html:107
+#: analyzer/templates/party_detail.html:98
+#, python-brace-format
+msgid "{share} of {count} shared motions"
+msgstr "{share} van {count} gedeelde moties"
+
+#: analyzer/templates/pair_detail.html:108
+msgid "as"
+msgstr "als"
+
+#: analyzer/templates/pair_detail.html:109
+msgid "Vote cast by the predecessor party"
+msgstr "Stem uitgebracht door de voorgangerpartij"
+
+#: analyzer/templates/pair_detail.html:112
+msgid "No motions match."
+msgstr "Geen moties gevonden."
+
+#: analyzer/templates/pair_detail.html:115
+#, python-brace-format
+msgid "Could not load the comparison: {error}"
+msgstr "Vergelijking laden mislukt: {error}"
+
+#: analyzer/templates/party_detail.html:13
+msgid "Party"
+msgstr "Partij"
+
+#: analyzer/templates/party_detail.html:15
+#, python-format
+msgid "Logo of %(name)s"
+msgstr "Logo van %(name)s"
+
+#: analyzer/templates/party_detail.html:23
+#, python-format
+msgid ""
+"Continues <a href=\"%(url)s\">%(name)s</a> since %(date)s. Its votes from "
+"before then count as %(abbreviation)s's on this page."
+msgstr "Zet <a href=\"%(url)s\">%(name)s</a> voort sinds %(date)s. De stemmen van daarvoor tellen op deze pagina als die van %(abbreviation)s."
+
+#: analyzer/templates/party_detail.html:35
+#, python-format
+msgid ""
+"Continued as <a href=\"%(url)s\">%(name)s</a> since %(date)s. This page "
+"shows only the votes of %(abbreviation)s itself, so it ends then."
+msgstr "Voortgezet als <a href=\"%(url)s\">%(name)s</a> sinds %(date)s. Deze pagina toont alleen de stemmen van %(abbreviation)s zelf, dus hij eindigt dan."
+
+#: analyzer/templates/party_detail.html:43
+msgid "of votes taken part in"
+msgstr "van de stemmingen meegedaan"
+
+#: analyzer/templates/party_detail.html:44
+msgid "votes most often with"
+msgstr "stemt het vaakst met"
+
+#: analyzer/templates/party_detail.html:45
+msgid "votes least often with"
+msgstr "stemt het minst vaak met"
+
+#: analyzer/templates/party_detail.html:46
+msgid "average agreement with the others"
+msgstr "gemiddelde overeenstemming met de anderen"
+
+#: analyzer/templates/party_detail.html:55
+msgid "Agreement with every party"
+msgstr "Overeenstemming met elke partij"
+
+#: analyzer/templates/party_detail.html:56
+#, python-format
+msgid ""
+"Share of shared motions on which %(abbreviation)s voted the same, over the "
+"whole period."
+msgstr "Aandeel gedeelde moties waarop %(abbreviation)s hetzelfde stemde, over de hele periode."
+
+#: analyzer/templates/party_detail.html:69
+msgid ""
+"Per calendar month. Months with fewer than 50 shared motions are left empty. "
+"Hover a line to see which party it is; use <em>Show</em> to keep it "
+"highlighted."
+msgstr "Per kalendermaand. Maanden met minder dan 50 gedeelde moties blijven leeg. Wijs een lijn aan om te zien welke partij het is; gebruik <em>Toon</em> om haar uitgelicht te houden."
+
+#: analyzer/templates/party_detail.html:72
+msgid "Show all"
+msgstr "Toon alle"
+
+#: analyzer/templates/party_detail.html:73
+msgid "Clear"
+msgstr "Wissen"
+
+#: analyzer/templates/party_detail.html:78
+msgid "Monthly agreement with other parties"
+msgstr "Overeenstemming per maand met andere partijen"
+
+#: analyzer/templates/party_detail.html:94
+msgid "Shown"
+msgstr "Getoond"
+
+#: analyzer/templates/party_detail.html:95
+msgid "Remove from the chart"
+msgstr "Verwijder uit de grafiek"
+
+#: analyzer/templates/party_detail.html:96
+msgid "No party highlighted. Hover a line, or use Show in the list."
+msgstr "Geen partij uitgelicht. Wijs een lijn aan, of gebruik Toon in de lijst."
+
+#: analyzer/templates/party_detail.html:97
+#, python-brace-format
+msgid "Show {name} in the timeline"
+msgstr "Toon {name} in de tijdlijn"
+
+#: analyzer/templates/party_detail.html:99
+msgid "Compare →"
+msgstr "Vergelijk →"
+
+#: analyzer/templates/party_detail.html:100
+msgid "No agreement data yet. Run the analysis first."
+msgstr "Nog geen overeenstemmingsgegevens. Voer eerst de analyse uit."
+
+#: analyzer/templates/party_detail.html:101
+msgid "This party has no shared motions with other parties."
+msgstr "Deze partij heeft geen gedeelde moties met andere partijen."
+
+#: analyzer/templates/party_detail.html:102
+#, python-brace-format
+msgid "Could not load the timeline: {error}"
+msgstr "Tijdlijn laden mislukt: {error}"
+
+#: analyzer/templates/party_detail.html:103
+msgid "No monthly agreement for this party yet."
+msgstr "Nog geen overeenstemming per maand voor deze partij."
+
+#: analyzer/templates/party_detail.html:104
+#, python-brace-format
+msgid "{party}: {share} ({count} motions)"
+msgstr "{party}: {share} ({count} moties)"
+
+#: scraper/models.py:19
+msgid "Participation rate in parliamentary votes as a percentage."
+msgstr "Deelname aan stemmingen in de Kamer, als percentage."
+
+#: scraper/models.py:26
+msgid ""
+"The logo's ContentLength as the API reports it (not the file size); empty "
+"when the party has no logo. Used to notice a new logo."
+msgstr "De ContentLength van het logo zoals de API die meldt (niet de bestandsgrootte); leeg als de partij geen logo heeft. Gebruikt om een nieuw logo op te merken."
+
+#: scraper/models.py:84
+msgid "Date of the voting session."
+msgstr "Datum van de stemming."
+
+#: scraper/models.py:100
+msgid ""
+"Identifier of the motion document on officielebekendmakingen.nl, e.g. "
+"'kst-36848-53'."
+msgstr "Kenmerk van het motiedocument op officielebekendmakingen.nl, bijv. 'kst-36848-53'."
+
+#: scraper/models.py:184
+msgid "Date the successor became active."
+msgstr "Datum waarop de opvolger actief werd."
+
+#: scraper/models.py:187
+msgid ""
+"Lowest share of members shared by both parties around the succession date: "
+"of the predecessor's last and of the successor's first members."
+msgstr "Laagste aandeel leden dat beide partijen rond de opvolgdatum delen: van de laatste leden van de voorganger en de eerste leden van de opvolger."

@@ -318,9 +318,11 @@ class ParliamentApi:
 
         The API reports a logo's size (`ContentLength`); a logo is only
         downloaded when that differs from the stored one, so a regular import
-        costs no extra requests. A party whose logo was removed from the API
-        loses it here too. A logo that fails to download, or is not a
-        recognised image, is logged and skipped; the party keeps its old one.
+        costs no extra requests. A party registered without a logo gets the
+        logo of an earlier registration under the same abbreviation (see
+        `_earlier_logo`); without one either, it has none, and loses a logo
+        it had. A logo that fails to download, or is not a recognised image,
+        is logged and skipped; the party keeps its old one.
 
         Args:
             fracties (list[FractieDTO]): The parties as returned by the API.
@@ -330,16 +332,25 @@ class ParliamentApi:
         )
         for fractie in fracties:
             party = parties.get(fractie.Id)
-            if party is None or party.logo_length == fractie.ContentLength:
+            if party is None:
                 continue
-            if not fractie.ContentLength:
+            # The registration whose logo the party shows, and its size.
+            source: tuple[str, int] | None = (
+                (fractie.Id, fractie.ContentLength)
+                if fractie.ContentLength
+                else self._earlier_logo(fractie)
+            )
+            length = source[1] if source else None
+            if party.logo_length == length:
+                continue
+            if source is None:
                 PartyLogo.objects.filter(party=party).delete()
                 party.logo_length = None
                 party.save(update_fields=["logo_length"])
                 continue
             try:
                 r = self.session.get(
-                    f"{self.api_url}Fractie({fractie.Id})/resource",
+                    f"{self.api_url}Fractie({source[0]})/resource",
                     timeout=API_TIMEOUT,
                 )
                 r.raise_for_status()
@@ -364,8 +375,43 @@ class ParliamentApi:
                     party=party,
                     defaults={"image": r.content, "content_type": content_type},
                 )
-                party.logo_length = fractie.ContentLength
+                party.logo_length = length
                 party.save(update_fields=["logo_length"])
+
+    def _earlier_logo(self, fractie: FractieDTO) -> tuple[str, int] | None:
+        """
+        The newest earlier registration of a party, by abbreviation, that has
+        a logo: its id and the logo's `ContentLength`.
+
+        A party that returns to parliament is registered again, sometimes
+        without a logo; 50PLUS (again since 2025) is one. Its 2012-2021
+        registration still has its logo. A failed lookup is logged and
+        counts as none found.
+
+        Args:
+            fractie (FractieDTO): A party registered without a logo.
+        """
+        abbreviation = fractie.Afkorting.replace("'", "''")
+        try:
+            found = self.fetch(
+                object_name="Fractie",
+                filters=[
+                    f"Afkorting eq '{abbreviation}'",
+                    "ContentLength ne null",
+                ],
+                order_by="DatumActief desc",
+                top=1,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to look up an earlier logo of {fractie.Afkorting}: {e}",
+                extra={"party_id": fractie.Id, "error": str(e)},
+            )
+            return None
+        length = found[0].get("ContentLength") if found else None
+        if not isinstance(length, int) or not length:
+            return None
+        return str(found[0]["Id"]), length
 
     def _adopt_reregistration(
         self, fractie_dto: FractieDTO, active_ids: set[str]

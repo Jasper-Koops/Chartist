@@ -1,32 +1,33 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}{{ party.abbreviation }} and {{ other_party.abbreviation }}{% endblock %}
-{% block nav %}parties{% endblock %}
+{% block title %}{% blocktranslate with a=party.abbreviation b=other_party.abbreviation %}{{ a }} and {{ b }}{% endblocktranslate %}{% endblock %}
+{% block nav %}overview{% endblock %}
 
 {% block band %}
   <ol class="breadcrumbs">
-    <li><a href="{% url 'home' %}">Overview</a></li>
+    <li><a href="{% url 'home' %}">{% translate "Overview" %}</a></li>
     <li><a href="{% url 'party-detail' party.id %}">{{ party.abbreviation }}</a></li>
-    <li aria-current="page">Compared with {{ other_party.abbreviation }}</li>
+    <li aria-current="page">{% blocktranslate with b=other_party.abbreviation %}Compared with {{ b }}{% endblocktranslate %}</li>
   </ol>
-  <p class="eyebrow">Comparison</p>
+  <p class="eyebrow">{% translate "Comparison" %}</p>
   <h1>
     <a class="plain-link" href="{% url 'party-detail' party.id %}">{{ party.abbreviation }}</a>
-    <span class="abbr">and</span>
+    <span class="abbr">{% translate "and" %}</span>
     <a class="plain-link" href="{% url 'party-detail' other_party.id %}">{{ other_party.abbreviation }}</a>
   </h1>
-  <p class="lead" id="summary">Loading...</p>
+  <p class="lead" id="summary">{% translate "Loading..." %}</p>
   <div class="band-actions">
-    <a class="btn on-band" href="{% url 'pair-detail' other_party.id party.id %}" title="Compare from {{ other_party.abbreviation }}'s side">
+    <a class="btn on-band" href="{% url 'pair-detail' other_party.id party.id %}" title="{% blocktranslate with b=other_party.abbreviation %}Compare from {{ b }}'s side{% endblocktranslate %}">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h10l-3-3M13 11H3l3 3"/></svg>
-      Swap sides
+      {% translate "Swap sides" %}
     </a>
   </div>
   <div class="stats" id="stats">
-    <div class="stat"><div class="value" id="stat-agreement">-</div><div class="label">voted the same</div></div>
-    <div class="stat"><div class="value" id="stat-shared">-</div><div class="label">motions both voted on</div></div>
-    <div class="stat"><div class="value" id="stat-for-against">-</div><div class="label">{{ party.abbreviation }} for, {{ other_party.abbreviation }} against</div></div>
-    <div class="stat"><div class="value" id="stat-against-for">-</div><div class="label">{{ party.abbreviation }} against, {{ other_party.abbreviation }} for</div></div>
+    <div class="stat"><div class="value" id="stat-agreement">-</div><div class="label">{% translate "voted the same" %}</div></div>
+    <div class="stat"><div class="value" id="stat-shared">-</div><div class="label">{% translate "motions both voted on" %}</div></div>
+    <div class="stat"><div class="value" id="stat-for-against">-</div><div class="label">{% blocktranslate with a=party.abbreviation b=other_party.abbreviation %}{{ a }} for, {{ b }} against{% endblocktranslate %}</div></div>
+    <div class="stat"><div class="value" id="stat-against-for">-</div><div class="label">{% blocktranslate with a=party.abbreviation b=other_party.abbreviation %}{{ a }} against, {{ b }} for{% endblocktranslate %}</div></div>
   </div>
 {% endblock %}
 
@@ -35,19 +36,19 @@
     <section class="card">
       <div class="card-head">
         <div>
-          <h2>Agreement over time</h2>
-          <p id="timeline-meta">Per calendar month. Months in which they shared fewer than 50 motions are left empty.</p>
+          <h2>{% translate "Agreement over time" %}</h2>
+          <p id="timeline-meta">{% translate "Per calendar month. Months in which they shared fewer than 50 motions are left empty." %}</p>
         </div>
       </div>
       <div class="card-body">
-        <div class="chart-box"><canvas id="timeline" aria-label="Monthly agreement"></canvas></div>
+        <div class="chart-box"><canvas id="timeline" aria-label="{% translate 'Monthly agreement' %}"></canvas></div>
       </div>
     </section>
     <section class="card">
       <div class="card-head">
         <div>
-          <h2>How their votes compare</h2>
-          <p>Motions on which both voted for or against.</p>
+          <h2>{% translate "How their votes compare" %}</h2>
+          <p>{% translate "Motions on which both voted for or against." %}</p>
         </div>
       </div>
       <div class="card-body">
@@ -60,20 +61,20 @@
   <section class="card spaced" id="motions-card">
     <div class="card-head">
       <div>
-        <h2>Motions</h2>
-        <p>Newest vote first. Open a motion for its text and every party's vote.</p>
+        <h2>{% translate "Motions" %}</h2>
+        <p>{% translate "Newest vote first. Open a motion for its text and every party's vote." %}</p>
       </div>
     </div>
     <div class="card-body filters">
       <div class="filter-bar">
         <div class="grow">
-          <label class="visually-hidden" for="motion-search">Search these motions</label>
-          <input class="field" id="motion-search" type="search" placeholder="Search these motions" autocomplete="off">
+          <label class="visually-hidden" for="motion-search">{% translate "Search these motions" %}</label>
+          <input class="field" id="motion-search" type="search" placeholder="{% translate 'Search these motions' %}" autocomplete="off">
         </div>
-        <div class="segmented" role="group" aria-label="Which motions" id="relation">
-          <button type="button" data-relation="differed" aria-pressed="true">Voted differently</button>
-          <button type="button" data-relation="agreed" aria-pressed="false">Voted the same</button>
-          <button type="button" data-relation="all" aria-pressed="false">All</button>
+        <div class="segmented" role="group" aria-label="{% translate 'Which motions' %}" id="relation">
+          <button type="button" data-relation="differed" aria-pressed="true">{% translate "Voted differently" %}</button>
+          <button type="button" data-relation="agreed" aria-pressed="false">{% translate "Voted the same" %}</button>
+          <button type="button" data-relation="all" aria-pressed="false">{% translate "All" %}</button>
         </div>
       </div>
       <p class="hint count" id="count"></p>
@@ -81,7 +82,7 @@
     <ul class="rows" id="motions"></ul>
     <div class="list-foot" id="more-box" hidden>
       <span class="hint" id="shown"></span>
-      <button class="btn" id="more" type="button">Load more</button>
+      <button class="btn" id="more" type="button">{% translate "Load more" %}</button>
     </div>
   </section>
 
@@ -95,6 +96,24 @@
 
 {% block scripts %}
   <script>
+    Object.assign(window.I18N, {
+      "{b} and {a} are the same party under a different name, so they are not compared. The motions below show their own recorded votes.": "{{ _("{b} and {a} are the same party under a different name, so they are not compared. The motions below show their own recorded votes.")|escapejs }}",
+      "{a} and {b} have not both voted on any motion.": "{{ _("{a} and {b} have not both voted on any motion.")|escapejs }}",
+      "{a} and {b} voted the same on {share} of the {count} motions they both voted on.": "{{ _("{a} and {b} voted the same on {share} of the {count} motions they both voted on.")|escapejs }}",
+      "Voted the same": "{{ _("Voted the same")|escapejs }}",
+      "{a} for, {b} against": "{{ _("{a} for, {b} against")|escapejs }}",
+      "{a} against, {b} for": "{{ _("{a} against, {b} for")|escapejs }}",
+      "No month with enough shared motions yet.": "{{ _("No month with enough shared motions yet.")|escapejs }}",
+      "{share} of {count} shared motions": "{{ _("{share} of {count} shared motions")|escapejs }}",
+      "as": "{{ _("as")|escapejs }}",
+      "Vote cast by the predecessor party": "{{ _("Vote cast by the predecessor party")|escapejs }}",
+      "{count} motion": "{{ _("{count} motion")|escapejs }}",
+      "{count} motions": "{{ _("{count} motions")|escapejs }}",
+      "No motions match.": "{{ _("No motions match.")|escapejs }}",
+      "Showing {shown} of {count}": "{{ _("Showing {shown} of {count}")|escapejs }}",
+      "Could not load motions: {error}": "{{ _("Could not load motions: {error}")|escapejs }}",
+      "Could not load the comparison: {error}": "{{ _("Could not load the comparison: {error}")|escapejs }}",
+    });
     chartDefaults();
     const PARTY_ID = JSON.parse(document.getElementById("party-id").textContent);
     const OTHER_ID = JSON.parse(document.getElementById("other-party-id").textContent);
@@ -109,36 +128,33 @@
       names = { a, b };
       const summary = document.getElementById("summary");
       if (data.same_lineage) {
-        summary.textContent =
-          `${b} and ${a} are the same party under a different name, so they are not ` +
-          "compared. The motions below show their own recorded votes.";
+        summary.textContent = t("{b} and {a} are the same party under a different name, so they are not compared. The motions below show their own recorded votes.", { a, b });
         document.getElementById("stats").hidden = true;
         document.getElementById("charts").hidden = true;
         return;
       }
       if (!data.shared_motions) {
-        summary.textContent = `${a} and ${b} have not both voted on any motion.`;
+        summary.textContent = t("{a} and {b} have not both voted on any motion.", { a, b });
         return;
       }
-      summary.textContent =
-        `${a} and ${b} voted the same on ${pct(data.agreement, 1)} of the ` +
-        `${data.shared_motions.toLocaleString()} motions they both voted on.`;
+      summary.textContent = t("{a} and {b} voted the same on {share} of the {count} motions they both voted on.",
+        { a, b, share: pct(data.agreement, 1), count: number(data.shared_motions) });
       document.getElementById("stat-agreement").textContent = pct(data.agreement);
-      document.getElementById("stat-shared").textContent = data.shared_motions.toLocaleString();
-      document.getElementById("stat-for-against").textContent = data.party_for_other_against.toLocaleString();
-      document.getElementById("stat-against-for").textContent = data.party_against_other_for.toLocaleString();
+      document.getElementById("stat-shared").textContent = number(data.shared_motions);
+      document.getElementById("stat-for-against").textContent = number(data.party_for_other_against);
+      document.getElementById("stat-against-for").textContent = number(data.party_against_other_for);
 
       const parts = [
-        { label: "Voted the same", value: data.agreed, color: css("--accent") },
-        { label: `${a} for, ${b} against`, value: data.party_for_other_against, color: "#d97706" },
-        { label: `${a} against, ${b} for`, value: data.party_against_other_for, color: "#0d9488" },
+        { label: t("Voted the same"), value: data.agreed, color: css("--accent") },
+        { label: t("{a} for, {b} against", { a, b }), value: data.party_for_other_against, color: css("--series-2") },
+        { label: t("{a} against, {b} for", { a, b }), value: data.party_against_other_for, color: css("--series-3") },
       ];
       const split = document.getElementById("split");
       const legend = document.getElementById("split-legend");
       for (const part of parts) {
         const share = part.value / data.shared_motions;
-        const bar = el("span", { title: `${part.label}: ${part.value.toLocaleString()} (${pct(share, 1)})` });
-        bar.style.width = pct(share, 2);
+        const bar = el("span", { title: `${part.label}: ${number(part.value)} (${pct(share, 1)})` });
+        bar.style.width = cssPct(share);
         bar.style.background = part.color;
         split.append(bar);
         const swatch = el("span", { className: "swatch" });
@@ -160,7 +176,7 @@
       });
       const present = values.filter((v) => v !== null);
       if (!present.length) {
-        meta.textContent = "No month with enough shared motions yet.";
+        meta.textContent = t("No month with enough shared motions yet.");
         box.hidden = true;
         return;
       }
@@ -190,8 +206,9 @@
             tooltip: {
               displayColors: false,
               callbacks: {
-                label: (context) =>
-                  `${context.parsed.y.toFixed(1)}% of ${context.dataset.shared[context.dataIndex]} shared motions`,
+                label: (context) => t("{share} of {count} shared motions", {
+                  share: `${number(context.parsed.y, 1)}%`, count: number(context.dataset.shared[context.dataIndex]),
+                }),
               },
             },
           },
@@ -237,8 +254,8 @@
     function voteNode(name, vote, inheritedFrom) {
       const node = el("span", { className: "vote" }, name, voteBadge(vote));
       if (inheritedFrom) {
-        node.append(el("span", {}, "as ",
-          el("a", { href: `/party/${inheritedFrom.id}/`, title: "Vote cast by the predecessor party" }, inheritedFrom.abbreviation)));
+        node.append(el("span", {}, `${t("as")} `,
+          el("a", { href: `/party/${inheritedFrom.id}/`, title: t("Vote cast by the predecessor party") }, inheritedFrom.abbreviation)));
       }
       return node;
     }
@@ -255,7 +272,7 @@
       try {
         const data = await fetchJson(`${BASE}motions/?${query}`);
         if (current !== request) return;
-        count.textContent = `${data.count.toLocaleString()} motion${data.count === 1 ? "" : "s"}`;
+        count.textContent = tn(data.count, "{count} motion", "{count} motions");
         for (const motion of data.results) {
           list.append(el("li", {}, el("div", { className: "row-link" },
             el("a", { className: "title", href: `/motion/${motion.id}/` }, motion.title),
@@ -267,13 +284,13 @@
             ),
           )));
         }
-        if (!data.count) list.append(el("li", { className: "empty-state" }, "No motions match."));
+        if (!data.count) list.append(el("li", { className: "empty-state" }, t("No motions match.")));
         offset += data.results.length;
         moreBox.hidden = !data.next;
         document.getElementById("shown").textContent =
-          `Showing ${offset.toLocaleString()} of ${data.count.toLocaleString()}`;
+          t("Showing {shown} of {count}", { shown: number(offset), count: number(data.count) });
       } catch (error) {
-        if (current === request) count.textContent = `Could not load motions: ${error.message}`;
+        if (current === request) count.textContent = t("Could not load motions: {error}", { error: error.message });
       }
     }
 
@@ -298,7 +315,7 @@
         if (!data.same_lineage) renderTimeline(data);
         if (data.same_lineage && !params.get("relation")) relation = "all";
       } catch (error) {
-        document.getElementById("summary").textContent = `Could not load the comparison: ${error.message}`;
+        document.getElementById("summary").textContent = t("Could not load the comparison: {error}", { error: error.message });
       }
       setRelation(relation);
       loadMotions(true);

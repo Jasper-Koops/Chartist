@@ -863,3 +863,114 @@ class TestQueryCounts(APITestCase):
         # Every vote query is limited to specific parties, never all votes.
         for sql in vote_queries:
             self.assertIn('"scraper_partyvote"."party_id" IN', sql)
+
+
+class TestMotionAxes(APITestCase):
+    """The motion detail says where the motion sits on each axis."""
+
+    def setUp(self) -> None:
+        self.items = [ParliamentaryItemFactory() for _ in range(3)]
+        analysis = PCAAnalysis.objects.create(total_explained_variance=0.5)
+        self.component = PCAComponent.objects.create(
+            analysis=analysis, number=1, explained_variance=0.4
+        )
+        for abbreviation, score in [("A", 3.0), ("B", -2.0), ("C", 1.0)]:
+            PCAComponentPartyScore.objects.create(
+                component=self.component,
+                party=Party.objects.create(
+                    api_id=abbreviation,
+                    name=abbreviation,
+                    abbreviation=abbreviation,
+                ),
+                score=score,
+            )
+        for item, loading in zip(self.items, [-0.3, 0.1, 0.2]):
+            PCAItemLoading.objects.create(
+                component=self.component,
+                parliamentary_item=item,
+                loading=loading,
+            )
+
+    def axes(self, item: ParliamentaryItem) -> list[dict[str, Any]]:
+        response = self.client.get(
+            reverse("parliamentaryitem-detail", args=[item.id])
+        )
+        return list(response.data["axes"])
+
+    def test_weight_strength_and_ends(self) -> None:
+        self.assertEqual(
+            [
+                {
+                    "component": self.component.id,
+                    "number": 1,
+                    "explained_variance": 0.4,
+                    "loading": -0.3,
+                    # Stronger than both others (0.1 and 0.2).
+                    "stronger_than": 2 / 3,
+                    "high_end": ["A", "C", "B"],
+                    "low_end": ["B", "C", "A"],
+                }
+            ],
+            self.axes(self.items[0]),
+        )
+
+    def test_weakest_motion(self) -> None:
+        self.assertEqual(0, self.axes(self.items[1])[0]["stronger_than"])
+
+    def test_without_analysis(self) -> None:
+        PCAAnalysis.objects.all().delete()
+        self.assertEqual([], self.axes(self.items[0]))
+
+
+class TestMotionListAxes(TestMotionAxes):
+    """With ?axes=1, list rows carry each motion's weight per axis."""
+
+    def test_list_with_axes(self) -> None:
+        response = self.client.get(
+            reverse("parliamentaryitem-list"), {"axes": "1"}
+        )
+        rows = {row["id"]: row["axes"] for row in response.data["results"]}
+        self.assertEqual(
+            [{"number": 1, "loading": -0.3, "stronger_than": 2 / 3}],
+            rows[self.items[0].id],
+        )
+
+    def test_list_without_axes(self) -> None:
+        response = self.client.get(reverse("parliamentaryitem-list"))
+        self.assertNotIn("axes", response.data["results"][0])
+
+    def test_list_with_axes_query_count(self) -> None:
+        # One query for the page, one for its loadings, one for all
+        # weights: not one per motion.
+        with CaptureQueriesContext(connection) as queries:
+            self.client.get(reverse("parliamentaryitem-list"), {"axes": "1"})
+        self.assertLessEqual(len(queries), 6)
+
+
+class TestMotionListSortedByAxis(TestMotionAxes):
+    """?sort=-pc1 puts the high end of PC1 first, pc1 the low end."""
+
+    def ids(self, sort: str) -> list[int]:
+        response = self.client.get(
+            reverse("parliamentaryitem-list"), {"sort": sort}
+        )
+        return [row["id"] for row in response.data["results"]]
+
+    def test_high_end_first(self) -> None:
+        # Weights -0.3, 0.1 and 0.2.
+        self.assertEqual(
+            [self.items[2].id, self.items[1].id, self.items[0].id],
+            self.ids("-pc1"),
+        )
+
+    def test_low_end_first(self) -> None:
+        self.assertEqual(
+            [self.items[0].id, self.items[1].id, self.items[2].id],
+            self.ids("pc1"),
+        )
+
+    def test_axis_without_weights_keeps_every_motion(self) -> None:
+        self.assertEqual(3, len(self.ids("-pc2")))
+
+    def test_unknown_sort_is_ignored(self) -> None:
+        self.assertEqual(3, len(self.ids("weird")))

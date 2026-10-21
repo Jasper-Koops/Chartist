@@ -1,5 +1,5 @@
-{% load static %}<!doctype html>
-<html lang="en">
+{% load static assets i18n %}{% get_current_language as LANGUAGE %}<!doctype html>
+<html lang="{{ LANGUAGE }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,10 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Zilla+Slab:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'chartist/app.css' %}">
+  <link rel="stylesheet" href="{% asset 'chartist/app.css' %}">
+  {% block styles %}{% endblock %}
 </head>
-<body data-nav="{% block nav %}{% endblock %}">
-  <a class="visually-hidden" href="#content">Skip to content</a>
+<body data-nav="{% block nav %}{% endblock %}" class="{% block body_class %}{% endblock %}">
+  <a class="visually-hidden" href="#content">{% translate "Skip to content" %}</a>
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="{% url 'home' %}">
@@ -21,12 +22,12 @@
         </span>
         <span class="brand-name">Chartist</span>
       </a>
-      <nav class="nav" aria-label="Main">
-        <a href="{% url 'home' %}" data-nav="overview">Overview</a>
-        <a href="{% url 'home' %}#agreement" data-nav="agreement" data-section="agreement">Agreement</a>
-        <a href="{% url 'home' %}#parties" data-nav="parties" data-section="parties">Parties</a>
-        <a href="{% url 'component-detail' 1 %}" data-nav="axes">Axes</a>
-        <a href="{% url 'motion-list' %}" data-nav="motions">Motions</a>
+      <nav class="nav" aria-label="{% translate 'Main' %}">
+        {% comment %}Pages only: where on the site you are. Where you are
+        within the home page is its own chapter bar.{% endcomment %}
+        <a href="{% url 'home' %}" data-nav="overview">{% translate "Overview" %}</a>
+        <a href="{% url 'component-detail' 1 %}" data-nav="axes">{% translate "Axes" %}</a>
+        <a href="{% url 'motion-list' %}" data-nav="motions">{% translate "Motions" %}</a>
       </nav>
       <div class="topbar-right">
         <div class="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="search-results">
@@ -34,15 +35,24 @@
             <circle cx="7" cy="7" r="5"/><path d="m11 11 3.5 3.5" stroke-linecap="round"/>
           </svg>
           <input id="search" type="search" autocomplete="off" spellcheck="false"
-                 placeholder="Search parties and motions" aria-label="Search parties and motions"
+                 placeholder="{% translate 'Search parties and motions' %}" aria-label="{% translate 'Search parties and motions' %}"
                  aria-autocomplete="list" aria-controls="search-results">
           <kbd>/</kbd>
           <div class="results" id="search-results" role="listbox" hidden></div>
         </div>
-        <span class="status-pill" id="status-pill"><span class="dot"></span><span class="text">Loading...</span></span>
+        {% comment %}The language: the browser's by default, kept in a cookie
+        once picked (Django's set_language), back on the same page.{% endcomment %}
+        <form class="lang-switch" action="{% url 'set_language' %}" method="post" aria-label="{% translate 'Language' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" name="language" value="nl" lang="nl" title="Nederlands" aria-pressed="{% if LANGUAGE == 'nl' %}true{% else %}false{% endif %}">NL</button>
+          <button type="submit" name="language" value="en" lang="en" title="English" aria-pressed="{% if LANGUAGE == 'en' %}true{% else %}false{% endif %}">EN</button>
+        </form>
       </div>
     </div>
   </header>
+
+  {% block hero %}{% endblock %}
 
   <section class="band{% block band_class %}{% endblock %}">
     <div class="band-inner">
@@ -55,12 +65,44 @@
   </main>
 
   <footer>
-    <span>Data: Tweede Kamer open data. Votes are recorded per party.</span>
-    <span id="footer-status"></span>
+    <span>{% translate "Data:" %} <a href="https://opendata.tweedekamer.nl/" rel="noopener">{% translate "Tweede Kamer open data" %}</a>,
+      {% translate "through its" %} <a href="https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/" rel="noopener">{% translate "OData API" %}</a>.
+      {% translate "Votes are recorded per party." %}</span>
+    {# How fresh the data is: green when the last sync worked, red when it failed. #}
+    <span class="status-pill" id="status-pill"><span class="dot"></span><span class="text">{% translate "Loading..." %}</span></span>
   </footer>
 
   {% block libraries %}{% endblock %}
-  <script src="{% static 'chartist/app.js' %}"></script>
+  <script>
+    // Translations for the texts app.js builds (see `t` there); each page
+    // adds its own.
+    window.I18N = {
+      "Unknown date": "{{ _("Unknown date")|escapejs }}",
+      "Accepted": "{{ _("Accepted")|escapejs }}",
+      "Rejected": "{{ _("Rejected")|escapejs }}",
+      "Pending": "{{ _("Pending")|escapejs }}",
+      "For": "{{ _("For")|escapejs }}",
+      "Against": "{{ _("Against")|escapejs }}",
+      "Did not vote": "{{ _("Did not vote")|escapejs }}",
+      "No vote": "{{ _("No vote")|escapejs }}",
+      "Sync failed {when}": "{{ _("Sync failed {when}")|escapejs }}",
+      "Synced {when}": "{{ _("Synced {when}")|escapejs }}",
+      "Never synced": "{{ _("Never synced")|escapejs }}",
+      "Votes through {date}": "{{ _("Votes through {date}")|escapejs }}",
+      "Analysis {when}": "{{ _("Analysis {when}")|escapejs }}",
+      "No analysis yet": "{{ _("No analysis yet")|escapejs }}",
+      "Status unavailable": "{{ _("Status unavailable")|escapejs }}",
+      "Parties": "{{ _("Parties")|escapejs }}",
+      "Motions": "{{ _("Motions")|escapejs }}",
+      "Searching...": "{{ _("Searching...")|escapejs }}",
+      "Type at least 3 letters to search motions.": "{{ _("Type at least 3 letters to search motions.")|escapejs }}",
+      "No motions found.": "{{ _("No motions found.")|escapejs }}",
+      "Show all {count} matching motions": "{{ _("Show all {count} matching motions")|escapejs }}",
+      "Could not search motions: {error}": "{{ _("Could not search motions: {error}")|escapejs }}",
+      "{a} and {b}": "{{ _("{a} and {b}")|escapejs }}",
+    };
+  </script>
+  <script src="{% asset 'chartist/app.js' %}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

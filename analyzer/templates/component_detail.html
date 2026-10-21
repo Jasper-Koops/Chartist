@@ -1,22 +1,30 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}Axis PC{{ number }}{% endblock %}
+{% block title %}{% blocktranslate %}Axis PC{{ number }}{% endblocktranslate %}{% endblock %}
 {% block nav %}axes{% endblock %}
+
+{% block styles %}
+  <style>
+    /* The line above the bars, set apart by a rule. */
+    #parties-line { padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+    .weight strong { font-weight: 700; color: var(--ink); }
+  </style>
+{% endblock %}
 
 {% block band %}
   <ol class="breadcrumbs">
-    <li><a href="{% url 'home' %}">Overview</a></li>
-    <li><a href="{% url 'home' %}#components">Axes</a></li>
+    <li><a href="{% url 'home' %}">{% translate "Overview" %}</a></li>
+    <li><a href="{% url 'home' %}#axes-chapter">{% translate "Axes" %}</a></li>
     <li aria-current="page">PC{{ number }}</li>
   </ol>
-  <p class="eyebrow">Axis of the political landscape</p>
-  <h1>What drives PC{{ number }}</h1>
+  <p class="eyebrow">{% translate "Axis of the political landscape" %}</p>
+  <h1>{% blocktranslate %}What drives PC{{ number }}{% endblocktranslate %}</h1>
   <p class="lead" id="lead">
-    Each axis is a voting pattern: a set of motions on which the parties at
-    one end vote for and the parties at the other end vote against.
+    {% translate "Each axis is a voting pattern: a set of motions on which the parties at one end vote for and the parties at the other end vote against." %}
   </p>
   <div class="band-actions">
-    <nav class="segmented on-band" id="components" aria-label="Axes"></nav>
+    <nav class="segmented on-band" id="components" aria-label="{% translate 'Axes' %}"></nav>
   </div>
 {% endblock %}
 
@@ -24,11 +32,17 @@
   <section class="card">
     <div class="card-head">
       <div>
-        <h2>Parties along PC{{ number }}</h2>
-        <p id="meta">Loading...</p>
+        <h2>{% blocktranslate %}Parties along PC{{ number }}{% endblocktranslate %}</h2>
+        <p id="meta">{% translate "Loading..." %}</p>
       </div>
     </div>
     <div class="card-body">
+      <!-- The picture first (who sits together), then the exact order and
+           score per party. -->
+      <div id="parties-line">
+        <div id="party-line"></div>
+        <div class="party-line-ends"><span id="line-lo"></span><span id="line-hi"></span></div>
+      </div>
       <ol class="ranking diverging" id="parties"></ol>
     </div>
   </section>
@@ -37,8 +51,8 @@
     <section class="card">
       <div class="card-head">
         <div>
-          <h2 id="positive-title">Motions at the high end</h2>
-          <p id="positive-meta">Supported by the parties with a high score, opposed by those with a low score.</p>
+          <h2 id="positive-title">{% translate "Motions at the high end" %}</h2>
+          <p id="positive-meta">{% translate "Supported by the parties with a high score, opposed by those with a low score." %}</p>
         </div>
       </div>
       <ul class="rows" id="positive"></ul>
@@ -46,8 +60,8 @@
     <section class="card">
       <div class="card-head">
         <div>
-          <h2 id="negative-title">Motions at the low end</h2>
-          <p id="negative-meta">Supported by the parties with a low score, opposed by those with a high score.</p>
+          <h2 id="negative-title">{% translate "Motions at the low end" %}</h2>
+          <p id="negative-meta">{% translate "Supported by the parties with a low score, opposed by those with a high score." %}</p>
         </div>
       </div>
       <ul class="rows" id="negative"></ul>
@@ -59,6 +73,21 @@
 
 {% block scripts %}
   <script>
+    Object.assign(window.I18N, {
+      "How strongly this motion follows the pattern": "{{ _("How strongly this motion follows the pattern")|escapejs }}",
+      "Weight": "{{ _("Weight")|escapejs }}",
+      "No motions.": "{{ _("No motions.")|escapejs }}",
+      "No analysis yet. Run the analysis first.": "{{ _("No analysis yet. Run the analysis first.")|escapejs }}",
+      "The newest analysis has no PC{number}.": "{{ _("The newest analysis has no PC{number}.")|escapejs }}",
+      "PC{number} captures {share} of all differences in how parties vote. Parties at one end vote for the motions below, parties at the other end against them.": "{{ _("PC{number} captures {share} of all differences in how parties vote. Parties at one end vote for the motions below, parties at the other end against them.")|escapejs }}",
+      "Score per party in the analysis of {when}. Parties close together vote alike on these motions.": "{{ _("Score per party in the analysis of {when}. Parties close together vote alike on these motions.")|escapejs }}",
+      "Mostly supported by {for}; opposed by {against}.": "{{ _("Mostly supported by {for}; opposed by {against}.")|escapejs }}",
+      "{high} motions share the strongest weight at the high end, and {low} at the low end: they have the same voting pattern, so the newest are shown.": "{{ _("{high} motions share the strongest weight at the high end, and {low} at the low end: they have the same voting pattern, so the newest are shown.")|escapejs }}",
+      "{count} motions share the strongest weight at the high end: they have the same voting pattern, so the newest are shown.": "{{ _("{count} motions share the strongest weight at the high end: they have the same voting pattern, so the newest are shown.")|escapejs }}",
+      "{count} motions share the strongest weight at the low end: they have the same voting pattern, so the newest are shown.": "{{ _("{count} motions share the strongest weight at the low end: they have the same voting pattern, so the newest are shown.")|escapejs }}",
+      "The {limit} motions that follow this pattern most strongly on each side; newest first among equals.": "{{ _("The {limit} motions that follow this pattern most strongly on each side; newest first among equals.")|escapejs }}",
+      "Could not load the axis: {error}": "{{ _("Could not load the axis: {error}")|escapejs }}",
+    });
     const NUMBER = JSON.parse(document.getElementById("component-number").textContent);
     const LIMIT = 25;
 
@@ -81,15 +110,34 @@
           const width = (Math.abs(p.score) / top) * 50;
           bar.style.width = `${width}%`;
           bar.style.left = p.score >= 0 ? "50%" : `${50 - width}%`;
-          bar.style.background = p.score >= 0 ? css("--accent") : "#d97706";
+          bar.style.background = css(p.score >= 0 ? "--data-hi" : "--data-lo");
           return el("li", {},
-            el("span", { className: "name" }, el("a", { href: `/party/${p.id}/` }, p.abbreviation)),
+            el("span", { className: "name" }, partyLogo(p, { size: "sm" }), el("a", { href: `/party/${p.id}/` }, p.abbreviation)),
             el("span", { className: "track" }, bar),
-            el("span", { className: "value" }, p.score.toFixed(1)),
+            el("span", { className: "value" }, number(p.score, 1)),
           );
         })
       );
     }
+
+    // The scores as a line with the party logos on it; hovering a logo gives
+    // the score. Low scores on the left, as in the bars below.
+    let lineParties = null;
+    function renderLine() {
+      if (!lineParties?.length) return;
+      partyLine(document.getElementById("party-line"),
+        lineParties.map((p) => ({ id: p.id, abbreviation: p.abbreviation, logo_url: p.logo_url, value: p.score })));
+      document.getElementById("line-lo").textContent = lineParties.at(-1).abbreviation;
+      document.getElementById("line-hi").textContent = lineParties[0].abbreviation;
+    }
+    // The logos are placed in pixels: place them again when the width changes.
+    let lineWidth = 0;
+    new ResizeObserver(([entry]) => {
+      const width = Math.round(entry.contentRect.width);
+      if (width === lineWidth) return;
+      lineWidth = width;
+      renderLine();
+    }).observe(document.getElementById("parties-line"));
 
     function renderMotions(listId, motions) {
       const list = document.getElementById(listId);
@@ -99,59 +147,71 @@
           el("div", { className: "row-meta" },
             el("span", {}, formatDate(motion.vote_date)),
             statusBadge(motion.status),
-            el("span", { className: "tabular", title: "How strongly this motion follows the pattern" }, `Weight ${motion.loading.toFixed(3)}`),
+            el("span", { className: "tabular weight", title: t("How strongly this motion follows the pattern") },
+              `${t("Weight")} `, el("strong", {}, number(motion.loading, 3))),
           ),
         ))
       ));
-      if (!motions.length) list.replaceChildren(el("li", { className: "empty-state" }, "No motions."));
+      if (!motions.length) list.replaceChildren(el("li", { className: "empty-state" }, t("No motions.")));
     }
 
-    // Name the sides after the parties at each end, e.g. "Supported by FVD,
-    // PVV and Groep Markuszower".
-    const listNames = (parties) =>
-      parties.length > 1 ? `${parties.slice(0, -1).join(", ")} and ${parties.at(-1)}` : parties.join("");
+    // Motions sharing the strongest weight of a side have the same voting
+    // pattern; when there are more than shown, say so.
+    function tiesNote(data) {
+      const high = data.tied_at_strongest_positive > data.positive.length ? data.tied_at_strongest_positive : 0;
+      const low = data.tied_at_strongest_negative > data.negative.length ? data.tied_at_strongest_negative : 0;
+      if (high && low) {
+        return t("{high} motions share the strongest weight at the high end, and {low} at the low end: they have the same voting pattern, so the newest are shown.",
+          { high: number(high), low: number(low) });
+      }
+      if (high) {
+        return t("{count} motions share the strongest weight at the high end: they have the same voting pattern, so the newest are shown.",
+          { count: number(high) });
+      }
+      if (low) {
+        return t("{count} motions share the strongest weight at the low end: they have the same voting pattern, so the newest are shown.",
+          { count: number(low) });
+      }
+      return t("The {limit} motions that follow this pattern most strongly on each side; newest first among equals.", { limit: LIMIT });
+    }
 
     (async () => {
       const meta = document.getElementById("meta");
       try {
         const analysis = results(await fetchJson("/api/v1/analysis/?ordering=-created_at&limit=1"))[0];
         if (!analysis) {
-          meta.textContent = "No analysis yet. Run the analysis first.";
+          meta.textContent = t("No analysis yet. Run the analysis first.");
           return;
         }
         const components = [...analysis.components].sort((a, b) => a.number - b.number);
         renderComponentLinks(components);
         const component = components.find((c) => c.number === NUMBER);
         if (!component) {
-          meta.textContent = `The newest analysis has no PC${NUMBER}.`;
+          meta.textContent = t("The newest analysis has no PC{number}.", { number: NUMBER });
           return;
         }
         const data = await fetchJson(`/api/v1/pca-components/${component.id}/breakdown/?limit=${LIMIT}`);
-        document.getElementById("lead").textContent =
-          `PC${NUMBER} captures ${pct(data.explained_variance, 1)} of all differences in how parties vote. ` +
-          "Parties at one end vote for the motions below, parties at the other end against them.";
-        meta.textContent = `Score per party in the analysis of ${formatDateTime(data.created_at)}. Parties close together vote alike on these motions.`;
+        document.getElementById("lead").textContent = t(
+          "PC{number} captures {share} of all differences in how parties vote. Parties at one end vote for the motions below, parties at the other end against them.",
+          { number: NUMBER, share: pct(data.explained_variance, 1) });
+        meta.textContent = t("Score per party in the analysis of {when}. Parties close together vote alike on these motions.",
+          { when: formatDateTime(data.created_at) });
         renderParties(data.parties);
+        lineParties = data.parties;
+        renderLine();
 
+        // Name the sides after the parties at each end.
         const high = data.parties.slice(0, 3).map((p) => p.abbreviation);
         const low = data.parties.slice(-3).reverse().map((p) => p.abbreviation);
-        document.getElementById("positive-meta").textContent = `Mostly supported by ${listNames(high)}; opposed by ${listNames(low)}.`;
-        document.getElementById("negative-meta").textContent = `Mostly supported by ${listNames(low)}; opposed by ${listNames(high)}.`;
+        document.getElementById("positive-meta").textContent =
+          t("Mostly supported by {for}; opposed by {against}.", { for: listNames(high), against: listNames(low) });
+        document.getElementById("negative-meta").textContent =
+          t("Mostly supported by {for}; opposed by {against}.", { for: listNames(low), against: listNames(high) });
         renderMotions("positive", data.positive);
         renderMotions("negative", data.negative);
-
-        const ties = [];
-        if (data.tied_at_strongest_positive > data.positive.length) {
-          ties.push(`${data.tied_at_strongest_positive} motions share the strongest weight at the high end`);
-        }
-        if (data.tied_at_strongest_negative > data.negative.length) {
-          ties.push(`${data.tied_at_strongest_negative} at the low end`);
-        }
-        document.getElementById("ties").textContent = ties.length
-          ? `${ties.join(" and ")}: they have the same voting pattern, so the newest are shown.`
-          : `The ${LIMIT} motions that follow this pattern most strongly on each side; newest first among equals.`;
+        document.getElementById("ties").textContent = tiesNote(data);
       } catch (error) {
-        meta.textContent = `Could not load the axis: ${error.message}`;
+        meta.textContent = t("Could not load the axis: {error}", { error: error.message });
       }
     })();
   </script>

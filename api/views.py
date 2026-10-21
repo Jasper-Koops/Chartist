@@ -1,11 +1,14 @@
+import re
 from typing import Any
 from django.db.models.functions import Abs
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from scraper.serializers import (
+    AxisRanks,
     PartySerializer,
     PartyVoteSerializer,
     ParliamentaryItemSerializer,
     ParliamentaryItemDetailSerializer,
+    ParliamentaryItemListSerializer,
     KeyParliamentaryItemSerializer,
 )
 from analyzer.compare import RELATIONS, pair_votes, related_items, summarize
@@ -19,6 +22,7 @@ from django.db.models import (
     OuterRef,
     Prefetch,
     QuerySet,
+    Subquery,
     Sum,
 )
 from rest_framework.decorators import action
@@ -268,10 +272,63 @@ class ParliamentaryItemViewSet(ReadOnlyModelViewSet[ParliamentaryItem]):
     serializer_class = ParliamentaryItemSerializer
     filterset_class = ParliamentaryItemFilter
 
+    def with_axes(self) -> bool:
+        # A list with each motion's weight per axis (`?axes=1`).
+        return (
+            self.action == "list"
+            and self.request.query_params.get("axes") == "1"
+        )
+
+    # `?sort=-pc1`: the high end of PC1 first (the largest weight), `pc1`
+    # the low end; likewise for the other axes.
+    AXIS_SORT = re.compile(r"^(-?)pc([1-9])$")
+
+    def get_queryset(self) -> QuerySet[ParliamentaryItem]:
+        queryset = super().get_queryset()
+        newest = PCAAnalysis.objects.order_by("-created_at").first()
+        if self.with_axes():
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "pca_loadings",
+                    queryset=PCAItemLoading.objects.filter(
+                        component__analysis=newest
+                    ).select_related("component"),
+                    to_attr="newest_loadings",
+                )
+            )
+        sort = self.AXIS_SORT.match(self.request.query_params.get("sort", ""))
+        if self.action == "list" and sort:
+            weight = Subquery(
+                PCAItemLoading.objects.filter(
+                    parliamentary_item=OuterRef("pk"),
+                    component__analysis=newest,
+                    component__number=int(sort.group(2)),
+                ).values("loading")[:1]
+            )
+            # Motions without a weight on that axis last; newest first
+            # among equal weights.
+            order = (
+                F("axis_weight").desc(nulls_last=True)
+                if sort.group(1)
+                else F("axis_weight").asc(nulls_last=True)
+            )
+            queryset = queryset.annotate(axis_weight=weight).order_by(
+                order, F("vote_date").desc(nulls_last=True), "-id"
+            )
+        return queryset
+
+    def get_serializer_context(self) -> dict[str, Any]:
+        context = dict(super().get_serializer_context())
+        if self.with_axes():
+            context["axis_ranks"] = AxisRanks()
+        return context
+
     def get_serializer_class(self) -> type[BaseSerializer[ParliamentaryItem]]:
         # The motion text is only included on the detail route.
         if self.action == "retrieve":
             return ParliamentaryItemDetailSerializer
+        if self.with_axes():
+            return ParliamentaryItemListSerializer
         return ParliamentaryItemSerializer
 
 
@@ -381,6 +438,7 @@ class PCAComponentViewSet(ReadOnlyModelViewSet[PCAComponent]):
                     {
                         "id": score.party_id,
                         "abbreviation": score.party.abbreviation,
+                        "logo_url": score.party.logo_url,
                         "score": score.score,
                     }
                     for score in component.party_scores.select_related(

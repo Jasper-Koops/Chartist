@@ -204,6 +204,9 @@ class TestPartyLogos(TestCase):
             self.ids[2]: MockedResponse({}, 404),
         }
         self.logo_requests: list[str] = []
+        # Earlier registrations with a logo, by abbreviation.
+        self.earlier: dict[str, list[dict[str, Any]]] = {}
+        self.lookups: list[str] = []
 
     def side_effect(
         self, url: str, *args: Any, **kwargs: Any
@@ -212,6 +215,13 @@ class TestPartyLogos(TestCase):
             self.logo_requests.append(url)
             party_id = url.split("(")[1].split(")")[0]
             return self.logos[party_id]
+        query = (kwargs.get("params") or {}).get("$filter") or ""
+        if "Afkorting eq" in query:
+            abbreviation = query.split("'")[1]
+            self.lookups.append(abbreviation)
+            return MockedResponse(
+                {"value": self.earlier.get(abbreviation, [])}, 200
+            )
         return MockedResponse({"value": self.parties}, 200)
 
     def import_parties(self) -> None:
@@ -266,6 +276,31 @@ class TestPartyLogos(TestCase):
         self.assertEqual(4000, sp.logo_length)
         self.assertEqual("image/png", sp.logo.content_type)
 
+    def test_logo_of_an_earlier_registration(self) -> None:
+        # Registered again without a logo (like 50PLUS in 2025): the logo of
+        # its earlier registration under the same abbreviation is used.
+        self.parties[0]["ContentLength"] = None
+        self.earlier["ChristenUnie"] = [
+            {"Id": "earlier-id", "ContentLength": 13605}
+        ]
+        self.logos["earlier-id"] = MockedResponse({}, 200, content=PNG)
+        self.import_parties()
+        christenunie = Party.objects.get(abbreviation="ChristenUnie")
+        self.assertEqual(13605, christenunie.logo_length)
+        self.assertEqual(PNG, bytes(christenunie.logo.image))
+        self.assertIn("Fractie(earlier-id)/resource", self.logo_requests[0])
+
+    def test_earlier_logo_is_not_downloaded_again(self) -> None:
+        self.parties[0]["ContentLength"] = None
+        self.earlier["ChristenUnie"] = [
+            {"Id": "earlier-id", "ContentLength": 13605}
+        ]
+        self.logos["earlier-id"] = MockedResponse({}, 200, content=PNG)
+        self.import_parties()
+        self.logo_requests.clear()
+        self.import_parties()
+        self.assertNotIn("earlier-id", "".join(self.logo_requests))
+
     def test_removed_logo_is_deleted(self) -> None:
         self.import_parties()
         self.parties[0]["ContentLength"] = None
@@ -273,6 +308,8 @@ class TestPartyLogos(TestCase):
         christenunie = Party.objects.get(abbreviation="ChristenUnie")
         self.assertIsNone(christenunie.logo_length)
         self.assertFalse(PartyLogo.objects.filter(party=christenunie).exists())
+        # It looked for an earlier logo, and found none.
+        self.assertEqual(["ChristenUnie"], self.lookups)
 
 
 def mocked_xml_url(zaak: dict[str, Any]) -> str:

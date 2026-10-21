@@ -164,6 +164,11 @@ class TestComponentBreakdown(APITestCase):
         data: dict[str, Any] = self.client.get(url, params).data
         return data
 
+    def test_parties_have_logo_url(self) -> None:
+        self.assertTrue(
+            all("logo_url" in p for p in self.breakdown()["parties"])
+        )
+
     def test_parties_sorted_by_score(self) -> None:
         scores = [p["score"] for p in self.breakdown()["parties"]]
         self.assertEqual(15, len(scores))
@@ -271,13 +276,14 @@ class TestInheritedVoteLabels(APITestCase):
         )
 
     def test_party_page_links_both_ways(self) -> None:
+        # The notices by their ids: their text depends on the language.
         new_page = self.client.get(reverse("party-detail", args=[self.new.id]))
-        self.assertContains(new_page, "Continues")
+        self.assertContains(new_page, 'id="continues"')
         self.assertContains(new_page, f'href="/party/{self.old.id}/"')
         old_page = self.client.get(reverse("party-detail", args=[self.old.id]))
-        self.assertContains(old_page, "Continued as")
+        self.assertContains(old_page, 'id="continued-as"')
         self.assertContains(old_page, f'href="/party/{self.new.id}/"')
         other_page = self.client.get(
             reverse("party-detail", args=[self.other.id])
         )
-        self.assertNotContains(other_page, "Continue")
+        self.assertNotContains(other_page, 'id="continue')

@@ -1,6 +1,8 @@
+from bisect import bisect_left
+
 from rest_framework import serializers
 from typing import Any
-from analyzer.models import PCAAnalysis
+from analyzer.models import PCAAnalysis, PCAItemLoading
 from scraper.models import Party, PartyVote, ParliamentaryItem
 
 
@@ -58,11 +60,68 @@ class ParliamentaryItemSerializer(
         ]
 
 
+class AxisRanks:
+    """
+    The newest analysis, with every motion's weight per axis sorted by
+    strength (one query for all), to say how a motion's weight compares
+    with those of all motions.
+    """
+
+    def __init__(self) -> None:
+        self.analysis = PCAAnalysis.objects.order_by("-created_at").first()
+        self.strengths: dict[int, list[float]] = {}
+        if self.analysis is None:
+            return
+        for component_id, loading in PCAItemLoading.objects.filter(
+            component__analysis=self.analysis
+        ).values_list("component_id", "loading"):
+            self.strengths.setdefault(component_id, []).append(abs(loading))
+        for values in self.strengths.values():
+            values.sort()
+
+    def stronger_than(self, component_id: int, loading: float) -> float | None:
+        """The share of motions whose weight on the axis is weaker."""
+        values = self.strengths.get(component_id)
+        if not values:
+            return None
+        return bisect_left(values, abs(loading)) / len(values)
+
+
+class ParliamentaryItemListSerializer(ParliamentaryItemSerializer):
+    """
+    A list row with the motion's weight on each axis of the newest analysis
+    and how it compares (`?axes=1`). Expects `newest_loadings` prefetched
+    and `axis_ranks` (AxisRanks) in the context.
+    """
+
+    axes = serializers.SerializerMethodField()
+
+    class Meta(ParliamentaryItemSerializer.Meta):
+        fields = ParliamentaryItemSerializer.Meta.fields + ["axes"]
+
+    def get_axes(self, obj: ParliamentaryItem) -> Any:
+        ranks: AxisRanks = self.context["axis_ranks"]
+        return [
+            {
+                "number": item.component.number,
+                "loading": item.loading,
+                "stronger_than": ranks.stronger_than(
+                    item.component_id, item.loading
+                ),
+            }
+            for item in sorted(
+                getattr(obj, "newest_loadings", []),
+                key=lambda item: item.component.number,
+            )
+        ]
+
+
 class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
     """
-    Adds the motion text, document links and the vote of every party,
-    which are left out of list responses. `text` is the full text as
-    published; `core_text` only what the motion says, without the formula.
+    Adds the motion text, document links, the vote of every party and where
+    the motion sits on the axes, which are left out of list responses.
+    `text` is the full text as published; `core_text` only what the motion
+    says, without the formula.
     """
 
     core_text = serializers.ListField(
@@ -70,6 +129,7 @@ class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
     )
     documents = serializers.SerializerMethodField()
     votes = serializers.SerializerMethodField()
+    axes = serializers.SerializerMethodField()
 
     class Meta(ParliamentaryItemSerializer.Meta):
         fields = ParliamentaryItemSerializer.Meta.fields + [
@@ -78,6 +138,7 @@ class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
             "document_id",
             "documents",
             "votes",
+            "axes",
         ]
 
     def get_documents(self, obj: ParliamentaryItem) -> Any:
@@ -104,6 +165,46 @@ class ParliamentaryItemDetailSerializer(ParliamentaryItemSerializer):
                 "party__abbreviation"
             )
         ]
+
+    def get_axes(self, obj: ParliamentaryItem) -> Any:
+        """
+        Where the motion sits on each axis of the newest analysis: its
+        loading (weight), the share of motions whose weight is weaker, and
+        the three parties at each end of the axis (most extreme first).
+        Parties at the high end tend to vote for motions with a positive
+        weight and against those with a negative one. Empty without an
+        analysis, or when the motion was not part of it.
+        """
+        ranks = AxisRanks()
+        if ranks.analysis is None:
+            return []
+        rows = []
+        for item in (
+            obj.pca_loadings.filter(component__analysis=ranks.analysis)
+            .select_related("component")
+            .order_by("component__number")
+        ):
+            component = item.component
+            parties = [
+                score.party.abbreviation
+                for score in component.party_scores.select_related(
+                    "party"
+                ).order_by("-score")
+            ]
+            rows.append(
+                {
+                    "component": component.id,
+                    "number": component.number,
+                    "explained_variance": component.explained_variance,
+                    "loading": item.loading,
+                    "stronger_than": ranks.stronger_than(
+                        component.id, item.loading
+                    ),
+                    "high_end": parties[:3],
+                    "low_end": parties[::-1][:3],
+                }
+            )
+        return rows
 
 
 class KeyParliamentaryItemSerializer(

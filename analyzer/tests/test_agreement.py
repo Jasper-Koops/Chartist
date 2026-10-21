@@ -1,3 +1,4 @@
+from django.conf import settings
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
 
@@ -302,7 +303,11 @@ class TestHomePage(TestCase):
     def test_home_page(self) -> None:
         response = self.client.get("/")
         self.assertEqual(200, response.status_code)
+        # The map that opens the page, and the chapters below it.
+        self.assertContains(response, 'id="hero"')
+        self.assertContains(response, 'id="axes-chapter"')
         self.assertContains(response, 'id="matrix"')
+        self.assertContains(response, 'id="party-grid"')
 
 
 class TestPartyDetailPage(TestCase):
@@ -371,3 +376,44 @@ class TestMotionPages(TestCase):
     def test_unknown_motion_is_404(self) -> None:
         response = self.client.get(reverse("motion-detail", args=[999999]))
         self.assertEqual(404, response.status_code)
+
+
+class TestAssetVersions(TestCase):
+    def test_shared_files_carry_a_version(self) -> None:
+        # A changed app.js or app.css gets a new URL, so the browser
+        # does not keep using its cached copy.
+        response = self.client.get("/")
+        self.assertRegex(response.content.decode(), r"chartist/app\.js\?v=\d+")
+        self.assertRegex(response.content.decode(), r"chartist/app\.css\?v=\d+")
+
+
+class TestLanguage(TestCase):
+    """Dutch by default for everyone; English once picked in the header."""
+
+    def test_dutch_by_default(self) -> None:
+        # Also when the browser prefers English.
+        response = self.client.get("/", HTTP_ACCEPT_LANGUAGE="en-US,en;q=0.9")
+        self.assertContains(response, '<html lang="nl">')
+        self.assertContains(response, "Wie stemt met wie in de Tweede Kamer")
+
+    def test_english_when_picked(self) -> None:
+        self.client.cookies[settings.LANGUAGE_COOKIE_NAME] = "en"
+        response = self.client.get("/")
+        self.assertContains(response, '<html lang="en">')
+        self.assertContains(response, "Who votes with whom in Dutch parliament")
+
+    def test_unknown_language_falls_back_to_dutch(self) -> None:
+        self.client.cookies[settings.LANGUAGE_COOKIE_NAME] = "de"
+        response = self.client.get("/")
+        self.assertContains(response, '<html lang="nl">')
+
+    def test_switch_keeps_the_page(self) -> None:
+        response = self.client.post(
+            reverse("set_language"), {"language": "en", "next": "/motions/"}
+        )
+        self.assertRedirects(
+            response, "/motions/", fetch_redirect_response=False
+        )
+        self.assertEqual(
+            "en", response.cookies[settings.LANGUAGE_COOKIE_NAME].value
+        )

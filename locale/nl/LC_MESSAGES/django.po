@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-21 17:38+0200\n"
+"POT-Creation-Date: 2026-10-21 23:42+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -33,7 +33,7 @@ msgid "Overview"
 msgstr "Overzicht"
 
 #: analyzer/templates/base.html:30 analyzer/templates/component_detail.html:18
-#: analyzer/templates/component_detail.html:27 analyzer/templates/home.html:661
+#: analyzer/templates/component_detail.html:27 analyzer/templates/home.html:665
 msgid "Axes"
 msgstr "Assen"
 
@@ -74,8 +74,8 @@ msgid "Votes are recorded per party."
 msgstr "Stemmen worden per partij vastgelegd."
 
 #: analyzer/templates/base.html:74 analyzer/templates/component_detail.html:36
-#: analyzer/templates/home.html:782 analyzer/templates/home.html:804
-#: analyzer/templates/home.html:823 analyzer/templates/motion_detail.html:70
+#: analyzer/templates/home.html:786 analyzer/templates/home.html:808
+#: analyzer/templates/home.html:827 analyzer/templates/motion_detail.html:70
 #: analyzer/templates/motion_detail.html:85
 #: analyzer/templates/motion_detail.html:106
 #: analyzer/templates/pair_detail.html:19
@@ -147,7 +147,7 @@ msgstr "Nog geen analyse"
 msgid "Status unavailable"
 msgstr "Status niet beschikbaar"
 
-#: analyzer/templates/base.html:97 analyzer/templates/home.html:663
+#: analyzer/templates/base.html:97 analyzer/templates/home.html:667
 #: analyzer/templates/party_detail.html:10
 msgid "Parties"
 msgstr "Partijen"
@@ -237,7 +237,7 @@ msgstr "Gewicht"
 msgid "No motions."
 msgstr "Geen moties."
 
-#: analyzer/templates/component_detail.html:80 analyzer/templates/home.html:844
+#: analyzer/templates/component_detail.html:80 analyzer/templates/home.html:849
 msgid "No analysis yet. Run the analysis first."
 msgstr "Nog geen analyse. Voer eerst de analyse uit."
 
@@ -302,139 +302,133 @@ msgstr "As laden mislukt: {error}"
 msgid "How the Tweede Kamer votes"
 msgstr "Hoe de Tweede Kamer stemt"
 
-#: analyzer/templates/home.html:657 analyzer/templates/home.html:659
+#: analyzer/templates/home.html:661 analyzer/templates/home.html:663
 msgid "On this page"
 msgstr "Op deze pagina"
 
-#: analyzer/templates/home.html:660 analyzer/templates/home.html:692
+#: analyzer/templates/home.html:664 analyzer/templates/home.html:696
 msgid "The map"
 msgstr "De kaart"
 
-#: analyzer/templates/home.html:662
+#: analyzer/templates/home.html:666
 msgid "Agreement"
 msgstr "Overeenstemming"
 
-#: analyzer/templates/home.html:666
+#: analyzer/templates/home.html:670
 msgid "The political landscape"
 msgstr "Het politieke landschap"
 
-#: analyzer/templates/home.html:682
+#: analyzer/templates/home.html:686
 msgid "Tweede Kamer · voting analysis"
 msgstr "Tweede Kamer · stemanalyse"
 
-#: analyzer/templates/home.html:683
+#: analyzer/templates/home.html:687
 msgid "Who votes with whom in Dutch parliament"
 msgstr "Wie stemt met wie in de Tweede Kamer"
 
-#: analyzer/templates/home.html:684
+#: analyzer/templates/home.html:688
 msgid "Close together means voting alike."
 msgstr "Dicht bij elkaar betekent: gelijk stemmen."
 
-#: analyzer/templates/home.html:684 analyzer/templates/home.html:837
+#: analyzer/templates/home.html:688 analyzer/templates/home.html:842
 msgid "Drag to turn the map, click a party to open it."
 msgstr "Sleep om de kaart te draaien, klik op een partij om die te openen."
 
-#: analyzer/templates/home.html:687
+#: analyzer/templates/home.html:691
 msgid "colour shows the main divide"
 msgstr "kleur toont de hoofdscheiding"
 
-#: analyzer/templates/home.html:693
-msgid ""
-"In 2D the map shows the two strongest voting patterns as its axes; in 3D, "
-"the third as well. Close together means voting alike."
-msgstr "In 2D toont de kaart de twee sterkste stempatronen als assen; in 3D ook het derde. Dicht bij elkaar betekent: gelijk stemmen."
-
-#: analyzer/templates/home.html:696
+#: analyzer/templates/home.html:700
 msgid "main divide"
 msgstr "hoofdscheiding"
 
-#: analyzer/templates/home.html:701
+#: analyzer/templates/home.html:705
 msgid "Map"
 msgstr "Kaart"
 
-#: analyzer/templates/home.html:703
+#: analyzer/templates/home.html:707
 msgid "View"
 msgstr "Weergave"
 
-#: analyzer/templates/home.html:710
+#: analyzer/templates/home.html:714
 msgid "Parties as"
 msgstr "Partijen als"
 
-#: analyzer/templates/home.html:712 analyzer/templates/home.html:778
+#: analyzer/templates/home.html:716 analyzer/templates/home.html:782
 msgid "Dots"
 msgstr "Stippen"
 
-#: analyzer/templates/home.html:713 analyzer/templates/home.html:779
+#: analyzer/templates/home.html:717 analyzer/templates/home.html:783
 msgid "Logos"
 msgstr "Logo's"
 
-#: analyzer/templates/home.html:717
+#: analyzer/templates/home.html:721
 msgid "Highlight"
 msgstr "Uitlichten"
 
-#: analyzer/templates/home.html:722
+#: analyzer/templates/home.html:726
 msgid "Choose a party"
 msgstr "Kies een partij"
 
-#: analyzer/templates/home.html:725 analyzer/templates/home.html:796
+#: analyzer/templates/home.html:729 analyzer/templates/home.html:800
 msgid "Clear the highlight"
 msgstr "Uitlichting wissen"
 
-#: analyzer/templates/home.html:731 analyzer/templates/home.html:856
+#: analyzer/templates/home.html:735 analyzer/templates/home.html:861
 msgid "Show the map on its own, filling the window"
 msgstr "Toon alleen de kaart, over het hele venster"
 
-#: analyzer/templates/home.html:734 analyzer/templates/home.html:859
+#: analyzer/templates/home.html:738 analyzer/templates/home.html:864
 msgid "Fullscreen"
 msgstr "Volledig scherm"
 
-#: analyzer/templates/home.html:736
+#: analyzer/templates/home.html:740
 msgid "Save the map as an image"
 msgstr "Sla de kaart op als afbeelding"
 
-#: analyzer/templates/home.html:738
+#: analyzer/templates/home.html:742
 msgid "Save image"
 msgstr "Afbeelding opslaan"
 
-#: analyzer/templates/home.html:742
+#: analyzer/templates/home.html:746
 msgid "The axes"
 msgstr "De assen"
 
-#: analyzer/templates/home.html:749
+#: analyzer/templates/home.html:753
 msgid "Explore the map"
 msgstr "Verken de kaart"
 
-#: analyzer/templates/home.html:761
+#: analyzer/templates/home.html:765
 msgid "motions with votes"
 msgstr "moties met stemmingen"
 
-#: analyzer/templates/home.html:762
+#: analyzer/templates/home.html:766
 msgid "parties"
 msgstr "partijen"
 
-#: analyzer/templates/home.html:763
+#: analyzer/templates/home.html:767
 msgid "first to last vote"
 msgstr "eerste tot laatste stemming"
 
-#: analyzer/templates/home.html:764
+#: analyzer/templates/home.html:768
 msgid "of voting differences shown on the"
 msgstr "van de stemverschillen getoond op de"
 
-#: analyzer/templates/home.html:764
+#: analyzer/templates/home.html:768
 msgid ""
 "The map's three axes together capture this share of all differences in how "
 "parties vote."
 msgstr "De drie assen van de kaart vatten samen dit deel van alle verschillen in hoe partijen stemmen."
 
-#: analyzer/templates/home.html:764
+#: analyzer/templates/home.html:768
 msgid "map"
 msgstr "kaart"
 
-#: analyzer/templates/home.html:773
+#: analyzer/templates/home.html:777
 msgid "What the map's axes mean"
 msgstr "Wat de assen van de kaart betekenen"
 
-#: analyzer/templates/home.html:774
+#: analyzer/templates/home.html:778
 msgid ""
 "Each axis is one pattern in how parties vote, found by principal component "
 "analysis. Its share says how much of all differences between parties it "
@@ -442,187 +436,192 @@ msgid ""
 "compare fairly."
 msgstr "Elke as is één patroon in hoe partijen stemmen, gevonden met hoofdcomponentenanalyse. Het aandeel zegt hoeveel van alle verschillen tussen partijen de as vat. De kaart gebruikt in elke richting dezelfde schaal, dus afstanden zijn eerlijk te vergelijken."
 
-#: analyzer/templates/home.html:776
+#: analyzer/templates/home.html:780
 msgid "Show the parties as"
 msgstr "Toon de partijen als"
 
-#: analyzer/templates/home.html:777 analyzer/templates/party_detail.html:93
+#: analyzer/templates/home.html:781 analyzer/templates/party_detail.html:93
 msgid "Show"
 msgstr "Toon"
 
-#: analyzer/templates/home.html:783
+#: analyzer/templates/home.html:787
 msgid ""
 "Parties that started later in the period are placed using only the motions "
 "they voted on."
 msgstr "Partijen die later in de periode begonnen, staan op basis van alleen de moties waarover zij stemden."
 
-#: analyzer/templates/home.html:790
+#: analyzer/templates/home.html:794
 msgid "How often they vote alike"
 msgstr "Hoe vaak ze gelijk stemmen"
 
-#: analyzer/templates/home.html:791
+#: analyzer/templates/home.html:795
 msgid ""
 "The share of motions on which two parties voted the same, out of those they "
 "both voted on. Parties that vote alike are grouped, so blocs show as dark "
 "squares along the diagonal."
 msgstr "Het aandeel moties waarop twee partijen hetzelfde stemden, van de moties waarover ze allebei stemden. Partijen die gelijk stemmen staan bij elkaar, dus blokken verschijnen als donkere vlakken langs de diagonaal."
 
-#: analyzer/templates/home.html:795
+#: analyzer/templates/home.html:799
 msgid "Highlighting"
 msgstr "Uitgelicht:"
 
-#: analyzer/templates/home.html:806
+#: analyzer/templates/home.html:810
 msgid ""
 "Click a cell to compare two parties motion by motion, or a name to open the "
 "party."
 msgstr "Klik op een vak om twee partijen motie voor motie te vergelijken, of op een naam om de partij te openen."
 
-#: analyzer/templates/home.html:813
+#: analyzer/templates/home.html:817
 msgid "Every party, its closest and furthest"
 msgstr "Elke partij, haar naaste en verste"
 
-#: analyzer/templates/home.html:814
+#: analyzer/templates/home.html:818
 msgid ""
 "The party each one votes with most often, and the one it votes with least."
 msgstr "De partij waarmee elke partij het vaakst gelijk stemt, en die waarmee het minst."
 
-#: analyzer/templates/home.html:816
+#: analyzer/templates/home.html:820
 msgid "Order the parties"
 msgstr "Orden de partijen"
 
-#: analyzer/templates/home.html:817
+#: analyzer/templates/home.html:821
 msgid "Order"
 msgstr "Volgorde"
 
-#: analyzer/templates/home.html:818
+#: analyzer/templates/home.html:822
 msgid "A–Z"
 msgstr "A–Z"
 
-#: analyzer/templates/home.html:819
+#: analyzer/templates/home.html:823
 msgid "Along the main divide"
 msgstr "Langs de hoofdscheiding"
 
-#: analyzer/templates/home.html:820
+#: analyzer/templates/home.html:824
 msgid "Closest ally"
 msgstr "Naaste bondgenoot"
 
-#: analyzer/templates/home.html:834
+#: analyzer/templates/home.html:838
 msgid "Could not load the 3D chart library."
 msgstr "De 3D-grafiekbibliotheek kon niet laden."
 
-#: analyzer/templates/home.html:835
+#: analyzer/templates/home.html:839
 msgid "Open fullscreen to explore the map."
 msgstr "Open volledig scherm om de kaart te verkennen."
 
-#: analyzer/templates/home.html:836
+#: analyzer/templates/home.html:840
+#, python-brace-format
+msgid "Combined, the axes explain {share} of the differences."
+msgstr "Samen verklaren de assen {share} van de verschillen."
+
+#: analyzer/templates/home.html:841
 msgid "Click a party to open it."
 msgstr "Klik op een partij om die te openen."
 
-#: analyzer/templates/home.html:838
+#: analyzer/templates/home.html:843
 msgid "of the differences →"
 msgstr "van de verschillen →"
 
-#: analyzer/templates/home.html:839
+#: analyzer/templates/home.html:844
 msgid "→"
 msgstr "→"
 
-#: analyzer/templates/home.html:840
+#: analyzer/templates/home.html:845
 msgid "across"
 msgstr "horizontaal"
 
-#: analyzer/templates/home.html:841
+#: analyzer/templates/home.html:846
 msgid "up and down"
 msgstr "verticaal"
 
-#: analyzer/templates/home.html:842
+#: analyzer/templates/home.html:847
 msgid "depth"
 msgstr "diepte"
 
-#: analyzer/templates/home.html:843 analyzer/templates/motion_detail.html:128
+#: analyzer/templates/home.html:848 analyzer/templates/motion_detail.html:128
 #, python-brace-format
 msgid "What drives PC{number}"
 msgstr "Wat PC{number} bepaalt"
 
-#: analyzer/templates/home.html:845
+#: analyzer/templates/home.html:850
 msgid "across the map"
 msgstr "horizontaal op de kaart"
 
-#: analyzer/templates/home.html:846
+#: analyzer/templates/home.html:851
 msgid "the depth"
 msgstr "de diepte"
 
-#: analyzer/templates/home.html:847
+#: analyzer/templates/home.html:852
 msgid "a further pattern"
 msgstr "een verder patroon"
 
-#: analyzer/templates/home.html:848
+#: analyzer/templates/home.html:853
 #, python-brace-format
 msgid "Parties on PC{number}, from {from} to {to}"
 msgstr "Partijen op PC{number}, van {from} tot {to}"
 
-#: analyzer/templates/home.html:849
+#: analyzer/templates/home.html:854
 msgid "of the differences between parties"
 msgstr "van de verschillen tussen partijen"
 
-#: analyzer/templates/home.html:850
+#: analyzer/templates/home.html:855
 msgid "The motions behind it"
 msgstr "De moties erachter"
 
-#: analyzer/templates/home.html:851
+#: analyzer/templates/home.html:856
 msgid "No PCA scores yet. Run the analysis first."
 msgstr "Nog geen PCA-scores. Voer eerst de analyse uit."
 
-#: analyzer/templates/home.html:852
+#: analyzer/templates/home.html:857
 msgid "No 3D scores yet. Run the analysis first."
 msgstr "Nog geen 3D-scores. Voer eerst de analyse uit."
 
-#: analyzer/templates/home.html:853
+#: analyzer/templates/home.html:858
 #, python-brace-format
 msgid "Could not load the landscape: {error}"
 msgstr "Landschap laden mislukt: {error}"
 
-#: analyzer/templates/home.html:854
+#: analyzer/templates/home.html:859
 msgid "Loading the map…"
 msgstr "Kaart laden…"
 
-#: analyzer/templates/home.html:855
+#: analyzer/templates/home.html:860
 msgid "Back to the page (Esc)"
 msgstr "Terug naar de pagina (Esc)"
 
-#: analyzer/templates/home.html:857
+#: analyzer/templates/home.html:862
 msgid "Exit fullscreen"
 msgstr "Volledig scherm sluiten"
 
-#: analyzer/templates/home.html:858
+#: analyzer/templates/home.html:863
 msgid "Explore"
 msgstr "Verken"
 
-#: analyzer/templates/home.html:860
+#: analyzer/templates/home.html:865
 #, python-brace-format
 msgid "{a} and {b}: {share} of {count} shared motions"
 msgstr "{a} en {b}: {share} van {count} gedeelde moties"
 
-#: analyzer/templates/home.html:861
+#: analyzer/templates/home.html:866
 msgid "Not compared: no shared motions, or the same party under a new name"
 msgstr "Niet vergeleken: geen gedeelde moties, of dezelfde partij onder een nieuwe naam"
 
-#: analyzer/templates/home.html:862
+#: analyzer/templates/home.html:867
 msgid "Most with"
 msgstr "Meest met"
 
-#: analyzer/templates/home.html:863
+#: analyzer/templates/home.html:868
 msgid "Least with"
 msgstr "Minst met"
 
-#: analyzer/templates/home.html:864
+#: analyzer/templates/home.html:869
 msgid "Open party page"
 msgstr "Partijpagina openen"
 
-#: analyzer/templates/home.html:865
+#: analyzer/templates/home.html:870
 msgid "No agreement matrix yet. Run the analysis first."
 msgstr "Nog geen overeenstemmingsmatrix. Voer eerst de analyse uit."
 
-#: analyzer/templates/home.html:866 analyzer/templates/party_detail.html:105
+#: analyzer/templates/home.html:871 analyzer/templates/party_detail.html:105
 #, python-brace-format
 msgid "Could not load agreement: {error}"
 msgstr "Overeenstemming laden mislukt: {error}"

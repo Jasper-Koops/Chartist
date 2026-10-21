@@ -140,7 +140,9 @@
     .hero.morphed .map-caption { transition: opacity 0.6s ease, transform 0.6s ease; }
     .hero.morphed .hero-copy { display: none; }  /* the caption alone; the controls move up */
     .map-caption h2 { font-size: clamp(28px, 3.2vw, 42px); line-height: 1.08; margin: 0 0 14px; }
-    .map-caption .lead { color: var(--ink-2); font-size: 16px; }
+    /* How much the axes capture together, so no one has to add them up. */
+    .map-caption .map-total { margin: 10px 0 0; font-size: 15px; color: var(--ink-2); }
+    .map-caption .map-total:empty { display: none; }
     .map-caption .hint { margin: 14px 0 0; font-size: 14px; color: var(--ink-3); }
     .hero-copy h1 { font-size: clamp(34px, 5.2vw, 72px); line-height: 1.02; margin: 0 0 14px; }
     .hero-copy .lead { color: var(--ink-2); font-size: clamp(17px, 1.4vw, 20px); }
@@ -264,15 +266,17 @@
       .is-fullscreen .map-dock .map-controls { width: max-content; flex-wrap: nowrap; }
       .is-fullscreen .map-dock .map-controls .pick { flex: none; }
     }
-    @media (min-width: 1000px) and (max-height: 780px) {
-      .map-caption .lead { display: none; }  /* room for the controls and axes */
-    }
-    @media (min-width: 1000px) and (max-height: 680px) {
-      .map-caption .hint, .map-axes .meter, .hero-legend { display: none; }
+    /* Short windows: tighter, without the hint and the small bars. */
+    @media (min-width: 1000px) and (max-height: 740px) {
+      .map-caption .hint, .map-axes .meter, .map-caption .hero-legend { display: none; }
       .map-controls { margin-top: 14px; padding: 10px 0 12px; }
       .map-controls .row + .row { margin-top: 6px; }
       .map-axes { margin-top: 10px; gap: 5px; }
       .map-axes a { padding: 5px 8px 5px 12px; }
+    }
+    @media (min-width: 1000px) and (max-height: 560px) {
+      .map-caption .chapter-num { display: none; }
+      .map-caption h2 { font-size: 24px; margin-bottom: 6px; }
     }
     @media (max-width: 999px) {
       .map-axes { display: none; }  /* no room beside the map; chapter 02 has the axes */
@@ -638,7 +642,7 @@
     }
     @media (max-width: 640px) {
       .map-info { left: 16px; top: 16px; width: calc(100% - 32px); }
-      .hero-copy .lead, .map-caption .lead, .map-caption .hero-legend { display: none; }
+      .hero-copy .lead, .map-caption .hero-legend { display: none; }
       .map-caption h2 { font-size: 26px; margin-bottom: 4px; }
       .map-caption .hint { margin-top: 4px; }
       .map-dock .pill { padding: 6px 8px; }
@@ -690,7 +694,7 @@
           <div class="map-caption" id="map-caption" inert>
             <p class="chapter-num">01</p>
             <h2>{% translate "The map" %}</h2>
-            <p class="lead">{% translate "In 2D the map shows the two strongest voting patterns as its axes; in 3D, the third as well. Close together means voting alike." %}</p>
+            <p class="map-total" id="map-total"></p>
             <div class="hero-legend" hidden>
               <span class="legend-lo"></span><span class="bar" aria-hidden="true"></span><span class="legend-hi"></span>
               <span>· {% translate "main divide" %}</span>
@@ -833,6 +837,7 @@
     Object.assign(window.I18N, {
       "Could not load the 3D chart library.": "{{ _("Could not load the 3D chart library.")|escapejs }}",
       "Open fullscreen to explore the map.": "{{ _("Open fullscreen to explore the map.")|escapejs }}",
+      "Combined, the axes explain {share} of the differences.": "{{ _("Combined, the axes explain {share} of the differences.")|escapejs }}",
       "Click a party to open it.": "{{ _("Click a party to open it.")|escapejs }}",
       "Drag to turn the map, click a party to open it.": "{{ _("Drag to turn the map, click a party to open it.")|escapejs }}",
       "of the differences →": "{{ _("of the differences →")|escapejs }}",
@@ -1320,6 +1325,8 @@
     function morphed({ glide = true } = {}) {
       if (morph.done) return;
       visit.save({ formed: true });
+      // A formed map is past the opening: the menu is shown from here on.
+      document.body.classList.add("scrolled");
       morph.done = true;
       morph.p = 1;
       const hero = document.getElementById("hero");
@@ -1568,6 +1575,10 @@
       const components = [...(analysis?.components || [])].sort((a, b) => a.number - b.number);
       const role = { 1: t("across"), 2: t("up and down"), 3: t("depth") };
       const top = Math.max(0, ...components.map((c) => c.explained_variance)) || 1;
+      // The shares added up, so no one has to.
+      const share = components.reduce((sum, c) => sum + Number(c.explained_variance), 0);
+      document.getElementById("map-total").textContent = components.length
+        ? t("Combined, the axes explain {share} of the differences.", { share: pct(share, 1) }) : "";
       document.getElementById("map-axes").replaceChildren(...components.map((c) => {
         const meter = el("span", { className: "meter" }, el("span"));
         meter.firstChild.style.width = `${(c.explained_variance / top) * 100}%`;
@@ -2134,7 +2145,8 @@
       update();
     })();
 
-    // ---------- The menu slides in once the visitor scrolls, and stays ----------
+    // ---------- The menu slides in once the visitor scrolls (or the map has
+    // formed, see morphed), and stays ----------
     (() => {
       const update = () => {
         if (window.scrollY <= 24) return;

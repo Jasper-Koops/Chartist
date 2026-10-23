@@ -2,7 +2,6 @@ from django.test import TestCase
 import io
 
 from analyzer.utils import (
-    PARTICIPATION_THRESHOLD,
     AnalysisLogger,
     generate_dataframe,
     log_to_stdout,
@@ -88,10 +87,9 @@ class TestGenerateDataFrame(TestCase):
         df = generate_dataframe(log=self.log).set_index("Motion ID")
         self.assertTrue(df.loc[[items[0].id], party.abbreviation].isna().all())
         self.assertEqual(0, df.loc[items[1].id, party.abbreviation])
-        # Eligibility uses coverage even when participation falls below 90%.
+        # A low participation percentage does not exclude the party.
         party.refresh_from_db()
         self.assertEqual(80.0, party.participation_rate)
-        self.assertEqual(100.0, party.record_coverage)
 
     def test_function_generates_dataframe(self) -> None:
         df = generate_dataframe(log=self.log)
@@ -128,31 +126,50 @@ class TestGenerateDataFrame(TestCase):
                 )
 
 
-class TestParticipationThreshold(TestCase):
-    def setUp(self) -> None:
-        self.log = AnalysisLogger(logger, {})
-
-    def party(self, rate: float) -> Party:
-        party: Party = PartyFactory(record_coverage=rate)
-        return party
-
+class TestPcaPartySelection(TestCase):
     def included(self) -> list[str]:
-        return list(generate_dataframe(log=self.log).columns[1:])
+        return list(
+            generate_dataframe(log=AnalysisLogger(logger, {})).columns[1:]
+        )
 
-    def test_party_missing_a_single_vote_is_included(self) -> None:
-        # Under the old IQR rule, all parties at 100% made the cutoff 100%.
-        full = [self.party(100.0) for _ in range(5)]
-        almost = self.party(99.9)
-        included = self.included()
-        self.assertIn(almost.abbreviation, included)
-        for party in full:
-            self.assertIn(party.abbreviation, included)
+    def test_participation_does_not_filter_parties(self) -> None:
+        parties = [
+            PartyFactory(participation_rate=rate)
+            for rate in (None, 0, 50, 89, 100)
+        ]
+        self.assertCountEqual(
+            [party.abbreviation for party in parties], self.included()
+        )
 
-    def test_threshold_is_inclusive(self) -> None:
-        party = self.party(PARTICIPATION_THRESHOLD)
-        self.assertIn(party.abbreviation, self.included())
+    def test_predecessor_is_excluded_even_with_full_participation(self) -> None:
+        from datetime import date
+        from scraper.models import PartySuccession
 
-    def test_party_below_threshold_is_excluded(self) -> None:
-        self.party(100.0)
-        inactive = self.party(PARTICIPATION_THRESHOLD - 0.1)
-        self.assertNotIn(inactive.abbreviation, self.included())
+        old = PartyFactory(participation_rate=100)
+        successor = PartyFactory(participation_rate=50)
+        PartySuccession.objects.create(
+            predecessor=old,
+            successor=successor,
+            date=date(2026, 1, 1),
+            member_overlap=1,
+        )
+        self.assertEqual([successor.abbreviation], self.included())
+
+    def test_only_final_successor_in_chain_is_included(self) -> None:
+        from datetime import date
+        from scraper.models import PartySuccession
+
+        old, middle, newest = [PartyFactory() for _ in range(3)]
+        PartySuccession.objects.create(
+            predecessor=old,
+            successor=middle,
+            date=date(2026, 1, 1),
+            member_overlap=1,
+        )
+        PartySuccession.objects.create(
+            predecessor=middle,
+            successor=newest,
+            date=date(2026, 2, 1),
+            member_overlap=1,
+        )
+        self.assertEqual([newest.abbreviation], self.included())

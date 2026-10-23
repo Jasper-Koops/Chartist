@@ -8,11 +8,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Minimum record coverage (in %, measured from each party's own start) for
-# a party to be included in the analysis. Filters out parties that are not
-# really active, e.g. a group that stopped voting.
-PARTICIPATION_THRESHOLD: float = 90.0
-
 # The PCA axes are fitted on the parties with a vote on at least this share
 # of the motions (in practice: present the whole period). The other parties
 # are projected onto those axes afterwards, using only the motions they
@@ -66,32 +61,12 @@ def generate_dataframe(log: AnalysisLogger) -> pd.DataFrame:
     """
     Load data from the database and return it as a pandas DataFrame.
 
-    Since we skip ParliamentaryItems where Parties did not vote, only Parties
-    with record coverage of at least PARTICIPATION_THRESHOLD are
-    included in the DataFrame. This way, we ensure that the PCA analysis is
-    not skewed by Parties that are not really active.
+    Parties with a recorded successor are represented by that successor.
+    Their votes remain available through inheritance. Incomplete histories
+    are handled by the fitting and projection rules in prepare_df.
     """
-    record_coverage_cutoff: float = PARTICIPATION_THRESHOLD
-
-    included_parties = Party.objects.filter(
-        record_coverage__gte=record_coverage_cutoff
-    ).order_by("abbreviation")
-
-    excluded_parties = Party.objects.exclude(
-        id__in=included_parties.values_list("id", flat=True)
-    ).order_by("abbreviation")
-    excluded_names = list(
-        excluded_parties.values_list("abbreviation", flat=True)
-    )
-    excluded_count = len(excluded_names)
-    party_word = "party" if excluded_count == 1 else "parties"
-    log.info(
-        f"{excluded_count} {party_word} excluded from analysis due to low record coverage.",
-        extra={
-            "excluded_parties": excluded_names,
-            "excluded_count": excluded_count,
-            "cutoff": record_coverage_cutoff,
-        },
+    included_parties = Party.objects.filter(succession__isnull=True).order_by(
+        "abbreviation"
     )
 
     items: QuerySet[ParliamentaryItem] = (

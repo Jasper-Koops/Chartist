@@ -121,7 +121,6 @@ class TestSuccessionInAnalysis(SuccessionTestCase):
         self.new.refresh_from_db()
         self.old.refresh_from_db()
         self.assertAlmostEqual(400 / 6, self.new.participation_rate)
-        self.assertEqual(100.0, self.new.record_coverage)
         self.assertAlmostEqual(200 / 6, self.old.participation_rate)
         df = generate_dataframe(
             log=AnalysisLogger(logging.getLogger(), {})
@@ -140,6 +139,20 @@ class TestSuccessionInAnalysis(SuccessionTestCase):
         self.assertNotIn(self.old.abbreviation, df.columns)
         # No missing votes: all six items are usable.
         self.assertEqual(6, len(df.dropna()))
+
+    def test_full_history_predecessor_does_not_fit_axes(self) -> None:
+        from analyzer.analysis import prepare_df
+
+        self.vote(self.old, self.items[3:], [F, F, F])
+        calculate_party_participation_rate()
+        self.old.refresh_from_db()
+        self.assertEqual(100.0, self.old.participation_rate)
+        prepared = prepare_df(log=AnalysisLogger(logging.getLogger(), {}))
+        self.assertCountEqual(
+            [self.new.abbreviation, self.other.abbreviation], prepared.labels
+        )
+        self.assertEqual(6, prepared.fit.shape[1])
+        self.assertNotIn(self.old.abbreviation, prepared.projected.index)
 
     def test_matrix_keeps_both_parties_and_skips_their_pair(self) -> None:
         matrix = run_agreement_analysis()

@@ -8,7 +8,6 @@ from django.views.generic import TemplateView, View
 from scraper.models import ParliamentaryItem, Party, PartyLogo, PartySuccession
 from scraper.utils import PERIOD_START
 from analyzer.utils import (
-    PARTICIPATION_THRESHOLD,
     PCA_FIT_COVERAGE,
     PCA_MIN_PROJECTED_VOTES,
 )
@@ -27,7 +26,6 @@ class MethodologyView(TemplateView):
         context = super().get_context_data(**kwargs)
         context.update(
             period_start=datetime.fromisoformat(PERIOD_START).date(),
-            participation_threshold=PARTICIPATION_THRESHOLD,
             fit_coverage=PCA_FIT_COVERAGE * 100,
             minimum_projected_votes=PCA_MIN_PROJECTED_VOTES,
         )

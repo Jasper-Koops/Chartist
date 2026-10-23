@@ -35,8 +35,8 @@ def calculate_party_participation_rate() -> None:
 
     The rate is measured from each party's own start: the share of voted
     items, dated on or after the party's first record, on which the party
-    votes for, against or is evenly split. Non-participation counts only
-    towards record coverage, which controls analysis eligibility.
+    votes for, against or is evenly split. Non-participation is excluded
+    from the numerator.
     A party that formed during the period (e.g. a split) is
     therefore not penalised for items from before it existed.
 
@@ -65,7 +65,6 @@ def calculate_party_participation_rate() -> None:
             vote in (VoteType.FOR, VoteType.AGAINST, VoteType.SPLIT)
             for vote in own_votes.values()
         )
-        coverage = 0.0
         if not records:
             participation_rate: float = 0.0
         else:
@@ -74,14 +73,10 @@ def calculate_party_participation_rate() -> None:
                 voted_item_dates, first_vote
             )
             participation_rate = (votes_cast / eligible) * 100
-            coverage = (records / eligible) * 100
         party.participation_rate = participation_rate
-        party.record_coverage = coverage
         parties_to_update.append(party)
 
-    Party.objects.bulk_update(
-        parties_to_update, ["participation_rate", "record_coverage"]
-    )
+    Party.objects.bulk_update(parties_to_update, ["participation_rate"])
 
 
 def generate_pca_object(

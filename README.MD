@@ -78,15 +78,8 @@ celery -A Chartist beat --loglevel=info
 ```
 
 Motion texts are downloaded when missing or when their publication identifier,
-document version, or version modification timestamp changes. Existing texts
-without version metadata are refreshed once on the first import after upgrading.
+document version, or version modification timestamp changes.
 A failed download keeps the previous text and is retried on the next import.
-
-After upgrading to separate evenly split party votes from non-participation,
-run `migrate`, then `import_data`, then `run_analysis`. The old `Abstain`
-records combine those cases; only reimporting the source votes can distinguish
-them. Splits count as participation and have value 0 in PCA. Non-participation
-is missing in PCA. Record coverage remains the separate party eligibility rule.
 
 ## Party successions and aliases
 

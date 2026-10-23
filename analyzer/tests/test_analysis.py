@@ -49,7 +49,7 @@ class TestCalculatePartyParticipationRate(TestCase):
             party.refresh_from_db()
             self.assertEqual(party.participation_rate, 0.0)
 
-    def test_non_participation_reduces_participation_but_not_coverage(
+    def test_non_participation_reduces_participation(
         self,
     ) -> None:
         party = self.parties.first()
@@ -67,7 +67,6 @@ class TestCalculatePartyParticipationRate(TestCase):
         calculate_party_participation_rate()
         party.refresh_from_db()
         self.assertEqual(60.0, party.participation_rate)
-        self.assertEqual(100.0, party.record_coverage)
 
     def test_party_with_only_absences_has_zero_participation(self) -> None:
         party = self.parties.first()
@@ -78,7 +77,6 @@ class TestCalculatePartyParticipationRate(TestCase):
         calculate_party_participation_rate()
         party.refresh_from_db()
         self.assertEqual(0.0, party.participation_rate)
-        self.assertEqual(100.0, party.record_coverage)
 
     def test_party_voting_on_everything_has_100_percent(self) -> None:
         generate_party_votes(
@@ -306,6 +304,19 @@ class TestLateParty(TestCase):
             0, prepared.projected.loc[self.late.abbreviation, self.items[-1].id]
         )
 
+    def test_short_ended_history_without_successor_is_projected(self) -> None:
+        for item in self.items[:20]:
+            PartyVoteFactory(
+                party=self.late, parliamentary_item=item, vote=VoteType.FOR
+            )
+        calculate_party_participation_rate()
+        self.late.refresh_from_db()
+        self.assertEqual(50.0, self.late.participation_rate)
+        run_pca_analysis(n_components=3)
+        self.assertEqual(
+            3, PCAComponentPartyScore.objects.filter(party=self.late).count()
+        )
+
     def test_too_few_votes_is_left_out(self) -> None:
         self.vote_late(10)
         run_pca_analysis(n_components=3)
@@ -482,6 +493,35 @@ class TestRunFullAnalysis(TestCase):
         run_full_analysis(n_components=3, stdout=StringIO())
         for party in Party.objects.all():
             self.assertEqual(100.0, party.participation_rate)
+
+    def test_predecessor_receives_no_scores_and_successor_keeps_history(
+        self,
+    ) -> None:
+        from scraper.models import PartySuccession
+
+        old = PartyFactory()
+        successor = self.parties.first()
+        PartySuccession.objects.create(
+            predecessor=old,
+            successor=successor,
+            date=date(2026, 1, 1),
+            member_overlap=1,
+        )
+        for item in ParliamentaryItem.objects.all():
+            PartyVoteFactory(
+                party=old, parliamentary_item=item, vote=VoteType.FOR
+            )
+        run_full_analysis(n_components=3, stdout=StringIO())
+        self.assertFalse(
+            PCAComponentPartyScore.objects.filter(party=old).exists()
+        )
+        self.assertEqual(
+            3, PCAComponentPartyScore.objects.filter(party=successor).count()
+        )
+        self.assertTrue(Party.objects.filter(pk=old.pk).exists())
+        self.assertTrue(
+            AgreementMatrix.objects.get().agreements.filter(party=old).exists()
+        )
 
     def test_creates_analysis_with_requested_components(self) -> None:
         run_full_analysis(n_components=2, stdout=StringIO())

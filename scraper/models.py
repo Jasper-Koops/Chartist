@@ -21,12 +21,6 @@ class Party(models.Model):
         blank=True,
         null=True,
     )
-    record_coverage = models.FloatField(
-        help_text="Share of eligible motions with a party record, including non-participation.",
-        blank=True,
-        null=True,
-        editable=False,
-    )
     logo_length = models.PositiveIntegerField(
         help_text=_(
             "The logo's ContentLength as the API reports it (not the file "
@@ -185,7 +179,8 @@ class PartySuccession(models.Model):
 
     Detected during the import (see `ParliamentApi.import_successions`) and
     correctable in the admin. In the analysis, the successor inherits the
-    predecessor's votes; both parties stay visible.
+    predecessor's votes. PCA graphs show the successor; historical pages
+    and agreement calculations retain both parties.
     """
 
     predecessor = models.OneToOneField(

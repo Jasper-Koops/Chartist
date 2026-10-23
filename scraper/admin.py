@@ -15,13 +15,11 @@ class PartyAdmin(admin.ModelAdmin):
         "abbreviation",
         "name",
         "participation_rate",
-        "record_coverage",
     ]
     search_fields = ["abbreviation", "name", "api_id"]
     readonly_fields = [
         "api_id",
         "participation_rate",
-        "record_coverage",
         "logo_length",
     ]
 

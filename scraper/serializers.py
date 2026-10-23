@@ -17,7 +17,6 @@ class PartySerializer(serializers.ModelSerializer[Party]):
             "name",
             "abbreviation",
             "participation_rate",
-            "record_coverage",
             "logo_url",
             "party_scores",
         ]

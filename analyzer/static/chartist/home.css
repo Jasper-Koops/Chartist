@@ -1,0 +1,649 @@
+/* One piece on paper: the map opens it, and the chapters below sit on
+   the same paper, divided by rules and type rather than boxes. Controls
+   are words, not buttons. The palette is the site's (app.css). */
+:root { --hero-bg: var(--bg); }
+
+/* Immersive opening: the menu is hidden until the visitor scrolls (or
+   tabs into it), then slides in and stays. */
+.immersive .topbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  transform: translateY(-100%);
+  transition: transform 0.35s ease;
+}
+.immersive.scrolled .topbar, .immersive .topbar:focus-within { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .immersive .topbar { transition: none; }
+}
+
+/* ---------- Controls as words ---------- */
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.text-btn:hover { color: var(--ink); text-decoration: none; }
+.text-btn svg { width: 14px; height: 14px; flex: none; }
+.text-btn[aria-pressed="true"] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 7px;
+}
+.switch { display: inline-flex; align-items: center; gap: 18px; }
+.switch-label { font-size: 14px; color: var(--ink-3); margin-right: -4px; }
+/* The map's own controls: clear buttons on darker paper, the chosen
+   view in ink. */
+.map-seg { background: var(--surface-2); border-color: var(--border-strong); }
+.map-seg button { font-size: 14px; padding: 6px 14px; color: var(--ink-2); }
+.map-seg [aria-pressed="true"] { background: var(--ink); color: var(--bg); box-shadow: none; }
+.pill, .pill-select select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pill:hover, .pill-select select:hover { border-color: var(--ink-3); }
+.pill svg { width: 14px; height: 14px; flex: none; }
+.pill-select { position: relative; display: inline-flex; }
+.pill-select select { appearance: none; padding-right: 30px; }
+.pill-select::after {
+  content: "";
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--ink-2);
+  border-bottom: 1.5px solid var(--ink-2);
+  transform: translateY(-75%) rotate(45deg);
+  pointer-events: none;
+}
+
+/* ---------- The map ----------
+   The opening map stays pinned for one more screen of scrolling. That
+   scroll flattens it (--p goes from 0 to 1): the title gives way to the
+   map's caption, and the map becomes the flat, readable one. Once flat
+   it stays flat for the visit. */
+.hero {
+  --morph: 90svh;  /* the scroll that flattens the map */
+  --p: 0;
+  position: relative;
+  height: calc(100svh + var(--morph));
+  min-height: calc(480px + var(--morph));
+  color: var(--ink);
+  background: var(--hero-bg);
+  overflow: clip;  /* clip, not hidden: hidden would stop the pinning */
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero { --morph: 0px; }
+}
+.stage { position: sticky; top: 0; height: 100vh; height: 100svh; min-height: 480px; overflow: hidden; }
+.hero .plot-frame { position: absolute; inset: 0; }
+.hero .plot-frame.is-fullscreen { background: var(--hero-bg); padding: 0; }
+.hero .plot, .hero .plot-frame.is-fullscreen .plot { height: 100%; }
+.hero .fs-tools, .hero .plot-frame.is-fullscreen .fs-tools { display: none; }
+/* The column beside the map: its text (the title, which gives way to
+   the map's caption as the map flattens; both share one place), then the
+   map's controls, then the axes. The text lets drags through to the map;
+   the controls and links take clicks. */
+.map-info {
+  position: absolute;
+  z-index: 2;
+  left: clamp(24px, 4vw, 64px);
+  top: 28px;
+  width: min(540px, calc(100% - 48px));
+  pointer-events: none;
+  transition: top 0.35s ease;
+}
+/* Once the menu is in (it stays), the column sits below it. */
+.immersive.scrolled .map-info { top: calc(var(--header-h) + 24px); }
+.map-text { display: grid; }
+.map-text > * { grid-area: 1 / 1; }
+.hero-copy {
+  opacity: calc(1 - var(--p) * 1.8);
+  transform: translateY(calc(var(--p) * -48px));
+}
+.map-caption {
+  width: min(340px, 100%);
+  opacity: calc((var(--p) - 0.55) * 2.2);
+  transform: translateY(calc((1 - var(--p)) * 24px));
+}
+.hero.morphed .map-caption { transition: opacity 0.6s ease, transform 0.6s ease; }
+.hero.morphed .hero-copy { display: none; }  /* the caption alone; the controls move up */
+.map-caption h2 { font-size: clamp(28px, 3.2vw, 42px); line-height: 1.08; margin: 0 0 14px; }
+/* How much the axes capture together, so no one has to add them up. */
+.map-caption .map-total { margin: 10px 0 0; font-size: 15px; color: var(--ink-2); }
+.map-caption .map-total:empty { display: none; }
+.map-caption .hint { margin: 14px 0 0; font-size: 14px; color: var(--ink-3); }
+.hero-copy h1 { font-size: clamp(34px, 5.2vw, 72px); line-height: 1.02; margin: 0 0 14px; }
+.hero-copy .lead { color: var(--ink-2); font-size: clamp(17px, 1.4vw, 20px); }
+.hero-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.hero-legend .bar {
+  width: 140px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--data-lo), var(--data-mid), var(--data-hi));
+}
+
+/* The map's controls, in the column: a labelled row per setting. They
+   come in with the caption, once the map is the readable one (the
+   opening shows only the title, the turning map and its button). */
+.map-controls, .map-dock { opacity: calc((var(--p) - 0.55) * 2.2); }
+.hero.morphed :is(.map-controls, .map-dock) { transition: opacity 0.6s ease; }
+.hero:not(.morphed) .map-controls { pointer-events: none; }
+.map-controls {
+  width: 340px;
+  margin-top: 26px;
+  padding: 14px 0 16px;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  pointer-events: auto;
+}
+.map-controls .row { display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: center; gap: 10px; }
+.map-controls .row + .row { margin-top: 10px; }
+.map-controls .label { font-size: 13px; font-weight: 600; color: var(--ink-3); }
+.map-controls .map-seg { justify-self: start; }
+/* As wide as a party name needs, not the whole row. */
+.map-controls .pick { display: flex; gap: 6px; min-width: 0; }
+.map-controls .pill-select { flex: none; }
+.map-controls .pill-select select { width: 170px; max-width: 100%; }
+.map-controls .actions { grid-template-columns: auto auto; justify-content: start; margin-top: 14px; }
+.pill.clear { padding: 6px 9px; }
+.pill.clear[hidden] { display: none; }
+/* Fullscreen shows that it is on: dark like a chosen view, its other
+   icon, "Exit fullscreen". */
+.pill .when-on { display: none; }
+.pill[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.pill[aria-pressed="true"] .when-on { display: block; }
+.pill[aria-pressed="true"] .when-off { display: none; }
+
+/* Shortcuts to each axis's page, under the controls once the map is
+   flat: tiles to press, like the parties below, each with a round arrow
+   that fills on hover. */
+.map-axes {
+  width: 340px;
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+  opacity: calc((var(--p) - 0.55) * 2.2);
+}
+.hero.morphed .map-axes { pointer-events: auto; transition: opacity 0.6s ease; }
+.map-axes a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 9px 10px 10px 14px;
+  color: var(--ink-2);
+  font-size: 14px;
+  background: color-mix(in srgb, var(--surface-2) 60%, var(--bg));
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.map-axes a:hover { text-decoration: none; }
+.map-axes a:is(:hover, :focus-visible) { background: var(--surface-2); border-color: var(--accent); transform: translateY(-1px); }
+.map-axes strong { color: var(--ink); font-weight: 700; margin-right: 6px; }
+.map-axes .share { font-family: var(--font-digits); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+.map-axes .meter { grid-column: 1 / -1; height: 3px; background: var(--border-strong); border-radius: 2px; }
+.map-axes .meter span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.round-arrow {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-2);
+  font-size: 14px;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+a:is(:hover, :focus-visible) .round-arrow { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+/* Narrow screens: the controls are docked under the map, in one row of
+   buttons (the labels say it to screen readers only). */
+.map-dock { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 2; }
+.map-dock:empty { display: none; }
+.map-dock .map-controls {
+  width: auto;
+  margin: 0;
+  padding: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--surface-2) 55%, var(--bg));
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+}
+.map-dock .map-controls .row { display: flex; gap: 4px; margin: 0; }
+.map-dock .map-controls .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.map-dock .map-controls .pick { flex: none; }
+.map-dock .map-controls .actions { margin: 0; }
+.map-dock .pill span { display: none; }  /* icons, named by their title */
+.map-dock .pill.labelled span { display: inline; }  /* "Explore" on touch screens */
+.map-dock .pill[aria-pressed="true"] span { display: inline; }  /* "Exit fullscreen", always said */
+/* Fullscreen on a wide screen: the docked bar is one row, centred. */
+@media (min-width: 1000px) {
+  .is-fullscreen .map-dock { left: 50%; right: auto; bottom: 18px; transform: translateX(-50%); }
+  .is-fullscreen .map-dock .map-controls { width: max-content; flex-wrap: nowrap; }
+  .is-fullscreen .map-dock .map-controls .pick { flex: none; }
+}
+/* Short windows: tighter, without the hint and the small bars. */
+@media (min-width: 1000px) and (max-height: 740px) {
+  .map-caption .hint, .map-axes .meter, .map-caption .hero-legend { display: none; }
+  .map-controls { margin-top: 14px; padding: 10px 0 12px; }
+  .map-controls .row + .row { margin-top: 6px; }
+  .map-axes { margin-top: 10px; gap: 5px; }
+  .map-axes a { padding: 5px 8px 5px 12px; }
+}
+@media (min-width: 1000px) and (max-height: 560px) {
+  .map-caption .chapter-num { display: none; }
+  .map-caption h2 { font-size: 24px; margin-bottom: 6px; }
+}
+@media (max-width: 999px) {
+  .map-axes { display: none; }  /* no room beside the map; chapter 02 has the axes */
+}
+/* The opening's button, centred on the page under the map. */
+.map-start {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  z-index: 2;
+  transform: translateX(-50%);
+}
+.map-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--ink);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  opacity: calc(1 - var(--p) * 3);
+  transition: background 0.2s ease;
+}
+.map-start:hover { background: var(--accent); }
+.map-start svg { width: 16px; height: 16px; }
+.hero.morphed .map-start { display: none; }
+
+/* Fullscreen fills the window with the map (not the whole screen). */
+.hero.fullscreen .stage { z-index: 101; }  /* above the menu */
+.is-fullscreen .map-text, .is-fullscreen .map-axes { display: none; }
+.is-fullscreen .map-info { top: 24px; }
+.is-fullscreen .map-controls { margin-top: 0; }
+
+/* Logos and axis labels over the map. */
+.map-overlay { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.map-logos[hidden], .map-axis[hidden], .map-tip[hidden] { display: none; }
+.map-logo { position: absolute; left: 0; top: 0; line-height: 0; border-radius: 6px; pointer-events: auto; transition: opacity 0.2s ease; }
+.map-logo .logo { box-shadow: 0 0 0 2px var(--hero-bg), 0 1px 3px rgba(60, 45, 20, 0.18); }
+.map-logo:is(:hover, :focus-visible) { z-index: 2000 !important; }
+.map-logos.focusing .map-logo:not(.is-focus) { opacity: 0.25; }
+.map-axis {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.map-axis span { font-weight: 400; color: var(--ink-3); }
+a.map-axis { pointer-events: auto; color: var(--ink-2); }
+a.map-axis:hover { text-decoration: none; color: var(--accent-ink); }
+a.map-axis:hover span { color: var(--accent-ink); }
+.map-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2001;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-ink);
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.map-tip span { display: block; color: var(--tooltip-ink-2); font-family: var(--font-digits); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* Calm opening: the parties, the title and the map's controls; the
+   hint shows once the visitor grabs the map. */
+.hero-copy .more { transition: opacity 0.4s ease; }
+.hero.is-calm .hero-copy .more { opacity: 0; }
+@media (pointer: coarse) {
+  /* The map fills the first screen: a swipe over it scrolls the page.
+     It turns in fullscreen. */
+  .hero .plot-frame:not(.is-fullscreen) .plot { pointer-events: none; }
+}
+
+/* ---------- The figures: one typeset line ---------- */
+.immersive .band { padding: 0; }
+.immersive .stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 0;
+  margin: 0;
+  padding: 22px 0 24px;
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--border-strong);
+}
+.immersive .stat {
+  flex: 1 1 auto;
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0 28px;
+}
+.immersive .stat:first-child { border-left: 0; padding-left: 0; }
+.immersive .stat .value { font-family: var(--font-display); font-size: clamp(26px, 2.6vw, 34px); letter-spacing: 0; overflow: visible; }
+.immersive .stat .label { font-size: 14px; color: var(--ink-3); }
+/* Two full dates: smaller, so they stay on one line. */
+.immersive .stat.period .value { font-size: clamp(20px, 1.8vw, 25px); line-height: 1.6; }
+
+/* ---------- The chapter bar ---------- */
+.chapter-bar {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  z-index: 19;  /* slides out from under the menu */
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.chapter-bar.shown { transform: none; opacity: 1; pointer-events: auto; }
+.chapter-bar .inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chapter-bar .label { font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+.chapter-bar a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 10px 0 9px;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.chapter-bar a:hover { color: var(--ink); text-decoration: none; }
+.chapter-bar a.active { color: var(--ink); border-bottom-color: var(--accent); }
+.chapter-bar .num { font-family: var(--font-digits); font-size: 12px; font-weight: 600; color: var(--accent-ink); }
+/* Wide screens: a list in the right margin instead, beside the content
+   (which does not move), the current chapter marked by a blue line. */
+@media (min-width: 1400px) {
+  .chapter-bar {
+    top: calc(var(--header-h) + 40px);
+    left: auto;
+    right: 8px;
+    width: 118px;
+    background: none;
+    backdrop-filter: none;
+    border: 0;
+    transform: translateX(12px);
+  }
+  .chapter-bar.shown { transform: none; }
+  .chapter-bar .inner { flex-direction: column; align-items: stretch; gap: 2px; padding: 0; overflow: visible; }
+  .chapter-bar .label { margin-bottom: 8px; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .chapter-bar a {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 5px 0 6px 11px;
+    border-bottom: 0;
+    border-left: 2px solid var(--border);
+    font-size: 12.5px;
+    line-height: 1.25;
+    white-space: normal;
+  }
+  .chapter-bar a.active { border-left-color: var(--accent); }
+  .immersive .chapter { scroll-margin-top: calc(var(--header-h) + 24px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chapter-bar { transition: none; }
+}
+@media (max-width: 640px) {
+  .chapter-bar .inner { padding: 0 16px; gap: 20px; }
+  .chapter-bar .label { display: none; }
+}
+
+/* ---------- Chapters ---------- */
+/* Below the menu and the chapter bar when jumped to. */
+.chapter { scroll-margin-top: calc(var(--header-h) + 60px); }
+.chapter { padding: 64px 0 0; }
+.chapter + .chapter { margin-top: 72px; border-top: 1px solid var(--border-strong); }
+.chapter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 48px;
+  margin-bottom: 32px;
+}
+.chapter-num {
+  font-family: var(--font-digits);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--accent-ink);
+  margin: 0 0 10px;
+}
+.chapter-head h2 { font-size: clamp(28px, 3.2vw, 42px); line-height: 1.08; margin: 0 0 14px; }
+.chapter-head .lead { color: var(--ink-2); max-width: 62ch; }
+.chapter-foot { margin: 20px 0 0; font-size: 14px; color: var(--ink-3); }
+
+/* The axes: three newspaper columns, each axis drawn as a line with the
+   parties on it. */
+.axes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.axis { padding: 0 32px; border-left: 1px solid var(--border); min-width: 0; }
+.axis:first-child { padding-left: 0; border-left: 0; }
+.axis:last-child { padding-right: 0; }
+.axis-name { font-size: 14px; color: var(--ink-3); margin: 0; }
+.axis-name strong { color: var(--ink); font-weight: 600; }
+.axis-share {
+  font-family: var(--font-display);
+  font-size: clamp(44px, 5vw, 64px);
+  font-weight: 700;
+  line-height: 1;
+  margin: 10px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.axis-note { margin: 0; font-size: 14px; color: var(--ink-2); }
+.axis-line { margin-top: 22px; }
+/* The way to an axis's page: a button to press, like the parties. */
+.axis .more {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 6px 6px 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--surface-2) 60%, var(--bg));
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.axis .more:hover { text-decoration: none; }
+.axis .more:is(:hover, :focus-visible) { background: var(--surface-2); border-color: var(--accent); }
+
+/* Logos: each axis a full-width line, the parties on it by their logos.
+   Hovering or focusing a logo gives the score. */
+.axes.logos { grid-template-columns: minmax(0, 1fr); }
+.axes.logos .axis {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-areas: "text line" "more line";
+  align-content: start;
+  column-gap: 40px;
+  padding: 28px 0;
+  border-left: 0;
+  border-top: 1px solid var(--border);
+}
+.axes.logos .axis:first-child { padding-top: 0; border-top: 0; }
+.axes.logos .axis-text { grid-area: text; }
+.axes.logos .axis-line { grid-area: line; align-self: center; margin-top: 0; }
+.axes.logos .more { grid-area: more; align-self: start; }
+.axes.logos .axis-share { font-size: clamp(40px, 4vw, 52px); }
+
+/* Agreement: the matrix straight on the paper. */
+.immersive .matrix th.row { background: var(--bg); }
+.immersive .matrix td { border-radius: 2px; }
+.immersive .legend .bar { width: 160px; height: 6px; border-radius: 3px; }
+.immersive .focus-chip { background: none; border: 0; padding: 0; font-size: 14px; color: var(--ink-2); }
+.immersive .focus-chip button { background: none; border: 0; }
+
+/* Parties: each entry is a link to the party, so it looks like one
+   thing to press: a tile of darker paper (no white) that says what it
+   does, with a round arrow that fills on hover or focus. */
+.party-index { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.entry {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 16px 18px 18px;
+  color: inherit;
+  background: color-mix(in srgb, var(--surface-2) 60%, var(--bg));
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.entry:hover { text-decoration: none; }
+.entry:is(:hover, :focus-visible) {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+.entry:active { transform: none; box-shadow: none; }
+/* Says in words what the tile does, at the bottom where the eye ends. */
+.entry .go {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-strong);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+.entry .arrow {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-2);
+  font-size: 15px;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.entry:is(:hover, :focus-visible) .arrow { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.entry:is(:hover, :focus-visible) .abbr { color: var(--accent-ink); }
+.entry:is(:hover, :focus-visible) .go > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+.entry .logo.initials { background: var(--bg); }
+.entry .head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.entry .abbr { font-family: var(--font-display); font-size: 21px; font-weight: 700; line-height: 1.15; min-width: 0; }
+.entry .name { font-size: 13px; color: var(--ink-3); margin: 2px 0 12px; min-height: 1.4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry .rel {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 36px;
+  gap: 3px 10px;
+  align-items: center;
+  font-size: 13px;
+  padding: 3px 0;
+}
+.entry .rel.least { margin-bottom: 14px; }
+.entry .rel .k { color: var(--ink-3); }
+.entry .rel .v { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 500; }
+.entry .rel .v > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry .rel .p { text-align: right; font-family: var(--font-digits); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.entry .rel .track { grid-column: 2 / 4; height: 2px; background: var(--border-strong); }
+.entry .rel .track span { display: block; height: 100%; background: var(--accent); }
+.entry .rel.least .track span { background: var(--data-lo); }
+
+/* Chapters fade in as they scroll into view. */
+.reveal-ready .reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal-ready .reveal.is-visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-ready .reveal { opacity: 1; transform: none; transition: none; }
+}
+
+@media (max-width: 900px) {
+  .axes { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .axis, .axis:first-child, .axis:last-child { padding: 0; border-left: 0; }
+  .axes.logos .axis { grid-template-columns: minmax(0, 1fr); grid-template-areas: "text" "line" "more"; padding: 0; border-top: 0; }
+  .axes.logos .axis-line { margin-top: 16px; }
+}
+@media (max-width: 640px) {
+  .map-info { left: 16px; top: 16px; width: calc(100% - 32px); }
+  .hero-copy .lead, .map-caption .hero-legend { display: none; }
+  .map-caption h2 { font-size: 26px; margin-bottom: 4px; }
+  .map-caption .hint { margin-top: 4px; }
+  .map-dock .pill { padding: 6px 8px; }
+  .map-seg button { padding: 6px 11px; }
+  .immersive .stat { flex-basis: 40%; padding: 0 16px; }
+  .immersive .stat.period .value {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .immersive .stat:nth-child(odd) { border-left: 0; padding-left: 0; }
+  .chapter { padding-top: 44px; }
+  .chapter + .chapter { margin-top: 48px; }
+}

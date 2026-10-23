@@ -355,11 +355,15 @@ class TestAggregatePartyVotes(TestCase):
         )
         self.assertEqual({"a": VoteType.FOR}, votes)
 
-    def test_roll_call_even_split_is_abstain(self) -> None:
+    def test_roll_call_even_split_is_separate_from_absence(self) -> None:
         votes = aggregate_party_votes(
-            [stemming("a", VoteType.FOR), stemming("a", VoteType.AGAINST)]
+            [
+                stemming("a", VoteType.FOR),
+                stemming("a", VoteType.AGAINST),
+                stemming("a", VoteType.ABSTAIN),
+            ]
         )
-        self.assertEqual({"a": VoteType.ABSTAIN}, votes)
+        self.assertEqual({"a": VoteType.SPLIT}, votes)
 
     def test_roll_call_all_absent_is_abstain(self) -> None:
         votes = aggregate_party_votes(
@@ -369,6 +373,29 @@ class TestAggregatePartyVotes(TestCase):
 
 
 class TestImportRollCallVote(TestCase):
+    @mock.patch("scraper.utils.requests.Session.get")
+    def test_import_preserves_split_separately_from_absence(
+        self, mocked_get: mock.Mock
+    ) -> None:
+        zaak = copy.deepcopy(ZAAK_API_RESPONSE[0])
+        split_id, absent_id = [p["Id"] for p in PARTY_API_RESPONSE[:2]]
+        zaak["Besluit"][0]["Stemming"] = [
+            {"Fractie_Id": split_id, "Soort": "Voor"},
+            {"Fractie_Id": split_id, "Soort": "Tegen"},
+            {"Fractie_Id": absent_id, "Soort": "Niet deelgenomen"},
+        ]
+        mocked_get.side_effect = route_responses([zaak])
+        api = ParliamentApi()
+        api.import_parties()
+        api.import_votes()
+        self.assertEqual(
+            VoteType.SPLIT, PartyVote.objects.get(party__api_id=split_id).vote
+        )
+        self.assertEqual(
+            VoteType.ABSTAIN,
+            PartyVote.objects.get(party__api_id=absent_id).vote,
+        )
+
     @mock.patch("scraper.utils.requests.Session.get")
     def test_roll_call_stores_one_majority_vote_per_party(
         self, mocked_get: mock.Mock
@@ -660,7 +687,8 @@ class TestRunImport(TestCase):
         patcher = mock.patch("scraper.utils.requests.Session.get")
         self.mocked_get = patcher.start()
         self.addCleanup(patcher.stop)
-        self.mocked_get.side_effect = route_responses(ZAAK_API_RESPONSE)
+        self.zaken = copy.deepcopy(ZAAK_API_RESPONSE)
+        self.mocked_get.side_effect = route_responses(self.zaken)
 
     def test_successful_run_is_recorded_with_counts(self) -> None:
         messages: list[str] = []
@@ -698,6 +726,65 @@ class TestRunImport(TestCase):
         run_import(ParliamentApi())
         item = ParliamentaryItem.objects.get(api_id=ZAAK_API_RESPONSE[0]["Id"])
         self.assertEqual("kst-99999-0", item.document_id)
+
+    def test_unchanged_document_text_is_not_downloaded_again(self) -> None:
+        run_import(ParliamentApi())
+        result = run_import(ParliamentApi())
+        self.assertEqual(0, result.texts_fetched)
+
+    def test_changed_publication_is_downloaded(self) -> None:
+        run_import(ParliamentApi())
+        version = self.zaken[0]["Document"][0]["HuidigeDocumentVersie"]
+        version["ExterneIdentifier"] = "kst-99999-replacement"
+        result = run_import(ParliamentApi())
+        item = ParliamentaryItem.objects.get(api_id=self.zaken[0]["Id"])
+        self.assertEqual(1, result.texts_fetched)
+        self.assertEqual(
+            "kst-99999-replacement", item.text_source["document_id"]
+        )
+
+    def test_changed_version_with_same_publication_is_downloaded(self) -> None:
+        version = self.zaken[0]["Document"][0]["HuidigeDocumentVersie"]
+        version["Id"] = "first-version"
+        run_import(ParliamentApi())
+        version["Id"] = "second-version"
+        result = run_import(ParliamentApi())
+        item = ParliamentaryItem.objects.get(api_id=self.zaken[0]["Id"])
+        self.assertEqual(1, result.texts_fetched)
+        self.assertEqual("second-version", item.text_source["version_id"])
+
+    def test_modified_version_is_downloaded(self) -> None:
+        version = self.zaken[0]["Document"][0]["HuidigeDocumentVersie"]
+        version["GewijzigdOp"] = "2026-01-01T12:00:00Z"
+        run_import(ParliamentApi())
+        version["GewijzigdOp"] = "2026-02-01T12:00:00Z"
+        result = run_import(ParliamentApi())
+        self.assertEqual(1, result.texts_fetched)
+
+    def test_failed_refresh_keeps_source_and_retries_next_import(self) -> None:
+        version = self.zaken[0]["Document"][0]["HuidigeDocumentVersie"]
+        version["Id"] = "first-version"
+        run_import(ParliamentApi())
+        item = ParliamentaryItem.objects.get(api_id=self.zaken[0]["Id"])
+        old_text = item.text
+        version["Id"] = "second-version"
+        url = (
+            "https://zoek.officielebekendmakingen.nl/"
+            f"{version['ExterneIdentifier']}.xml"
+        )
+        self.mocked_get.side_effect = route_responses(
+            self.zaken, {url: requests.exceptions.ConnectionError("down")}
+        )
+        result = run_import(ParliamentApi())
+        item.refresh_from_db()
+        self.assertEqual(1, result.texts_failed)
+        self.assertEqual(old_text, item.text)
+        self.assertEqual("first-version", item.text_source["version_id"])
+        self.mocked_get.side_effect = route_responses(self.zaken)
+        result = run_import(ParliamentApi())
+        item.refresh_from_db()
+        self.assertEqual(1, result.texts_fetched)
+        self.assertEqual("second-version", item.text_source["version_id"])
 
 
 OLD_ID = "old-50plus"

@@ -3,6 +3,7 @@ from django.urls import path
 from analyzer.views import (
     ComponentDetailView,
     HomeView,
+    MethodologyView,
     MotionDetailView,
     MotionListView,
     PairDetailView,
@@ -12,6 +13,7 @@ from analyzer.views import (
 
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
+    path("methodology/", MethodologyView.as_view(), name="methodology"),
     path("party/<int:pk>/", PartyDetailView.as_view(), name="party-detail"),
     path("party/<int:pk>/logo/", PartyLogoView.as_view(), name="party-logo"),
     path(

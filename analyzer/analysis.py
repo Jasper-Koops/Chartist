@@ -13,7 +13,7 @@ from analyzer.utils import (
     generate_dataframe,
     log_to_stdout,
 )
-from scraper.models import Party, PartyVote
+from scraper.models import Party, PartyVote, VoteType
 from analyzer.models import (
     PCAAnalysis,
     PCAComponent,
@@ -34,8 +34,10 @@ def calculate_party_participation_rate() -> None:
     Calculate and update the participation rate for each party.
 
     The rate is measured from each party's own start: the share of voted
-    items, dated on or after the party's first vote, on which the party has
-    a vote. A party that formed during the period (e.g. a split) is
+    items, dated on or after the party's first record, on which the party
+    votes for, against or is evenly split. Non-participation is excluded
+    from the numerator.
+    A party that formed during the period (e.g. a split) is
     therefore not penalised for items from before it existed.
 
     Only items with at least one vote count; items whose votes are not
@@ -58,8 +60,12 @@ def calculate_party_participation_rate() -> None:
     parties_to_update = []
     for party in Party.objects.all():
         own_votes = votes.get(party.id, {})
-        votes_cast = len(own_votes)
-        if not votes_cast:
+        records = len(own_votes)
+        votes_cast = sum(
+            vote in (VoteType.FOR, VoteType.AGAINST, VoteType.SPLIT)
+            for vote in own_votes.values()
+        )
+        if not records:
             participation_rate: float = 0.0
         else:
             first_vote = min(item_dates[item_id] for item_id in own_votes)
@@ -103,7 +109,7 @@ def generate_pca_object(
 class PreparedVotes(NamedTuple):
     """
     The vote matrices for the PCA (parties as rows, motion ids as columns;
-    1 for, -1 against, 0 did not take part).
+    1 for, -1 against, 0 evenly split; non-participation is missing).
 
     Attributes:
         fit (pd.DataFrame): Parties the axes are fitted on, with a vote on

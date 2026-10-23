@@ -27,19 +27,22 @@ msgstr "Hoofdmenu"
 
 #: analyzer/templates/base.html:29 analyzer/templates/component_detail.html:17
 #: analyzer/templates/motion_detail.html:52
-#: analyzer/templates/motion_list.html:25 analyzer/templates/pair_detail.html:9
+#: analyzer/templates/motion_list.html:25
+#: analyzer/templates/pair_detail.html:9
 #: analyzer/templates/party_detail.html:9
 msgid "Overview"
 msgstr "Overzicht"
 
 #: analyzer/templates/base.html:30 analyzer/templates/component_detail.html:18
-#: analyzer/templates/component_detail.html:27 analyzer/templates/home.html:665
+#: analyzer/templates/component_detail.html:27
+#: analyzer/templates/home.html:665
 msgid "Axes"
 msgstr "Assen"
 
 #: analyzer/templates/base.html:31 analyzer/templates/base.html:98
 #: analyzer/templates/motion_detail.html:53
-#: analyzer/templates/motion_list.html:4 analyzer/templates/motion_list.html:26
+#: analyzer/templates/motion_list.html:4
+#: analyzer/templates/motion_list.html:26
 #: analyzer/templates/motion_list.html:29
 #: analyzer/templates/pair_detail.html:64
 msgid "Motions"
@@ -197,7 +200,9 @@ msgstr "Wat PC%(number)s bepaalt"
 msgid ""
 "Each axis is a voting pattern: a set of motions on which the parties at one "
 "end vote for and the parties at the other end vote against."
-msgstr "Elke as is een stempatroon: een groep moties waarvoor de partijen aan de ene kant stemmen en de partijen aan de andere kant tegen."
+msgstr ""
+"Elke as is een stempatroon: een groep moties waarvoor de partijen aan de ene"
+" kant stemmen en de partijen aan de andere kant tegen."
 
 #: analyzer/templates/component_detail.html:35
 #, python-format
@@ -212,7 +217,9 @@ msgstr "Moties aan de hoge kant"
 msgid ""
 "Supported by the parties with a high score, opposed by those with a low "
 "score."
-msgstr "Gesteund door de partijen met een hoge score, tegengestemd door die met een lage score."
+msgstr ""
+"Gesteund door de partijen met een hoge score, tegengestemd door die met een "
+"lage score."
 
 #: analyzer/templates/component_detail.html:63
 msgid "Motions at the low end"
@@ -222,7 +229,9 @@ msgstr "Moties aan de lage kant"
 msgid ""
 "Supported by the parties with a low score, opposed by those with a high "
 "score."
-msgstr "Gesteund door de partijen met een lage score, tegengestemd door die met een hoge score."
+msgstr ""
+"Gesteund door de partijen met een lage score, tegengestemd door die met een "
+"hoge score."
 
 #: analyzer/templates/component_detail.html:77
 msgid "How strongly this motion follows the pattern"
@@ -237,7 +246,8 @@ msgstr "Gewicht"
 msgid "No motions."
 msgstr "Geen moties."
 
-#: analyzer/templates/component_detail.html:80 analyzer/templates/home.html:849
+#: analyzer/templates/component_detail.html:80
+#: analyzer/templates/home.html:849
 msgid "No analysis yet. Run the analysis first."
 msgstr "Nog geen analyse. Voer eerst de analyse uit."
 
@@ -250,15 +260,21 @@ msgstr "De nieuwste analyse heeft geen PC{number}."
 #, python-brace-format
 msgid ""
 "PC{number} captures {share} of all differences in how parties vote. Parties "
-"at one end vote for the motions below, parties at the other end against them."
-msgstr "PC{number} vat {share} van alle verschillen in hoe partijen stemmen. Partijen aan de ene kant stemmen voor de moties hieronder, partijen aan de andere kant ertegen."
+"at one end vote for the motions below, parties at the other end against "
+"them."
+msgstr ""
+"PC{number} vat {share} van alle verschillen in hoe partijen stemmen. "
+"Partijen aan de ene kant stemmen voor de moties hieronder, partijen aan de "
+"andere kant ertegen."
 
 #: analyzer/templates/component_detail.html:83
 #, python-brace-format
 msgid ""
-"Score per party in the analysis of {when}. Parties close together vote alike "
-"on these motions."
-msgstr "Score per partij in de analyse van {when}. Partijen dicht bij elkaar stemmen gelijk op deze moties."
+"Score per party in the analysis of {when}. Parties close together vote alike"
+" on these motions."
+msgstr ""
+"Score per partij in de analyse van {when}. Partijen dicht bij elkaar stemmen"
+" gelijk op deze moties."
 
 #: analyzer/templates/component_detail.html:84
 #, python-brace-format
@@ -270,28 +286,36 @@ msgstr "Vooral gesteund door {for}; tegengestemd door {against}."
 msgid ""
 "{high} motions share the strongest weight at the high end, and {low} at the "
 "low end: they have the same voting pattern, so the newest are shown."
-msgstr "{high} moties delen het sterkste gewicht aan de hoge kant, en {low} aan de lage kant: ze hebben hetzelfde stempatroon, dus de nieuwste worden getoond."
+msgstr ""
+"{high} moties delen het sterkste gewicht aan de hoge kant, en {low} aan de "
+"lage kant: ze hebben hetzelfde stempatroon, dus de nieuwste worden getoond."
 
 #: analyzer/templates/component_detail.html:86
 #, python-brace-format
 msgid ""
 "{count} motions share the strongest weight at the high end: they have the "
 "same voting pattern, so the newest are shown."
-msgstr "{count} moties delen het sterkste gewicht aan de hoge kant: ze hebben hetzelfde stempatroon, dus de nieuwste worden getoond."
+msgstr ""
+"{count} moties delen het sterkste gewicht aan de hoge kant: ze hebben "
+"hetzelfde stempatroon, dus de nieuwste worden getoond."
 
 #: analyzer/templates/component_detail.html:87
 #, python-brace-format
 msgid ""
 "{count} motions share the strongest weight at the low end: they have the "
 "same voting pattern, so the newest are shown."
-msgstr "{count} moties delen het sterkste gewicht aan de lage kant: ze hebben hetzelfde stempatroon, dus de nieuwste worden getoond."
+msgstr ""
+"{count} moties delen het sterkste gewicht aan de lage kant: ze hebben "
+"hetzelfde stempatroon, dus de nieuwste worden getoond."
 
 #: analyzer/templates/component_detail.html:88
 #, python-brace-format
 msgid ""
 "The {limit} motions that follow this pattern most strongly on each side; "
 "newest first among equals."
-msgstr "De {limit} moties die dit patroon aan elke kant het sterkst volgen; bij gelijke stand de nieuwste eerst."
+msgstr ""
+"De {limit} moties die dit patroon aan elke kant het sterkst volgen; bij "
+"gelijke stand de nieuwste eerst."
 
 #: analyzer/templates/component_detail.html:89
 #, python-brace-format
@@ -418,7 +442,9 @@ msgstr "van de stemverschillen getoond op de"
 msgid ""
 "The map's three axes together capture this share of all differences in how "
 "parties vote."
-msgstr "De drie assen van de kaart vatten samen dit deel van alle verschillen in hoe partijen stemmen."
+msgstr ""
+"De drie assen van de kaart vatten samen dit deel van alle verschillen in hoe"
+" partijen stemmen."
 
 #: analyzer/templates/home.html:768
 msgid "map"
@@ -434,7 +460,11 @@ msgid ""
 "analysis. Its share says how much of all differences between parties it "
 "captures. The map uses the same scale in every direction, so distances "
 "compare fairly."
-msgstr "Elke as is één patroon in hoe partijen stemmen, gevonden met hoofdcomponentenanalyse. Het aandeel zegt hoeveel van alle verschillen tussen partijen de as vat. De kaart gebruikt in elke richting dezelfde schaal, dus afstanden zijn eerlijk te vergelijken."
+msgstr ""
+"Elke as is één patroon in hoe partijen stemmen, gevonden met "
+"hoofdcomponentenanalyse. Het aandeel zegt hoeveel van alle verschillen "
+"tussen partijen de as vat. De kaart gebruikt in elke richting dezelfde "
+"schaal, dus afstanden zijn eerlijk te vergelijken."
 
 #: analyzer/templates/home.html:780
 msgid "Show the parties as"
@@ -448,7 +478,9 @@ msgstr "Toon"
 msgid ""
 "Parties that started later in the period are placed using only the motions "
 "they voted on."
-msgstr "Partijen die later in de periode begonnen, staan op basis van alleen de moties waarover zij stemden."
+msgstr ""
+"Partijen die later in de periode begonnen, staan op basis van alleen de "
+"moties waarover zij stemden."
 
 #: analyzer/templates/home.html:794
 msgid "How often they vote alike"
@@ -459,7 +491,10 @@ msgid ""
 "The share of motions on which two parties voted the same, out of those they "
 "both voted on. Parties that vote alike are grouped, so blocs show as dark "
 "squares along the diagonal."
-msgstr "Het aandeel moties waarop twee partijen hetzelfde stemden, van de moties waarover ze allebei stemden. Partijen die gelijk stemmen staan bij elkaar, dus blokken verschijnen als donkere vlakken langs de diagonaal."
+msgstr ""
+"Het aandeel moties waarop twee partijen hetzelfde stemden, van de moties "
+"waarover ze allebei stemden. Partijen die gelijk stemmen staan bij elkaar, "
+"dus blokken verschijnen als donkere vlakken langs de diagonaal."
 
 #: analyzer/templates/home.html:799
 msgid "Highlighting"
@@ -469,7 +504,9 @@ msgstr "Uitgelicht:"
 msgid ""
 "Click a cell to compare two parties motion by motion, or a name to open the "
 "party."
-msgstr "Klik op een vak om twee partijen motie voor motie te vergelijken, of op een naam om de partij te openen."
+msgstr ""
+"Klik op een vak om twee partijen motie voor motie te vergelijken, of op een "
+"naam om de partij te openen."
 
 #: analyzer/templates/home.html:817
 msgid "Every party, its closest and furthest"
@@ -478,7 +515,9 @@ msgstr "Elke partij, haar naaste en verste"
 #: analyzer/templates/home.html:818
 msgid ""
 "The party each one votes with most often, and the one it votes with least."
-msgstr "De partij waarmee elke partij het vaakst gelijk stemt, en die waarmee het minst."
+msgstr ""
+"De partij waarmee elke partij het vaakst gelijk stemt, en die waarmee het "
+"minst."
 
 #: analyzer/templates/home.html:820
 msgid "Order the parties"
@@ -495,10 +534,6 @@ msgstr "A–Z"
 #: analyzer/templates/home.html:823
 msgid "Along the main divide"
 msgstr "Langs de hoofdscheiding"
-
-#: analyzer/templates/home.html:824
-msgid "Closest ally"
-msgstr "Naaste bondgenoot"
 
 #: analyzer/templates/home.html:838
 msgid "Could not load the 3D chart library."
@@ -603,7 +638,9 @@ msgstr "{a} en {b}: {share} van {count} gedeelde moties"
 
 #: analyzer/templates/home.html:866
 msgid "Not compared: no shared motions, or the same party under a new name"
-msgstr "Niet vergeleken: geen gedeelde moties, of dezelfde partij onder een nieuwe naam"
+msgstr ""
+"Niet vergeleken: geen gedeelde moties, of dezelfde partij onder een nieuwe "
+"naam"
 
 #: analyzer/templates/home.html:867
 msgid "Most with"
@@ -652,7 +689,9 @@ msgstr "Op de assen van de kaart"
 msgid ""
 "How strongly this motion follows each voting pattern of the map, compared "
 "with all motions. Open an axis to see the motions that drive it."
-msgstr "Hoe sterk deze motie elk stempatroon van de kaart volgt, vergeleken met alle moties. Open een as voor de moties die haar bepalen."
+msgstr ""
+"Hoe sterk deze motie elk stempatroon van de kaart volgt, vergeleken met alle"
+" moties. Open een as voor de moties die haar bepalen."
 
 #: analyzer/templates/motion_detail.html:94
 msgid "How parties voted"
@@ -666,7 +705,9 @@ msgstr "Documenten"
 msgid ""
 "No text available for this motion. See the documents for the official "
 "version."
-msgstr "Geen tekst beschikbaar voor deze motie. Zie de documenten voor de officiële versie."
+msgstr ""
+"Geen tekst beschikbaar voor deze motie. Zie de documenten voor de officiële "
+"versie."
 
 #: analyzer/templates/motion_detail.html:119
 msgid "Official publication"
@@ -682,13 +723,16 @@ msgstr "Geen documenten gekoppeld."
 
 #: analyzer/templates/motion_detail.html:122
 msgid "No votes recorded yet; they are sometimes published after the result."
-msgstr "Nog geen stemmen vastgelegd; die worden soms na de uitslag gepubliceerd."
+msgstr ""
+"Nog geen stemmen vastgelegd; die worden soms na de uitslag gepubliceerd."
 
 #: analyzer/templates/motion_detail.html:123
 msgid ""
 "Votes as recorded per party. The result is decided by seats, not by the "
 "number of parties."
-msgstr "Stemmen zoals per partij vastgelegd. De uitslag wordt bepaald door zetels, niet door het aantal partijen."
+msgstr ""
+"Stemmen zoals per partij vastgelegd. De uitslag wordt bepaald door zetels, "
+"niet door het aantal partijen."
 
 #: analyzer/templates/motion_detail.html:124
 #, python-brace-format
@@ -737,7 +781,9 @@ msgstr "Moties verkennen"
 msgid ""
 "Search the title and text of every motion. Open one for its full text, the "
 "official documents and how each party voted."
-msgstr "Zoek in de titel en tekst van elke motie. Open er een voor de volledige tekst, de officiële documenten en hoe elke partij stemde."
+msgstr ""
+"Zoek in de titel en tekst van elke motie. Open er een voor de volledige "
+"tekst, de officiële documenten en hoe elke partij stemde."
 
 #: analyzer/templates/motion_list.html:38
 msgid "Search motions"
@@ -876,7 +922,8 @@ msgstr "Overeenstemming door de tijd"
 msgid ""
 "Per calendar month. Months in which they shared fewer than 50 motions are "
 "left empty."
-msgstr "Per kalendermaand. Maanden met minder dan 50 gedeelde moties blijven leeg."
+msgstr ""
+"Per kalendermaand. Maanden met minder dan 50 gedeelde moties blijven leeg."
 
 #: analyzer/templates/pair_detail.html:44
 msgid "Monthly agreement"
@@ -892,7 +939,9 @@ msgstr "Moties waarop beide voor of tegen stemden."
 
 #: analyzer/templates/pair_detail.html:65
 msgid "Newest vote first. Open a motion for its text and every party's vote."
-msgstr "Nieuwste stemming eerst. Open een motie voor de tekst en de stem van elke partij."
+msgstr ""
+"Nieuwste stemming eerst. Open een motie voor de tekst en de stem van elke "
+"partij."
 
 #: analyzer/templates/pair_detail.html:71
 #: analyzer/templates/pair_detail.html:72
@@ -917,7 +966,9 @@ msgstr "Hetzelfde gestemd"
 msgid ""
 "{b} and {a} are the same party under a different name, so they are not "
 "compared. The motions below show their own recorded votes."
-msgstr "{b} en {a} zijn dezelfde partij onder een andere naam, dus ze worden niet vergeleken. De moties hieronder tonen hun eigen vastgelegde stemmen."
+msgstr ""
+"{b} en {a} zijn dezelfde partij onder een andere naam, dus ze worden niet "
+"vergeleken. De moties hieronder tonen hun eigen vastgelegde stemmen."
 
 #: analyzer/templates/pair_detail.html:101
 #, python-brace-format
@@ -927,9 +978,11 @@ msgstr "{a} en {b} hebben niet allebei over een motie gestemd."
 #: analyzer/templates/pair_detail.html:102
 #, python-brace-format
 msgid ""
-"{a} and {b} voted the same on {share} of the {count} motions they both voted "
-"on."
-msgstr "{a} en {b} stemden hetzelfde op {share} van de {count} moties waarover ze allebei stemden."
+"{a} and {b} voted the same on {share} of the {count} motions they both voted"
+" on."
+msgstr ""
+"{a} en {b} stemden hetzelfde op {share} van de {count} moties waarover ze "
+"allebei stemden."
 
 #: analyzer/templates/pair_detail.html:104
 #, python-brace-format
@@ -982,14 +1035,18 @@ msgstr "Logo van %(name)s"
 msgid ""
 "Continues <a href=\"%(url)s\">%(name)s</a> since %(date)s. Its votes from "
 "before then count as %(abbreviation)s's on this page."
-msgstr "Zet <a href=\"%(url)s\">%(name)s</a> voort sinds %(date)s. De stemmen van daarvoor tellen op deze pagina als die van %(abbreviation)s."
+msgstr ""
+"Zet <a href=\"%(url)s\">%(name)s</a> voort sinds %(date)s. De stemmen van "
+"daarvoor tellen op deze pagina als die van %(abbreviation)s."
 
 #: analyzer/templates/party_detail.html:35
 #, python-format
 msgid ""
 "Continued as <a href=\"%(url)s\">%(name)s</a> since %(date)s. This page "
 "shows only the votes of %(abbreviation)s itself, so it ends then."
-msgstr "Voortgezet als <a href=\"%(url)s\">%(name)s</a> sinds %(date)s. Deze pagina toont alleen de stemmen van %(abbreviation)s zelf, dus hij eindigt dan."
+msgstr ""
+"Voortgezet als <a href=\"%(url)s\">%(name)s</a> sinds %(date)s. Deze pagina "
+"toont alleen de stemmen van %(abbreviation)s zelf, dus hij eindigt dan."
 
 #: analyzer/templates/party_detail.html:43
 msgid "of votes taken part in"
@@ -1016,14 +1073,19 @@ msgstr "Overeenstemming met elke partij"
 msgid ""
 "Share of shared motions on which %(abbreviation)s voted the same, over the "
 "whole period."
-msgstr "Aandeel gedeelde moties waarop %(abbreviation)s hetzelfde stemde, over de hele periode."
+msgstr ""
+"Aandeel gedeelde moties waarop %(abbreviation)s hetzelfde stemde, over de "
+"hele periode."
 
 #: analyzer/templates/party_detail.html:69
 msgid ""
-"Per calendar month. Months with fewer than 50 shared motions are left empty. "
-"Hover a line to see which party it is; use <em>Show</em> to keep it "
+"Per calendar month. Months with fewer than 50 shared motions are left empty."
+" Hover a line to see which party it is; use <em>Show</em> to keep it "
 "highlighted."
-msgstr "Per kalendermaand. Maanden met minder dan 50 gedeelde moties blijven leeg. Wijs een lijn aan om te zien welke partij het is; gebruik <em>Toon</em> om haar uitgelicht te houden."
+msgstr ""
+"Per kalendermaand. Maanden met minder dan 50 gedeelde moties blijven leeg. "
+"Wijs een lijn aan om te zien welke partij het is; gebruik <em>Toon</em> om "
+"haar uitgelicht te houden."
 
 #: analyzer/templates/party_detail.html:72
 msgid "Show all"
@@ -1047,7 +1109,8 @@ msgstr "Verwijder uit de grafiek"
 
 #: analyzer/templates/party_detail.html:96
 msgid "No party highlighted. Hover a line, or use Show in the list."
-msgstr "Geen partij uitgelicht. Wijs een lijn aan, of gebruik Toon in de lijst."
+msgstr ""
+"Geen partij uitgelicht. Wijs een lijn aan, of gebruik Toon in de lijst."
 
 #: analyzer/templates/party_detail.html:97
 #, python-brace-format
@@ -1088,7 +1151,10 @@ msgstr "Deelname aan stemmingen in de Kamer, als percentage."
 msgid ""
 "The logo's ContentLength as the API reports it (not the file size); empty "
 "when the party has no logo. Used to notice a new logo."
-msgstr "De ContentLength van het logo zoals de API die meldt (niet de bestandsgrootte); leeg als de partij geen logo heeft. Gebruikt om een nieuw logo op te merken."
+msgstr ""
+"De ContentLength van het logo zoals de API die meldt (niet de "
+"bestandsgrootte); leeg als de partij geen logo heeft. Gebruikt om een nieuw "
+"logo op te merken."
 
 #: scraper/models.py:84
 msgid "Date of the voting session."
@@ -1098,7 +1164,9 @@ msgstr "Datum van de stemming."
 msgid ""
 "Identifier of the motion document on officielebekendmakingen.nl, e.g. "
 "'kst-36848-53'."
-msgstr "Kenmerk van het motiedocument op officielebekendmakingen.nl, bijv. 'kst-36848-53'."
+msgstr ""
+"Kenmerk van het motiedocument op officielebekendmakingen.nl, bijv. "
+"'kst-36848-53'."
 
 #: scraper/models.py:184
 msgid "Date the successor became active."
@@ -1108,4 +1176,314 @@ msgstr "Datum waarop de opvolger actief werd."
 msgid ""
 "Lowest share of members shared by both parties around the succession date: "
 "of the predecessor's last and of the successor's first members."
-msgstr "Laagste aandeel leden dat beide partijen rond de opvolgdatum delen: van de laatste leden van de voorganger en de eerste leden van de opvolger."
+msgstr ""
+"Laagste aandeel leden dat beide partijen rond de opvolgdatum delen: van de "
+"laatste leden van de voorganger en de eerste leden van de opvolger."
+
+msgid "Methodology"
+msgstr "Verantwoording"
+
+msgid "How to read Chartist"
+msgstr "Zo lees je Chartist"
+
+msgid ""
+"Chartist describes recorded voting patterns. It does not measure a party's "
+"ideology, explain its motives, or recommend whom to vote for."
+msgstr ""
+"Chartist beschrijft geregistreerde stempatronen. Het meet niet de ideologie "
+"van een partij, verklaart geen motieven en geeft geen stemadvies."
+
+msgid "Which votes are included?"
+msgstr "Welke stemmingen tellen mee?"
+
+#, python-format
+msgid ""
+"The import includes motions started after %(start)s that have a voting "
+"decision in the Tweede Kamer's open data. Bills and amendments are outside "
+"this dataset."
+msgstr ""
+"De import bevat moties die na %(start)s zijn gestart en een stemmingsbesluit"
+" hebben in de open data van de Tweede Kamer. Wetsvoorstellen en amendementen"
+" vallen buiten deze dataset."
+
+msgid ""
+"Each party has one recorded position per motion. For roll-call votes, the "
+"majority of participating members determines that position. An even split is"
+" stored as a neutral entry."
+msgstr ""
+"Elke partij heeft één geregistreerd standpunt per motie. Bij hoofdelijke "
+"stemmingen bepaalt de meerderheid van de deelnemende fractieleden dat "
+"standpunt. Een gelijke verdeling wordt als neutraal opgeslagen."
+
+msgid ""
+"The dates shown are voting-session dates where available. Monthly "
+"comparisons fall back to the record's modification date when the voting date"
+" is missing. Official publications remain the source for the motion's "
+"wording."
+msgstr ""
+"De getoonde datums zijn waar mogelijk de datums van de stemmingen. "
+"Vergelijkingen per maand gebruiken de wijzigingsdatum van het record als de "
+"stemmingsdatum ontbreekt. De officiële publicatie blijft de bron voor de "
+"tekst van de motie."
+
+msgid "Parties that continue under another name"
+msgstr "Partijen die onder een andere naam doorgaan"
+
+msgid ""
+"A successor inherits its predecessor's votes on motions for which it has no "
+"record of its own. Its own records take precedence. This preserves the "
+"voting history of a continuing party without inventing votes for a new "
+"split."
+msgstr ""
+"Een opvolger erft de stemmen van zijn voorganger voor moties waarvoor de "
+"opvolger zelf geen registratie heeft. Eigen registraties gaan voor. Zo "
+"blijft de stemgeschiedenis van een doorgaande partij behouden zonder stemmen"
+" te verzinnen voor een nieuwe afsplitsing."
+
+msgid ""
+"The predecessor keeps its own history. A predecessor and its successor are "
+"not ranked against each other in the agreement matrix. Party pages explain "
+"the relationship, and comparisons identify inherited votes."
+msgstr ""
+"De voorganger behoudt zijn eigen geschiedenis. Een voorganger en zijn "
+"opvolger worden niet met elkaar vergeleken in de overeenstemmingsmatrix. "
+"Partijpagina’s leggen de relatie uit en vergelijkingen vermelden overgenomen"
+" stemmen."
+
+msgid "How the map is calculated"
+msgstr "Hoe de kaart wordt berekend"
+
+msgid ""
+"Principal component analysis (PCA) finds patterns across motions, with "
+"parties as the observations. A vote for is coded as 1, against as −1, and a "
+"recorded non-participation or even split as 0. A missing record stays "
+"missing."
+msgstr ""
+"Principalecomponentenanalyse (PCA) zoekt patronen tussen moties, met "
+"partijen als waarnemingen. Een stem voor krijgt waarde 1, tegen −1, en "
+"geregistreerde niet-deelname of een gelijke verdeling 0. Een ontbrekende "
+"registratie blijft ontbreken."
+
+#, python-format
+msgid ""
+"The axes are fitted using eligible parties with records on at least "
+"%(coverage)s%% of all motions. Only motions with a record for every fitted "
+"party enter that fit. Motions are centred, without standardising their "
+"variance."
+msgstr ""
+"De assen worden berekend met de geselecteerde partijen die bij minstens "
+"%(coverage)s%% van alle moties een registratie hebben. Alleen moties met een"
+" registratie voor elke gebruikte partij tellen mee voor die berekening. "
+"Moties worden gecentreerd, zonder hun variantie te standaardiseren."
+
+#, python-format
+msgid ""
+"Other eligible parties are projected onto those axes using only their "
+"observed records. They need at least %(minimum)s records on the fitted "
+"motions. Missing votes are not replaced by an average. A shorter voting "
+"history provides less evidence for a party's position."
+msgstr ""
+"Andere geselecteerde partijen worden op die assen geplaatst met alleen hun "
+"waargenomen registraties. Ze hebben minstens %(minimum)s registraties nodig "
+"op de gebruikte moties. Ontbrekende stemmen worden niet vervangen door een "
+"gemiddelde. Een kortere stemgeschiedenis biedt minder onderbouwing voor de "
+"positie van een partij."
+
+msgid "What distance and percentages mean"
+msgstr "Wat afstand en percentages betekenen"
+
+msgid ""
+"Parties close together have similar positions on the displayed voting "
+"patterns. The axes use the same scale. A 2D view omits the third axis; the "
+"3D view still leaves out patterns beyond the first three axes."
+msgstr ""
+"Partijen die dicht bij elkaar liggen, hebben vergelijkbare posities op de "
+"getoonde stempatronen. De assen gebruiken dezelfde schaal. De 2D-weergave "
+"laat de derde as weg; ook de 3D-weergave toont geen patronen buiten de "
+"eerste drie assen."
+
+msgid ""
+"An axis's percentage is its share of variance in the fitted parties' voting "
+"data. It is not prediction accuracy, a confidence score, or the percentage "
+"of motions correctly classified. The combined percentage refers to the three"
+" axes together."
+msgstr ""
+"Het percentage bij een as is het aandeel van de variantie in de stemgegevens"
+" van de partijen waarmee de assen zijn berekend. Het is geen "
+"voorspellingsnauwkeurigheid, betrouwbaarheidsscore of percentage juist "
+"geclassificeerde moties. Het gezamenlijke percentage gaat over de drie assen"
+" samen."
+
+msgid ""
+"Axis direction has no inherent political meaning. The motions and parties at"
+" each end explain the pattern. A motion's weight describes its contribution "
+"to an axis, not its importance as public policy."
+msgstr ""
+"De richting van een as heeft op zichzelf geen politieke betekenis. De moties"
+" en partijen aan de uiteinden verklaren het patroon. Het gewicht van een "
+"motie beschrijft haar bijdrage aan een as, niet haar maatschappelijke "
+"belang."
+
+msgid "How agreement is calculated"
+msgstr "Hoe overeenstemming wordt berekend"
+
+msgid ""
+"Agreement is the share of motions on which both parties voted the same, "
+"among motions on which both voted for or against. Non-participation, even "
+"splits and missing records are excluded. Each motion has equal weight; party"
+" seats do not weight this percentage."
+msgstr ""
+"Overeenstemming is het aandeel moties waarbij beide partijen hetzelfde "
+"stemden, onder de moties waarop beide voor of tegen stemden. Niet-deelname, "
+"gelijke verdelingen en ontbrekende registraties tellen niet mee. Elke motie "
+"weegt even zwaar; het aantal zetels bepaalt dit percentage niet."
+
+msgid ""
+"Pairs can cover different periods when parties started or stopped at "
+"different times. Check the shared-motion count and voting dates when "
+"comparing percentages. Monthly charts leave months with fewer than 50 shared"
+" motions empty."
+msgstr ""
+"Vergelijkingen kunnen verschillende perioden beslaan als partijen op andere "
+"momenten zijn begonnen of gestopt. Bekijk het aantal gezamenlijke moties en "
+"de stemdatums wanneer je percentages vergelijkt. Maandgrafieken laten "
+"maanden met minder dan 50 gezamenlijke moties leeg."
+
+msgid ""
+"Voting alike does not establish an alliance or agreement on every topic. The"
+" motion lists let you inspect the decisions behind an overall percentage."
+msgstr ""
+"Hetzelfde stemmen betekent geen bondgenootschap of overeenstemming op elk "
+"onderwerp. Met de motielijsten kun je de besluiten achter een "
+"totaalpercentage bekijken."
+
+msgid "Sources and updates"
+msgstr "Bronnen en updates"
+
+msgid ""
+"Voting records come from Tweede Kamer open data; motion texts come from "
+"officielebekendmakingen.nl. Motion pages link to the official publication."
+msgstr ""
+"Stemregistraties komen uit de open data van de Tweede Kamer; motieteksten "
+"komen van officielebekendmakingen.nl. Motiepagina’s verwijzen naar de "
+"officiële publicatie."
+
+msgid ""
+"The scheduled pipeline imports the data and then runs the analysis after "
+"every successful import. The footer shows the latest successful sync, newest"
+" voting date and analysis time. During an update, live records and saved "
+"analysis can temporarily refer to different stages of that update."
+msgstr ""
+"De geplande pipeline importeert de gegevens en voert na elke geslaagde "
+"import de analyse uit. De voettekst toont de laatste geslaagde "
+"synchronisatie, nieuwste stemdatum en analysetijd. Tijdens een update kunnen"
+" actuele registraties en opgeslagen analyses tijdelijk bij verschillende "
+"stappen van die update horen."
+
+msgid "Highest voting agreement"
+msgstr "Hoogste stemovereenstemming"
+
+msgid "Menu"
+msgstr "Menu"
+
+msgid ""
+"Each party has one recorded position per motion. For roll-call votes, the "
+"majority of participating members determines that position. An even split is"
+" stored separately from non-participation and counts as participation."
+msgstr ""
+"Elke partij heeft één geregistreerd standpunt per motie. Bij hoofdelijke "
+"stemmingen bepaalt de meerderheid van de deelnemende fractieleden dat "
+"standpunt. Een gelijke verdeling wordt apart van niet-deelname opgeslagen en"
+" telt als deelname."
+
+msgid ""
+"Principal component analysis (PCA) finds patterns across motions, with "
+"parties as the observations. A vote for is coded as 1, against as −1, and an"
+" even split as 0. Recorded non-participation and missing records stay "
+"missing."
+msgstr ""
+"Principalecomponentenanalyse (PCA) zoekt patronen tussen moties, met "
+"partijen als waarnemingen. Een stem voor krijgt waarde 1, tegen −1, en een "
+"gelijke verdeling 0. Geregistreerde niet-deelname en ontbrekende "
+"registraties blijven ontbreken."
+
+msgid ""
+"The axes are fitted using eligible parties with a for, against or evenly "
+"split position on at least %(coverage)s%% of all motions. Only motions with "
+"such a position for every fitted party enter that fit. Motions are centred, "
+"without standardising their variance."
+msgstr ""
+"De assen worden berekend met de geselecteerde partijen die bij minstens "
+"%(coverage)s%% van alle moties een stem voor, tegen of een gelijke verdeling"
+" hebben. Alleen moties met zo’n positie voor elke gebruikte partij tellen "
+"mee voor die berekening. Moties worden gecentreerd, zonder hun variantie te "
+"standaardiseren."
+
+msgid ""
+"Other eligible parties are projected onto those axes using only their for, "
+"against or evenly split positions. They need at least %(minimum)s such "
+"positions on the fitted motions. Missing votes are not replaced by an "
+"average. A shorter voting history provides less evidence for a party's "
+"position."
+msgstr ""
+"Andere geselecteerde partijen worden op die assen geplaatst met alleen hun "
+"stemmen voor, tegen of gelijke verdelingen. Ze hebben minstens %(minimum)s "
+"van zulke posities nodig op de gebruikte moties. Ontbrekende stemmen worden "
+"niet vervangen door een gemiddelde. Een kortere stemgeschiedenis biedt "
+"minder onderbouwing voor de positie van een partij."
+
+msgid "Evenly split"
+msgstr "Gelijk verdeeld"
+
+msgid ""
+"Parties with a recorded successor are represented by that successor in the "
+"PCA graphs, including inherited votes. Predecessors remain available on "
+"historical party pages and in agreement comparisons. There is no "
+"participation-percentage cutoff for entering PCA preparation."
+msgstr ""
+"Partijen met een geregistreerde opvolger worden in de PCA-grafieken "
+"vertegenwoordigd door die opvolger, inclusief overgenomen stemmen. "
+"Voorgangers blijven beschikbaar op historische partijpagina’s en in "
+"stemvergelijkingen. Er geldt geen minimumdeelnamepercentage voor opname in "
+"de PCA-voorbereiding."
+
+msgid ""
+"The participation percentage shown on party pages counts for, against and "
+"evenly split positions from the party's first recorded vote onward, "
+"including inherited history. It measures participation at party level, not "
+"individual members’ attendance."
+msgstr ""
+"Het deelnamepercentage op partijpagina’s telt stemmen voor, tegen en gelijke"
+" verdelingen vanaf de eerste geregistreerde stem van de partij, inclusief "
+"overgenomen geschiedenis. Het meet deelname op partijniveau, niet de "
+"aanwezigheid van individuele leden."
+
+#, python-format
+#~ msgid ""
+#~ "The current inclusion rule requires at least %(threshold)s%% recorded-vote "
+#~ "coverage from a party's first recorded vote onward, including inherited "
+#~ "history. This coverage includes non-participation records; it is not a "
+#~ "measure of attendance."
+#~ msgstr ""
+#~ "De huidige selectieregel vereist minstens %(threshold)s%% dekking van "
+#~ "stemregistraties vanaf de eerste geregistreerde stem van een partij, "
+#~ "inclusief overgenomen geschiedenis. Ook registraties van niet-deelname "
+#~ "tellen mee voor deze dekking; het is geen aanwezigheidspercentage."
+
+#~ msgid ""
+#~ "The current inclusion rule requires at least %(threshold)s%% recorded-vote "
+#~ "coverage from a party's first recorded vote onward, including inherited "
+#~ "history. This coverage includes non-participation records. The participation"
+#~ " percentage shown on party pages counts for, against and evenly split "
+#~ "positions, using the same period. It measures participation at party level, "
+#~ "not individual members’ attendance."
+#~ msgstr ""
+#~ "De huidige selectieregel vereist minstens %(threshold)s%% dekking van "
+#~ "stemregistraties vanaf de eerste geregistreerde stem van een partij, "
+#~ "inclusief overgenomen geschiedenis. Ook registraties van niet-deelname "
+#~ "tellen mee voor deze dekking. Het deelnamepercentage op partijpagina’s telt "
+#~ "stemmen voor, tegen en gelijke verdelingen, over dezelfde periode. Het meet "
+#~ "deelname op partijniveau, niet de aanwezigheid van individuele leden."
+
+#~ msgid "Closest ally"
+#~ msgstr "Naaste bondgenoot"

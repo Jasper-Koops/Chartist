@@ -102,6 +102,36 @@ class TestSuccessionInAnalysis(SuccessionTestCase):
         # The predecessor stopped voting halfway.
         self.assertEqual(50.0, self.old.participation_rate)
 
+    def test_inherited_absence_and_split_keep_their_meaning(self) -> None:
+        from scraper.models import PartyVote
+
+        PartyVote.objects.filter(
+            party=self.old, parliamentary_item=self.items[0]
+        ).update(vote=VoteType.ABSTAIN)
+        PartyVote.objects.filter(
+            party=self.old, parliamentary_item=self.items[1]
+        ).update(vote=VoteType.SPLIT)
+        # An explicit absence must also override a predecessor's FOR.
+        PartyVoteFactory(
+            party=self.new,
+            parliamentary_item=self.items[2],
+            vote=VoteType.ABSTAIN,
+        )
+        calculate_party_participation_rate()
+        self.new.refresh_from_db()
+        self.old.refresh_from_db()
+        self.assertAlmostEqual(400 / 6, self.new.participation_rate)
+        self.assertAlmostEqual(200 / 6, self.old.participation_rate)
+        df = generate_dataframe(
+            log=AnalysisLogger(logging.getLogger(), {})
+        ).set_index("Motion ID")
+        self.assertTrue(
+            df.loc[[self.items[0].id, self.items[2].id], self.new.abbreviation]
+            .isna()
+            .all()
+        )
+        self.assertEqual(0, df.loc[self.items[1].id, self.new.abbreviation])
+
     def test_pca_input_uses_inherited_votes(self) -> None:
         calculate_party_participation_rate()
         df = generate_dataframe(log=AnalysisLogger(logging.getLogger(), {}))
@@ -109,6 +139,20 @@ class TestSuccessionInAnalysis(SuccessionTestCase):
         self.assertNotIn(self.old.abbreviation, df.columns)
         # No missing votes: all six items are usable.
         self.assertEqual(6, len(df.dropna()))
+
+    def test_full_history_predecessor_does_not_fit_axes(self) -> None:
+        from analyzer.analysis import prepare_df
+
+        self.vote(self.old, self.items[3:], [F, F, F])
+        calculate_party_participation_rate()
+        self.old.refresh_from_db()
+        self.assertEqual(100.0, self.old.participation_rate)
+        prepared = prepare_df(log=AnalysisLogger(logging.getLogger(), {}))
+        self.assertCountEqual(
+            [self.new.abbreviation, self.other.abbreviation], prepared.labels
+        )
+        self.assertEqual(6, prepared.fit.shape[1])
+        self.assertNotIn(self.old.abbreviation, prepared.projected.index)
 
     def test_matrix_keeps_both_parties_and_skips_their_pair(self) -> None:
         matrix = run_agreement_analysis()

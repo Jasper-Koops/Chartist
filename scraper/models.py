@@ -92,6 +92,12 @@ class ParliamentaryItem(models.Model):
         default=ParliamentaryItemStatusTypes.PENDING,
     )
     text = models.JSONField(blank=True, null=True)
+    text_source = models.JSONField(
+        default=dict,
+        blank=True,
+        editable=False,
+        help_text=_("Document version from which the stored text was fetched."),
+    )
     document_id = models.CharField(
         max_length=50,
         blank=True,
@@ -122,7 +128,8 @@ class ParliamentaryItem(models.Model):
 class VoteType(models.TextChoices):
     FOR = "For", "For"
     AGAINST = "Against", "Against"
-    ABSTAIN = "Abstain", "Abstain"
+    ABSTAIN = "Abstain", "Did not participate"
+    SPLIT = "Split", "Evenly split"
 
 
 class PartyVote(models.Model):
@@ -172,7 +179,8 @@ class PartySuccession(models.Model):
 
     Detected during the import (see `ParliamentApi.import_successions`) and
     correctable in the admin. In the analysis, the successor inherits the
-    predecessor's votes; both parties stay visible.
+    predecessor's votes. PCA graphs show the successor; historical pages
+    and agreement calculations retain both parties.
     """
 
     predecessor = models.OneToOneField(

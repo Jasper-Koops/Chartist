@@ -1,16 +1,35 @@
 from typing import Any
+from datetime import datetime
 
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView, View
 
 from scraper.models import ParliamentaryItem, Party, PartyLogo, PartySuccession
+from scraper.utils import PERIOD_START
+from analyzer.utils import (
+    PCA_FIT_COVERAGE,
+    PCA_MIN_PROJECTED_VOTES,
+)
 
 
 class HomeView(TemplateView):
     """Landing page: the landscape, agreement matrix, parties and axes."""
 
     template_name = "home.html"
+
+
+class MethodologyView(TemplateView):
+    template_name = "methodology.html"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context.update(
+            period_start=datetime.fromisoformat(PERIOD_START).date(),
+            fit_coverage=PCA_FIT_COVERAGE * 100,
+            minimum_projected_votes=PCA_MIN_PROJECTED_VOTES,
+        )
+        return context
 
 
 class PartyDetailView(TemplateView):

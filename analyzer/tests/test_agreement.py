@@ -56,6 +56,12 @@ class TestAgreementAnalysis(TestCase):
         assert pair.agreement is not None
         return pair.agreement
 
+    def test_split_and_non_participation_are_excluded(self) -> None:
+        cast({self.a: [F, VoteType.SPLIT, X, A], self.b: [F, F, A, A]})
+        pair = self.pair(run_agreement_analysis(), self.a, self.b)
+        self.assertEqual(2, pair.shared_motions)
+        self.assertEqual(1.0, self.value(pair))
+
     def test_agreement_is_share_of_same_votes(self) -> None:
         cast({self.a: [F, F, A, A], self.b: [F, A, A, A], self.c: [A, A, F, F]})
         matrix = run_agreement_analysis()

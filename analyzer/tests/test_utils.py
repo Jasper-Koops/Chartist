@@ -73,6 +73,26 @@ class TestGenerateDataFrame(TestCase):
             parliamentary_items=self.items, parties=self.parties
         )
 
+    def test_non_participation_is_missing_and_split_is_zero(self) -> None:
+        from analyzer.analysis import calculate_party_participation_rate
+
+        party = self.parties.first()
+        items = list(self.items)
+        PartyVote.objects.filter(
+            party=party, parliamentary_item=items[0]
+        ).update(vote=VoteType.ABSTAIN)
+        PartyVote.objects.filter(
+            party=party, parliamentary_item=items[1]
+        ).update(vote=VoteType.SPLIT)
+        calculate_party_participation_rate()
+        df = generate_dataframe(log=self.log).set_index("Motion ID")
+        self.assertTrue(df.loc[[items[0].id], party.abbreviation].isna().all())
+        self.assertEqual(0, df.loc[items[1].id, party.abbreviation])
+        # Eligibility uses coverage even when participation falls below 90%.
+        party.refresh_from_db()
+        self.assertEqual(80.0, party.participation_rate)
+        self.assertEqual(100.0, party.record_coverage)
+
     def test_function_generates_dataframe(self) -> None:
         df = generate_dataframe(log=self.log)
 
@@ -100,7 +120,7 @@ class TestGenerateDataFrame(TestCase):
                 vote_map: dict[str, int] = {
                     VoteType.FOR.value: 1,
                     VoteType.AGAINST.value: -1,
-                    VoteType.ABSTAIN.value: 0,
+                    VoteType.SPLIT.value: 0,
                 }
                 expected_vote: int = vote_map[party_vote.vote]
                 self.assertEqual(
@@ -113,7 +133,7 @@ class TestParticipationThreshold(TestCase):
         self.log = AnalysisLogger(logger, {})
 
     def party(self, rate: float) -> Party:
-        party: Party = PartyFactory(participation_rate=rate)
+        party: Party = PartyFactory(record_coverage=rate)
         return party
 
     def included(self) -> list[str]:

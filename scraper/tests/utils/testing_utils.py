@@ -53,7 +53,7 @@ def generate_party_votes(
                 parliamentary_item=item,
                 party=party,
                 vote=random.choice(
-                    [VoteType.FOR, VoteType.AGAINST, VoteType.ABSTAIN]
+                    [VoteType.FOR, VoteType.AGAINST, VoteType.SPLIT]
                 ),
             )
 

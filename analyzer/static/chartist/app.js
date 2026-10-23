@@ -153,7 +153,7 @@ const STATUS_CLASS = { Accepted: "accepted", Rejected: "rejected", Pending: "pen
 const statusLabel = (status) => t(status);
 const statusBadge = (status) => el("span", { className: `badge ${STATUS_CLASS[status] || ""}` }, statusLabel(status));
 
-const VOTE_LABEL = { For: "For", Against: "Against", Abstain: "Did not vote" };
+const VOTE_LABEL = { For: "For", Against: "Against", Split: "Evenly split", Abstain: "Did not vote" };
 const VOTE_CLASS = { For: "for", Against: "against" };
 const voteBadge = (vote) =>
   el("span", { className: `badge ${VOTE_CLASS[vote] || ""}` }, t(VOTE_LABEL[vote] || "No vote"));
@@ -215,6 +215,35 @@ const statusRequest = fetchJson("/api/v1/status/");
     text.textContent = t("Status unavailable");
     pill.title = error.message;
   }
+})();
+
+// ---------- Header: narrow navigation ----------
+(() => {
+  const toggle = document.querySelector(".menu-toggle");
+  const nav = document.getElementById("main-nav");
+  if (!toggle || !nav) return;
+  const close = () => {
+    toggle.setAttribute("aria-expanded", "false");
+    nav.classList.remove("is-open");
+  };
+  toggle.addEventListener("click", () => {
+    const open = toggle.getAttribute("aria-expanded") !== "true";
+    toggle.setAttribute("aria-expanded", String(open));
+    nav.classList.toggle("is-open", open);
+  });
+  document.addEventListener("click", (event) => {
+    if (!toggle.contains(event.target) && !nav.contains(event.target)) close();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+      close();
+      toggle.focus();
+    }
+  });
+  nav.addEventListener("focusout", (event) => {
+    if (!nav.contains(event.relatedTarget) && event.relatedTarget !== toggle) close();
+  });
+  window.matchMedia("(max-width: 960px)").addEventListener("change", close);
 })();
 
 // ---------- Header: mark the current page ----------

@@ -34,11 +34,24 @@ def parliamentary_item_from_dto(
 
 def document_id_from_dto(dto: ZaakBesluitDTO) -> str | None:
     """The motion document's identifier (e.g. 'kst-36848-53'), if known."""
+    return document_source_from_dto(dto)["document_id"]
+
+
+def document_source_from_dto(
+    dto: ZaakBesluitDTO,
+) -> dict[str, str | None]:
+    """Version metadata used to detect changes to a motion's stored text."""
     if not dto.Document:
-        return None
+        return {"document_id": None, "version_id": None, "modified_at": None}
     version = dto.Document[0].get("HuidigeDocumentVersie") or {}
     externe_id = version.get("ExterneIdentifier")
-    return str(externe_id) if externe_id else None
+    return {
+        "document_id": str(externe_id) if externe_id else None,
+        "version_id": str(version["Id"]) if version.get("Id") else None,
+        "modified_at": (
+            str(version["GewijzigdOp"]) if version.get("GewijzigdOp") else None
+        ),
+    }
 
 
 def party_vote_from_dto(dto: StemmingDTO) -> dict[str, str]:

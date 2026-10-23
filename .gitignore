@@ -1,6 +1,7 @@
 .idea
 db.sqlite3
 Chartist/secrets/*
+!Chartist/secrets/secrets.example.py
 __pycache__/
 *.pyc
 design.md
@@ -8,3 +9,4 @@ design.md
 .venv
 dump.rdb
 sources/
+.browser-artifacts/

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Methodology" %}{% endblock %}
+{% block nav %}methodology{% endblock %}
+{% block band_class %} compact{% endblock %}
+
+{% block band %}
+  <ol class="breadcrumbs">
+    <li><a href="{% url 'home' %}">{% translate "Overview" %}</a></li>
+    <li aria-current="page">{% translate "Methodology" %}</li>
+  </ol>
+  <h1>{% translate "How to read Chartist" %}</h1>
+  <p class="lead">{% translate "Chartist describes recorded voting patterns. It does not measure a party's ideology, explain its motives, or recommend whom to vote for." %}</p>
+{% endblock %}
+
+{% block content %}
+  <div class="methodology">
+    <section class="card">
+      <div class="card-head"><h2>{% translate "Which votes are included?" %}</h2></div>
+      <div class="card-body prose">
+        <p>{% blocktranslate trimmed with start=period_start|date:"j F Y" %}The import includes motions started after {{ start }} that have a voting decision in the Tweede Kamer's open data. Bills and amendments are outside this dataset.{% endblocktranslate %}</p>
+        <p>{% translate "Each party has one recorded position per motion. For roll-call votes, the majority of participating members determines that position. An even split is stored separately from non-participation and counts as participation." %}</p>
+        <p>{% translate "The dates shown are voting-session dates where available. Monthly comparisons fall back to the record's modification date when the voting date is missing. Official publications remain the source for the motion's wording." %}</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{% translate "Parties that continue under another name" %}</h2></div>
+      <div class="card-body prose">
+        <p>{% translate "A successor inherits its predecessor's votes on motions for which it has no record of its own. Its own records take precedence. This preserves the voting history of a continuing party without inventing votes for a new split." %}</p>
+        <p>{% translate "The predecessor keeps its own history. A predecessor and its successor are not ranked against each other in the agreement matrix. Party pages explain the relationship, and comparisons identify inherited votes." %}</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{% translate "How the map is calculated" %}</h2></div>
+      <div class="card-body prose">
+        <p>{% translate "Principal component analysis (PCA) finds patterns across motions, with parties as the observations. A vote for is coded as 1, against as −1, and an even split as 0. Recorded non-participation and missing records stay missing." %}</p>
+        <p>{% blocktranslate trimmed with threshold=participation_threshold|floatformat:"0" %}The current inclusion rule requires at least {{ threshold }}% recorded-vote coverage from a party's first recorded vote onward, including inherited history. This coverage includes non-participation records. The participation percentage shown on party pages counts for, against and evenly split positions, using the same period. It measures participation at party level, not individual members’ attendance.{% endblocktranslate %}</p>
+        <p>{% blocktranslate trimmed with coverage=fit_coverage|floatformat:"0" %}The axes are fitted using eligible parties with a for, against or evenly split position on at least {{ coverage }}% of all motions. Only motions with such a position for every fitted party enter that fit. Motions are centred, without standardising their variance.{% endblocktranslate %}</p>
+        <p>{% blocktranslate trimmed with minimum=minimum_projected_votes %}Other eligible parties are projected onto those axes using only their for, against or evenly split positions. They need at least {{ minimum }} such positions on the fitted motions. Missing votes are not replaced by an average. A shorter voting history provides less evidence for a party's position.{% endblocktranslate %}</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{% translate "What distance and percentages mean" %}</h2></div>
+      <div class="card-body prose">
+        <p>{% translate "Parties close together have similar positions on the displayed voting patterns. The axes use the same scale. A 2D view omits the third axis; the 3D view still leaves out patterns beyond the first three axes." %}</p>
+        <p>{% translate "An axis's percentage is its share of variance in the fitted parties' voting data. It is not prediction accuracy, a confidence score, or the percentage of motions correctly classified. The combined percentage refers to the three axes together." %}</p>
+        <p>{% translate "Axis direction has no inherent political meaning. The motions and parties at each end explain the pattern. A motion's weight describes its contribution to an axis, not its importance as public policy." %}</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{% translate "How agreement is calculated" %}</h2></div>
+      <div class="card-body prose">
+        <p>{% translate "Agreement is the share of motions on which both parties voted the same, among motions on which both voted for or against. Non-participation, even splits and missing records are excluded. Each motion has equal weight; party seats do not weight this percentage." %}</p>
+        <p>{% translate "Pairs can cover different periods when parties started or stopped at different times. Check the shared-motion count and voting dates when comparing percentages. Monthly charts leave months with fewer than 50 shared motions empty." %}</p>
+        <p>{% translate "Voting alike does not establish an alliance or agreement on every topic. The motion lists let you inspect the decisions behind an overall percentage." %}</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>{% translate "Sources and updates" %}</h2></div>
+      <div class="card-body prose">
+        <p>{% translate "Voting records come from Tweede Kamer open data; motion texts come from officielebekendmakingen.nl. Motion pages link to the official publication." %}</p>
+        <p>{% translate "The scheduled pipeline imports the data and then runs the analysis after every successful import. The footer shows the latest successful sync, newest voting date and analysis time. During an update, live records and saved analysis can temporarily refer to different stages of that update." %}</p>
+      </div>
+    </section>
+  </div>
+{% endblock %}

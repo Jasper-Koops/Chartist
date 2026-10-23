@@ -22,12 +22,14 @@
         </span>
         <span class="brand-name">Chartist</span>
       </a>
-      <nav class="nav" aria-label="{% translate 'Main' %}">
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav">{% translate "Menu" %}</button>
+      <nav class="nav" id="main-nav" aria-label="{% translate 'Main' %}">
         {% comment %}Pages only: where on the site you are. Where you are
         within the home page is its own chapter bar.{% endcomment %}
         <a href="{% url 'home' %}" data-nav="overview">{% translate "Overview" %}</a>
         <a href="{% url 'component-detail' 1 %}" data-nav="axes">{% translate "Axes" %}</a>
         <a href="{% url 'motion-list' %}" data-nav="motions">{% translate "Motions" %}</a>
+        <a href="{% url 'methodology' %}" data-nav="methodology">{% translate "Methodology" %}</a>
       </nav>
       <div class="topbar-right">
         <div class="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="search-results">
@@ -83,6 +85,7 @@
       "Pending": "{{ _("Pending")|escapejs }}",
       "For": "{{ _("For")|escapejs }}",
       "Against": "{{ _("Against")|escapejs }}",
+      "Evenly split": "{{ _("Evenly split")|escapejs }}",
       "Did not vote": "{{ _("Did not vote")|escapejs }}",
       "No vote": "{{ _("No vote")|escapejs }}",
       "Sync failed {when}": "{{ _("Sync failed {when}")|escapejs }}",

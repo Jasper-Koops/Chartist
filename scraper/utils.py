@@ -26,7 +26,7 @@ from scraper.dto import (
     StemmingDTO,
 )
 from scraper.mapper import (
-    document_id_from_dto,
+    document_source_from_dto,
     party_from_dto,
     parliamentary_item_from_dto,
 )
@@ -107,8 +107,8 @@ def aggregate_party_votes(stemmingen: list[StemmingDTO]) -> dict[str, VoteType]:
     have many records, including members who did not take part.
 
     The party vote is the majority of FOR and AGAINST votes among its members;
-    members who did not take part are ignored. If no member took part, or the
-    party is split evenly, the party vote is ABSTAIN.
+    members who did not take part are ignored. An even division among voting
+    members is SPLIT; when no member took part, the party vote is ABSTAIN.
 
     Args:
         stemmingen (list[StemmingDTO]): The vote records of a decision.
@@ -126,6 +126,8 @@ def aggregate_party_votes(stemmingen: list[StemmingDTO]) -> dict[str, VoteType]:
             votes[fractie_id] = VoteType.FOR
         elif count[VoteType.AGAINST] > count[VoteType.FOR]:
             votes[fractie_id] = VoteType.AGAINST
+        elif count[VoteType.FOR]:
+            votes[fractie_id] = VoteType.SPLIT
         else:
             votes[fractie_id] = VoteType.ABSTAIN
     return votes
@@ -608,7 +610,8 @@ class ParliamentApi:
         whose API record fails validation are left untouched.
 
         Afterwards, downloads the motion text for new items and items
-        without text (or all items when `refetch_texts` is set), using a
+        without text, or whose document version changed (or all items when
+        `refetch_texts` is set), using a
         small thread pool. Failed downloads are logged and skipped; the item
         keeps its current text, so an item without text is selected again on
         the next run.
@@ -642,7 +645,7 @@ class ParliamentApi:
             "$expand=Stemming($filter=Verwijderd eq false;$select=Soort,Fractie_Id),"
             "Agendapunt($select=Id;$expand=Activiteit($select=Datum));"
             "$select=Id,Agendapunt_Id,BesluitSoort,GewijzigdOp)",
-            "Document($expand=HuidigeDocumentVersie($select=ExterneIdentifier);$select=Id)",
+            "Document($expand=HuidigeDocumentVersie($select=Id,ExterneIdentifier,GewijzigdOp);$select=Id)",
         ]
         vote_data = self.fetch(
             object_name="Zaak",
@@ -688,7 +691,9 @@ class ParliamentApi:
         seen_api_ids: set[str] = set()
 
         to_process = [data for data in vote_data if data.get("Besluit")]
-        text_todo: list[tuple[ParliamentaryItem, str]] = []
+        text_todo: list[
+            tuple[ParliamentaryItem, str, dict[str, str | None]]
+        ] = []
         for i, data in enumerate(to_process, start=1):
             self._report("Syncing votes", i, len(to_process))
             try:
@@ -754,10 +759,14 @@ class ParliamentApi:
                 if party_id not in desired
             )
 
-            if refetch_texts or created or not parliamentary_item.text:
-                externe_id = document_id_from_dto(dto)
-                if externe_id:
-                    text_todo.append((parliamentary_item, externe_id))
+            source = document_source_from_dto(dto)
+            externe_id = source["document_id"]
+            if externe_id and (
+                refetch_texts
+                or not parliamentary_item.text
+                or parliamentary_item.text_source != source
+            ):
+                text_todo.append((parliamentary_item, externe_id, source))
 
         for fractie_id, count in unknown_parties.items():
             logger.info(
@@ -817,7 +826,7 @@ class ParliamentApi:
 
     def _import_texts(
         self,
-        text_todo: list[tuple[ParliamentaryItem, str]],
+        text_todo: list[tuple[ParliamentaryItem, str, dict[str, str | None]]],
         result: VoteImportResult,
     ) -> None:
         """
@@ -828,8 +837,7 @@ class ParliamentApi:
         raised; other exceptions propagate.
 
         Args:
-            text_todo (list[tuple[ParliamentaryItem, str]]): Items paired with
-                their document identifier.
+            text_todo: Items paired with their document identifier and version.
             result (VoteImportResult): Result object to update with counts.
         """
         with ThreadPoolExecutor(max_workers=MAX_TEXT_WORKERS) as executor:
@@ -837,11 +845,12 @@ class ParliamentApi:
                 executor.submit(self._fetch_motion_text, externe_id): (
                     item,
                     externe_id,
+                    source,
                 )
-                for item, externe_id in text_todo
+                for item, externe_id, source in text_todo
             }
             for i, future in enumerate(as_completed(futures), start=1):
-                item, externe_id = futures[future]
+                item, externe_id, source = futures[future]
                 try:
                     item.text = future.result()
                 except (
@@ -854,7 +863,8 @@ class ParliamentApi:
                         extra={"document_id": externe_id, "error": str(e)},
                     )
                 else:
-                    item.save(update_fields=["text"])
+                    item.text_source = source
+                    item.save(update_fields=["text", "text_source"])
                     result.texts_fetched += 1
                 self._report("Fetching motion texts", i, len(text_todo))
 

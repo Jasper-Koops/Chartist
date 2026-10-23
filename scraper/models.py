@@ -21,6 +21,12 @@ class Party(models.Model):
         blank=True,
         null=True,
     )
+    record_coverage = models.FloatField(
+        help_text="Share of eligible motions with a party record, including non-participation.",
+        blank=True,
+        null=True,
+        editable=False,
+    )
     logo_length = models.PositiveIntegerField(
         help_text=_(
             "The logo's ContentLength as the API reports it (not the file "
@@ -92,6 +98,12 @@ class ParliamentaryItem(models.Model):
         default=ParliamentaryItemStatusTypes.PENDING,
     )
     text = models.JSONField(blank=True, null=True)
+    text_source = models.JSONField(
+        default=dict,
+        blank=True,
+        editable=False,
+        help_text=_("Document version from which the stored text was fetched."),
+    )
     document_id = models.CharField(
         max_length=50,
         blank=True,
@@ -122,7 +134,8 @@ class ParliamentaryItem(models.Model):
 class VoteType(models.TextChoices):
     FOR = "For", "For"
     AGAINST = "Against", "Against"
-    ABSTAIN = "Abstain", "Abstain"
+    ABSTAIN = "Abstain", "Did not participate"
+    SPLIT = "Split", "Evenly split"
 
 
 class PartyVote(models.Model):

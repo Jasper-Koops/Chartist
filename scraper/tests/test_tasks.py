@@ -26,28 +26,18 @@ class TestTasks(TestCase):
         self.addCleanup(patcher.stop)
         return analysis
 
-    def test_import_votes_reports_vote_changes(self) -> None:
+    def test_import_votes_finishes_with_vote_changes(self) -> None:
         self.mock_import(VoteImportResult(votes_updated=1))
-        self.assertTrue(tasks.import_votes())
+        self.assertIsNone(tasks.import_votes())
 
-    def test_import_votes_reports_no_changes(self) -> None:
+    def test_import_votes_finishes_without_changes(self) -> None:
         self.mock_import(VoteImportResult(created=0, texts_fetched=3))
-        self.assertFalse(tasks.import_votes())
+        self.assertIsNone(tasks.import_votes())
 
-    def test_analysis_runs_when_votes_changed(self) -> None:
-        analysis = self.mock_analysis()
-        tasks.run_scheduled_pca_analysis(True)
-        analysis.assert_called_once_with(n_components=3)
-
-    def test_analysis_skipped_without_vote_changes(self) -> None:
-        analysis = self.mock_analysis()
-        tasks.run_scheduled_pca_analysis(False)
-        analysis.assert_not_called()
-
-    def test_analysis_runs_by_default(self) -> None:
+    def test_analysis_runs(self) -> None:
         analysis = self.mock_analysis()
         tasks.run_scheduled_pca_analysis()
-        analysis.assert_called_once()
+        analysis.assert_called_once_with(n_components=3)
 
     def test_chain_runs_analysis_after_import_with_changes(self) -> None:
         api_class = self.mock_import(VoteImportResult(votes_created=5))
@@ -56,11 +46,22 @@ class TestTasks(TestCase):
         api_class.return_value.import_votes.assert_called_once()
         analysis.assert_called_once()
 
-    def test_chain_skips_analysis_without_changes(self) -> None:
+    def test_chain_runs_analysis_without_changes(self) -> None:
         self.mock_import(VoteImportResult())
         analysis = self.mock_analysis()
         tasks.import_and_analyze()
-        analysis.assert_not_called()
+        analysis.assert_called_once_with(n_components=3)
+
+    def test_analysis_failure_is_retried_after_next_successful_import(
+        self,
+    ) -> None:
+        self.mock_import(VoteImportResult())
+        analysis = self.mock_analysis()
+        analysis.side_effect = [RuntimeError("analysis failed"), None]
+        with self.assertRaises(RuntimeError):
+            tasks.run_scheduled_pca_analysis.run()
+        tasks.import_and_analyze()
+        self.assertEqual(2, analysis.call_count)
 
     def test_chain_does_not_analyze_when_import_fails(self) -> None:
         api_class = self.mock_import(VoteImportResult())

@@ -14,8 +14,8 @@ def load_vote_table() -> pd.DataFrame:
     Load the FOR/AGAINST votes as a table of items (rows) by parties
     (columns), including inherited votes (see `party_votes`).
 
-    'Niet deelgenomen' (stored as abstain) is not a vote and left out, so a
-    cell is FOR, AGAINST or empty.
+    Non-participation and evenly split positions are excluded, so a cell
+    is FOR, AGAINST or empty.
 
     Returns:
         pd.DataFrame: Votes indexed by item id, with party ids as columns.

@@ -11,9 +11,19 @@ from scraper.models import (
 
 @admin.register(Party)
 class PartyAdmin(admin.ModelAdmin):
-    list_display = ["abbreviation", "name", "participation_rate"]
+    list_display = [
+        "abbreviation",
+        "name",
+        "participation_rate",
+        "record_coverage",
+    ]
     search_fields = ["abbreviation", "name", "api_id"]
-    readonly_fields = ["api_id", "participation_rate", "logo_length"]
+    readonly_fields = [
+        "api_id",
+        "participation_rate",
+        "record_coverage",
+        "logo_length",
+    ]
 
 
 @admin.register(ParliamentaryItem)

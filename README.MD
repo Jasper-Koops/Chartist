@@ -13,13 +13,21 @@ This application is the backend server for Chartist, a tool designed to analyze 
 
 ## Installation
 
+Use Python 3.11 or newer. The commands below use Python 3.12.
+
 ```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+
 # Install dependencies (use requirements/base.txt for production)
 pip install -r requirements/dev.txt
 
 # Create the local settings file, then set SECRET_KEY (and DATABASES,
 # ALLOWED_HOSTS, DEBUG as needed). Settings refuse to load without it.
 cp Chartist/secrets/secrets.example.py Chartist/secrets/local.py
+
+# Generate a value to paste into SECRET_KEY in the local settings file
+python -c "from secrets import token_urlsafe; print(token_urlsafe(64))"
 
 # Run migrations
 python manage.py migrate
@@ -56,7 +64,7 @@ python manage.py run_analysis
 ```
 
 Or let Celery do it every night at 00:15: one chained task imports the data
-and then runs the analysis, which is skipped when no votes changed. This
+and then runs the analysis after every successful import. This
 needs a Redis server on `127.0.0.1:6379` (see `CELERY_BROKER_URL` in
 `Chartist/settings.py`; on Ubuntu: `sudo apt install redis-server`) and two
 processes next to the Django server:
@@ -68,6 +76,17 @@ celery -A Chartist worker --loglevel=info
 # Scheduler: starts the nightly task
 celery -A Chartist beat --loglevel=info
 ```
+
+Motion texts are downloaded when missing or when their publication identifier,
+document version, or version modification timestamp changes. Existing texts
+without version metadata are refreshed once on the first import after upgrading.
+A failed download keeps the previous text and is retried on the next import.
+
+After upgrading to separate evenly split party votes from non-participation,
+run `migrate`, then `import_data`, then `run_analysis`. The old `Abstain`
+records combine those cases; only reimporting the source votes can distinguish
+them. Splits count as participation and have value 0 in PCA. Non-participation
+is missing in PCA. Record coverage remains the separate party eligibility rule.
 
 ## Party successions and aliases
 
@@ -98,3 +117,15 @@ black, ruff and mypy on every commit:
 ```bash
 pre-commit install
 ```
+
+Browser regression checks run separately against a temporary test database:
+
+```bash
+python -m playwright install chromium
+python manage.py test browser_tests.journeys
+```
+
+They exercise navigation at phone, tablet and desktop widths, the map controls,
+statistics, highlight choices, and the party/comparison/motion/axis journey.
+The real chart libraries load from their configured CDNs, so this suite needs
+network access. Screenshots are saved in `.browser-artifacts/`.

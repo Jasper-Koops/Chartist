@@ -20,6 +20,28 @@ const listNames = (names) =>
 const number = (value, digits = 0) =>
   Number(value).toLocaleString(LANG, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
+// Theme preference. Reload after switching so canvas charts use the new palette.
+const themeButton = document.getElementById("theme-toggle");
+const systemTheme = matchMedia("(prefers-color-scheme: dark)");
+const isDarkTheme = () => document.documentElement.dataset.theme
+  ? document.documentElement.dataset.theme === "dark" : systemTheme.matches;
+function syncThemeButton() {
+  const dark = isDarkTheme();
+  themeButton.setAttribute("aria-pressed", String(dark));
+  themeButton.title = dark ? themeButton.dataset.lightLabel : themeButton.dataset.darkLabel;
+}
+syncThemeButton();
+systemTheme.addEventListener("change", syncThemeButton);
+themeButton.addEventListener("click", () => {
+  const theme = isDarkTheme() ? "light" : "dark";
+  document.documentElement.dataset.theme = theme;
+  syncThemeButton();
+  try {
+    localStorage.setItem("chartist.theme", theme);
+    location.reload();
+  } catch { /* Keep the selection for this page when storage is unavailable. */ }
+});
+
 async function fetchJson(url) {
   const response = await fetch(url, {
     headers: { Accept: "application/json" },

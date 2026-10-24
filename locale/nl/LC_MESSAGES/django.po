@@ -1458,6 +1458,15 @@ msgstr ""
 "overgenomen geschiedenis. Het meet deelname op partijniveau, niet de "
 "aanwezigheid van individuele leden."
 
+msgid "Dark mode"
+msgstr "Donkere modus"
+
+msgid "Switch to light mode"
+msgstr "Lichte modus inschakelen"
+
+msgid "Switch to dark mode"
+msgstr "Donkere modus inschakelen"
+
 #, python-format
 #~ msgid ""
 #~ "The current inclusion rule requires at least %(threshold)s%% recorded-vote "

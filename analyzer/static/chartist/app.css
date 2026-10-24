@@ -253,6 +253,27 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing:
 }
 .lang-switch button:hover { color: var(--band-ink); }
 .lang-switch button[aria-pressed="true"] { color: var(--bg); background: var(--ink); }
+/* Theme switch next to the language preference. */
+.theme-toggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  color: var(--band-ink-2);
+  background: var(--band-tile);
+  border: 1px solid var(--band-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--band-ink); border-color: var(--border-strong); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle .theme-sun, .theme-toggle[aria-pressed="true"] .theme-moon { display: none; }
+.theme-toggle[aria-pressed="true"] .theme-sun { display: block; }
+.lang-switch { flex: none; }
+
 /* Global search */
 .search { position: relative; width: 300px; }
 .search input {
